@@ -1,0 +1,119 @@
+Revision history for Perl extension Imager.
+
+0.01  Thu May  6 15:25:03 1999
+	- original version; created by h2xs 1.18
+
+0.02  Mon May 10 20:20:20 1999
+        - Added PPM writer, and a new return type to
+	be used to return undef() from a function returning
+	(int)0.
+
+0.03  Thu May 20 23:23:23 1999
+        - Added Pseudo image handling thingies, now
+	you can use your own get and put pixel routines.
+
+0.04  Mon May 24 22:14:55 1999
+        - Rewrote parts of jpeg support.
+
+0.05  Tue May 25 23:40:01 1999
+	- Added png support with libpng
+	fixed error reporting and return types from
+	some format routines.
+
+0.06  Wed May 26 19:05:39 1999
+        - Fixed Data::Dumper being used when it shouldn't have
+	added feature checking to see at run time if 
+	certain formats are avaliable.
+	removed some ancient C++ style comments that hadn't 
+	been properly removed, some out of bounds errors in ppm.c
+	fixed tests so missing features are skipped.
+
+0.07  Thu May 27 03:15:00 1999
+        - Fixed the typemap for i_img and i_color so that you can pass
+	a null pointer to them without getting a warning when warnings
+	are enabled. Maybe this is counter perl but it greatly increases
+	the usability of the functions.
+
+0.08   Fri May 28 14:13:21 1999
+         - Added support for gif via, giflib or libungif.
+	 gif is so ridden with patent issues but the user
+	 can decide which library to use since they have the same
+	 include files and calling interface.
+
+0.09   Mon May 31 17:52:32 1999
+         - Added image scaling per axis - faster than doing both
+	 axes at the same time.  The current method uses lancoz
+	 kernel and filtering. But more types should be added -
+	 including: nearest neighbor, linear, and bicubic.
+
+0.10   Mon Jun  7 03:25:54 1999
+         - Added T1 postscript font handling. It's very primitive
+	 at the moment but creative people can do nice stuff 
+	 with it.  Currently it is not possible to have it 
+	 generate an image of the correct size for a given string 
+	 but that is on the way.
+
+0.11   Mon Jun  7 14:43:35 1999
+         - Added T1 features for direct to image rendering in 
+	 a single color.  fixed some debug messages going to 
+	 stderr instead of a log file.
+
+0.12   Tue Jun  8 02:58:43 1999
+         - Fixed bugs in jpeg.c when loading images. Also specified
+	 prototype behaviour to on in the Imager.xs file. The
+	 Makefile.PL step doesn't complain anymore so that is
+	 hopefully fixed.
+
+0.13   Wed Jun  9 06:55:58 1999
+         - Fixed Imager.xs for init_log call.  Minor fixes here
+	 and there.
+
+0.14   Thu Jun 10 14:11:22 1999
+         - Rewrote most of the logging stuff so that it is now
+	 possible to remove all logging from the XS part of the
+	 module.  Also some primitive check of memory usage was
+	 added. Claes Jacobsson sent in some filters, inverter,
+	 contrast and a noise filter.
+
+0.15   Mon Jun 14 08:13:29 1999
+	  - Wrote minor enhancement on the calling syntax list.
+	  Started on the object interface - added better support
+	  for quering avaliable filetypes.  Fixed memory leaks in	
+	  most loaders. New filters from Claes in this version
+	  are bumpmap, postlevels and mosaic.
+
+0.16	Wed Jun 16 20:54:33 1999
+	  - Added fixes to the BEGIN and END parts, added writer
+	  function for the OO interface. Also added basic IPTC 
+	  reading support for jpegs.  Also a few filters have been
+	  added to the OO interface.
+
+0.17	Thu Jun 24 11:09:15 1999
+	  - Added dynamic loading stuff - It's still missing a nice
+	  global symbol table. This will be fixed in next release.
+	  also calling the plugins is not all to easy at the moment.
+
+
+0.18	Mon Jun 28 12:31:33 1999
+	  - Added global symbol table - plugins now need a symbol
+	  table pointer in them. When the module is loaded it is
+	  set to point at the global symbol table. Also some barebones
+	  Makefile.PL has been made in the dynfilt directory - it works
+	  on my system - I hope it does on yours.
+
+
+0.19	Fri Jul  1 15:00:03 1999	
+	  - Added a way new scaling method for creating easy previews.
+	  It only uses nearest neighbor, so it's doesn't look very nice
+	  but it may be better for applications like remote sensing.
+
+0.20	Mon Jul  5 10:15:37 1999
+	  - Added and rewrote documentation.
+
+0.21	Mon Jul  6 19:15:37 1999
+	  - Fixed a bug in the scaling routine - it wasn't
+	  handling 0< cases.
+
+===================================================
+
+

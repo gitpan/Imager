@@ -1,0 +1,34 @@
+#ifndef _IO_H_
+#define _IO_H_
+#include <stdio.h>
+#include "log.h"
+
+
+/* #define MALLOC_DEBUG */
+
+#ifdef IMAGER_DEBUG_MALLOC
+
+#define mymalloc(x) (mymalloc_file_line(x,__FILE__,__LINE__))
+void malloc_state();
+void* mymalloc_file_line(int size,char* file,int line);
+void* mymalloc_comm(int size,char *comm);
+void  myfree(void *p);
+
+#else
+
+#define malloc_comm(a,b) (mymalloc(a))
+void malloc_state();
+void* mymalloc(int size);
+void myfree(void *p);
+
+#endif /* IMAGER_MALLOC_DEBUG */
+
+
+
+int min(int a,int b);
+int max(int x,int y);
+int myread(int fd,void *buf,int len);
+int mywrite(int fd,void *buf,int len);
+void interleave(unsigned char *inbuffer,unsigned char *outbuffer,int rowsize,int channels);
+
+#endif

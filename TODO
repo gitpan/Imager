@@ -1,0 +1,31 @@
+-- The function pointer idea for getpixel putpixel is neat but it must be checked how
+   'far' that idea should be taken - since all sorts of wierd shit like circular
+   references can happen.
+
+-- Most of the read and write routines leak memory at an alarming rate
+   like, esp. the gif ones.
+
+   there are two solutions to this:
+	 a) make everything go through a debug malloc()
+	    version that checks start and offset into a table, so we can check for memory leaks.
+	 b) Have Malloc errors fatal... there probably isn't much harm in having it this way.
+	    but it would be nicer if it would not die on the spot.
+
+-- Unify file IO... probably it would be best to do something similar to streams, or just switch 
+   to streams.
+
+-- It would be nice to get the lowest version number of all the libraries the module depends on
+
+-- Get smaller test images - one idea is to use a single ppm image and start by testing the writers.
+
+-- Make the install more userfriendly
+
+-- Write Docs for the lowlevel interface
+
+-- Write the highlevel (OO) interface to the functions.
+
+-- Enhance the font interface and add support for bitmap and freetype fonts
+
+==============
+
+	That is all I can think of at the moment as always ideas/fixes to amh@mbl.is.

@@ -1,0 +1,47 @@
+===============================================================
+Copyright (c) 1999 Arnar M. Hrafnkelsson. All rights reserved.
+This program is free software; you can redistribute it and/or
+modify it under the same terms as Perl itself.
+===============================================================
+
+This doc desscribes some hints about getting
+the Imager module to find the libraries it needs for specific
+image file formats.
+
+The libraries it uses are:
+
+ jpeg: ftp://ftp.uu.net/graphics/jpeg/jpegsrc.v6b.tar.gz
+
+  png: ftp://ftp.uu.net/graphics/png  
+  you also need zlib to use png:  ftp://ftp.uu.net/pub/archiving/zip/zlib
+
+  gif: http://www.arrakeen.demon.co.uk/giflib/  
+or at: http://prtr-13.ucsc.edu/~badger/software/giflib.shtml
+
+   t1: ftp://ftp.neuroinformatik.ruhr-uni-bochum.de/pub/software/t1lib/t1lib-0.9.tar.gz. 
+or at: ftp://sunsite.unc.edu/pub/Linux/libs/graphics/t1lib-0.9.tar.gz 
+
+=================
+
+Logging is compiled in by default - if you should want to get of it
+from the binaries you can do so by setting the env IMAGER_NOLOG 
+to something. If you want to enable malloc debugging to check for leaks
+then set IMAGER_DEBUG_MALLOC to something.  Needless to say it is
+pretty pointless to have malloc debug enabled with no logging.
+
+=================
+
+The Imager module homepage is currently at:
+
+ http://gauss.mbl.is/~amh/Imager/
+
+The current docs are rather bad as I've been busy adding features
+but hopefully they will be updated soon.  Until then you'll just
+have to use the source. The test scripts might also be a good idea.
+By activating the the #init_log lines in the test script you can get
+rather verbose debugging output from the C code.
+
+=================
+
+Thanks go to Claes, Schwern, Tkil, Sky, Merlyn, lucs, PerlJam, Veblen, Dngor,
+Gbarr, Mjd, Jerome and Jalex and anyone else in case I forgot someone.
