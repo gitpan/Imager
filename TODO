@@ -7,8 +7,6 @@
 
 -- It would be nice to get the lowest version number of all the libraries the module depends on
 
--- Make the install more userfriendly
-
 -- Write Docs for the lowlevel interface
 
 -- Write the highlevel (OO) interface to the functions.
@@ -18,3 +16,7 @@
 ==============
 
 	That is all I can think of at the moment as always ideas/fixes to addi@umich.edu
+
+BUGS: 
+Implement color counting - and use to minimize colors in gifs.
+Fix bezier code.

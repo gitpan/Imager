@@ -2,7 +2,7 @@ package Imager;
 
 use strict;
 #use vars qw($VERSION @ISA @EXPORT @EXPORT_OK %formats $DEBUG %instances %filters %DSOs $ERRSTR $fontstate);
-use vars qw($VERSION @ISA @EXPORT @EXPORT_OK %formats $DEBUG %filters %DSOs $ERRSTR $fontstate %OPCODES $I2P);
+use vars qw($VERSION @ISA @EXPORT @EXPORT_OK %formats $DEBUG %filters %DSOs $ERRSTR $fontstate %OPCODES $I2P $FORMATGUESS);
 use IO::File;
 
 #use Data::Dumper;
@@ -44,11 +44,14 @@ use IO::File;
 	     i_arc
 
 	     i_bezier_multi
+	     i_poly_aa
 
 	     i_copyto
 	     i_rubthru
 	     i_scaleaxis
 	     i_scale_nn
+	     i_haar
+
 
 	     i_gaussian
 	     i_conv
@@ -104,7 +107,7 @@ BEGIN {
     require Exporter;
     require DynaLoader;
 
-    $VERSION = '0.29';
+    $VERSION = '0.31';
 
     @ISA = qw(Exporter DynaLoader);
     bootstrap Imager $VERSION;
@@ -163,8 +166,8 @@ BEGIN {
 	defaults => { xo=>100,yo=>100,ascale=>17.0,rscale=>0.02 },
 	callsub => sub { my %hsh=@_; i_radnoise($hsh{image},$hsh{xo},$hsh{yo},$hsh{rscale},$hsh{ascale}); }
     };
-
-
+    
+    $FORMATGUESS=\&def_guess_type;
 }
 
 sub init {
@@ -183,7 +186,6 @@ sub init {
 }
 
 
-
 END {
     if ($DEBUG) {
 	print "shutdown code\n";
@@ -193,11 +195,13 @@ END {
     }
 }
 
+# Non methods
+
 sub load_plugin {
     my ($filename)=@_;
     my $i;
     my ($DSO_handle,$str)=DSO_open($filename);
-    if (!defined($DSO_handle)) { $Imager::ERRSTR="Couldn't load plugin '$filename}'\n"; return undef; }
+    if (!defined($DSO_handle)) { $Imager::ERRSTR="Couldn't load plugin '$filename'\n"; return undef; }
     my %funcs=DSO_funclist($DSO_handle);
     if ($DEBUG) { print "loading module $filename\n"; $i=0; for(keys %funcs) { printf("  %2d: %s\n",$i++,$_); } }
     $i=0;
@@ -230,7 +234,7 @@ sub unload_plugin {
 
 
 
-# Preloaded methods go here.
+# methods
 
 sub new {
   my $class = shift;
@@ -247,24 +251,63 @@ sub new {
   return $self;
 }
 
+### COPY NOT FINISHED !!! 
+
 sub copy {
     my $self = shift;
     unless ($self->{IMG}) { $self->{ERRSTR}='empty input image'; return undef; }
 }
 
+
+
+sub paste {
+    my $self = shift;
+    unless ($self->{IMG}) { $self->{ERRSTR}='empty input image'; return undef; }
+    my %input=(left=>0, top=>0, @_);
+    unless($input{img}) {
+        $self->{ERRSTR}="no source image";
+        return;
+    }
+    $input{left}=0 if $input{left} <= 0;
+    $input{top}=0 if $input{top} <= 0;
+    my $src=$input{img};
+    my($r,$b)=i_img_info($src->{IMG});
+
+    i_copyto($self->{IMG}, $src->{IMG}, 
+                0,0, $r, $b, $input{left}, $input{top});
+    return 1;  # What should go here??
+}
+
 sub crop {
     my $self=shift;
     unless ($self->{IMG}) { $self->{ERRSTR}='empty input image'; return undef; }
-    my ($w,$h,$l,$r,$b,$t)=($self->getwidth(),$self->getheight());
     my %hsh=(left=>0,right=>0,top=>0,bottom=>0,@_);
     
-    if ($hsh{'width'}) { $l=int(0.5+($w-$hsh{'width'})/2); $r=$l+$hsh{'width'}; }
-    if ($hsh{'height'}) { $b=int(0.5+($h-$hsh{'height'})/2); $t=$h+$hsh{'height'}; }
+    my ($w,$h,$l,$r,$b,$t)=($self->getwidth(),$self->getheight(),
+				@hsh{qw(left right bottom top)});
+    $l=0 if not defined $l;
+    $t=0 if not defined $t;
+    $r=$self->getwidth if not defined $r;
+    $b=$self->getheight if not defined $b;
 
-#    print "l=$l\n";
-#    print "r=$r\n";
-#    print "b=$b\n";
-#    print "t=$t\n";
+    ($l,$r)=($r,$l) if $l>$r;
+    ($t,$b)=($b,$t) if $t>$b;
+
+    if ($hsh{'width'}) { 
+        $l=int(0.5+($w-$hsh{'width'})/2); 
+        $r=$l+$hsh{'width'}; 
+    } else {
+        $hsh{'width'}=$r-$l;
+    }
+    if ($hsh{'height'}) { 
+        $b=int(0.5+($h-$hsh{'height'})/2); 
+        $t=$h+$hsh{'height'}; 
+    } else {
+        $hsh{'height'}=$b-$t;
+    }
+
+#    print "l=$l, r=$r, h=$hsh{'width'}\n";
+#    print "t=$t, b=$b, w=$hsh{'height'}\n";
 
     my $dst=Imager->new(xsize=>$hsh{'width'},ysize=>$hsh{'height'});
     
@@ -287,23 +330,25 @@ sub img_set {
 
 
 
-sub open {
+sub read {
     my $self = shift;
     my %input=@_;
 
     my $stuff;
-
+    
     if (defined($self->{IMG})) {
 	i_img_destroy($self->{IMG});
 	undef($self->{IMG});
     }
     
     if (!$input{file}) { $self->{ERRSTR}='file parameter missing'; return undef; }
-    if (!$input{type}) { $self->{ERRSTR}='type parameter missing'; return undef; }
+    if (!$input{type}) { $input{type}=$FORMATGUESS->($input{file}); }
+    if (!$input{type}) { $self->{ERRSTR}='type parameter missing and not possible to guess from extension'; return undef; }
 
     if (!$formats{$input{type}}) { $self->{ERRSTR}='format not supported'; return undef; }
 
     my $fh = new IO::File($input{file},"r");
+    binmode($fh);
     if (!defined $fh) {	$self->{ERRSTR}='Could not open file'; return undef; }
 
     if ( $input{type} eq 'gif' ) {
@@ -332,8 +377,11 @@ sub open {
 	if ( !defined($self->{IMG}) ) { $self->{ERRSTR}='unable to read raw image'; return undef; }
 	$self->{DEBUG} && print "loading a raw file\n";
     }
-    return 1;
+    return $self;
 }
+
+
+
 
 sub write {
     my $self = shift;
@@ -343,14 +391,17 @@ sub write {
     unless ($self->{IMG}) { $self->{ERRSTR}='empty input image'; return undef; }
 
     if (!$input{file}) { $self->{ERRSTR}='file parameter missing'; return undef; }
-    if (!$input{type}) { $self->{ERRSTR}='type parameter missing'; return undef; }
+    if (!$input{type}) { $input{type}=$FORMATGUESS->($input{file}); }
+    if (!$input{type}) { $self->{ERRSTR}='type parameter missing and not possible to guess from extension'; return undef; }
 
     if (!$formats{$input{type}}) { $self->{ERRSTR}='format not supported'; return undef; }
 
     my $fh = new IO::File($input{file},"w+");
+    binmode($fh);
     if (!defined $fh) {	$self->{ERRSTR}='Could not open file'; return undef; }
     
     if ( $input{type} eq 'gif' ) {
+	if ($input{gifplanes}>8) { $input{gifplanes}=8; }
 	if ($input{gifquant} eq 'lm') {
 	    $rc=i_writegif($self->{IMG},$fh->fileno(),$input{gifplanes},$input{lmdither},$input{lmfixed});
 	} else {
@@ -376,7 +427,7 @@ sub write {
 	if ( !defined($rc) ) { $self->{ERRSTR}='unable to write raw image'; return undef; }
 	$self->{DEBUG} && print "writing a raw file\n";
     }
-    return 1;
+    return $self;
 }
 
 
@@ -423,21 +474,9 @@ sub filter {
     $self->{DEBUG} && print "callseq is: @cs\n";
     $self->{DEBUG} && print "matching callseq is: @b\n";
 
-    return 1;
+    return $self;
 }
 
-sub min {
-    my $mx=shift;
-    for(@_) { if ($_<$mx) { $mx=$_; }}
-    return $mx;
-}
-
-
-sub max {
-    my $mx=shift;
-    for(@_) { if ($_>$mx) { $mx=$_; }}
-    return $mx;
-}
 
 sub scale {
     my $self=shift;
@@ -574,6 +613,25 @@ sub box {
     return $self;
 }
 
+
+
+sub arc {
+    my $self=shift;
+    unless ($self->{IMG}) { $self->{ERRSTR}='empty input image'; return undef; }
+    my $dflcl=i_color_new(255,255,255,255);
+    my %opts=(color=>$dflcl,
+	      r=>min($self->getwidth(),$self->getheight())/3,
+	      x=>$self->getwidth()/2,
+	      y=>$self->getheight()/2,
+	      d1=>0, d2=>361, @_);
+    i_arc($self->{IMG},$opts{x},$opts{y},$opts{r},$opts{d1},$opts{d2},$opts{color}); 
+    return $self;
+}
+
+
+
+
+
 sub polyline {
     my $self=shift;
     my ($pt,$ls,@points);
@@ -656,6 +714,12 @@ sub getheight {
     return (i_img_info($self->{IMG}))[1];
 }
 
+sub getchannels {
+    my $self=shift;
+    if (!defined($self->{IMG})) { $self->{ERRSTR}='image is empty'; return undef; }
+    return i_img_getchannels($self->{IMG});
+}
+
 sub getmask {
     my $self=shift;
     if (!defined($self->{IMG})) { $self->{ERRSTR}='image is empty'; return undef; }
@@ -667,6 +731,39 @@ sub setmask {
     my %opts=@_;
     if (!defined($self->{IMG})) { $self->{ERRSTR}='image is empty'; return undef; }
     i_img_setmask( $self->{IMG} , $opts{mask} );
+}
+
+
+# Aliases - might be removed or changed
+
+*open=\&read;
+*circle=\&arc;
+
+
+#### Utility routines
+
+sub def_guess_type {
+    my $name=lc(shift);
+    my $ext;
+    $ext=($name =~ m/\.([^\.]+)$/)[0];
+    return 'jpeg' if ($ext =~ m/^jpe?g$/);
+    return 'png' if ($ext eq "png");
+    return 'gif' if ($ext eq "gif");
+    return 'ppm' if ($ext eq "ppm");
+    return ();
+}
+
+sub min {
+    my $mx=shift;
+    for(@_) { if ($_<$mx) { $mx=$_; }}
+    return $mx;
+}
+
+
+sub max {
+    my $mx=shift;
+    for(@_) { if ($_>$mx) { $mx=$_; }}
+    return $mx;
 }
 
 sub clean {
@@ -732,155 +829,180 @@ Imager - Perl extension for Generating 24 bit Images
 
 =head1 SYNOPSIS
 
-use Imager;
+  use Imager;
 
-init();
-$img = Imager->new();
-$img->open(file=>'image.ppm',type=>'ppm') 
-  || print "failed: ",$img->{ERRSTR},"\n";
-$scaled=$img->scale(xpixels=>400,ypixels=>400);
-$scaled->write(file=>'sc_image.ppm',type=>'ppm') 
-  || print "failed: ",$scaled->{ERRSTR},"\n";
+  init();
+  $img = Imager->new();
+  $img->open(file=>'image.ppm',type=>'ppm') 
+    || print "failed: ",$img->{ERRSTR},"\n";
+  $scaled=$img->scale(xpixels=>400,ypixels=>400);
+  $scaled->write(file=>'sc_image.ppm',type=>'ppm') 
+    || print "failed: ",$scaled->{ERRSTR},"\n";
 
 =head1 DESCRIPTION
 
-Imager is a module for creating and altering images - It 
-is not meant as a replacement or a competitor to ImageMagick or
-GD. Both are excellent packages and well supported.
+Imager is a module for creating and altering images - It is not meant
+as a replacement or a competitor to ImageMagick or GD. Both are
+excellent packages and well supported.
 
-Why a new module? Compiling PerlMagick has been more than trivial
-for me, and it lacks drawing functions. GD.pm has those but only
-does gif and png.  I like studying graphics, so why not let others in
-a similar situation benefit?  The basis for this module is code
-written to preprocess remote sensing data. 
+Why a new module? Compiling PerlMagick can be complicated, and it
+lacks drawing functions. GD.pm has those but only supports gif and
+png.  I like studying graphics, so why not let others in a similar
+situation benefit?  The basis for this module is code written to
+preprocess remote sensing data.
 
-=head2 Class interface
+Note: Documentation is ordered in:
+
+API
+Basic concepts
+Reading and writing images
+Obtaining/setting attributes of images
+Drawing Methods
+Text rendering
+Image resizing
+Filters
+Transformations
+Plugins
+Internals
+Functional interface
+
+=head2 API
 
 Almost all functions take the parameters in the hash fashion.
 Example: 
 
   $img->open(file=>'lena.png',type=>'png');
 
+or just:
+
+  $img->open(file=>'lena.png');
+
 There are a few exceptions to this.
 
-=head2 Basics
+=head2 Basic concept
 
-An Image object is created with C<$img = Imager-E<gt>new()> Should this
-fail for some reason an explanation can be found in C<$Imager::ERRSTR>
-usually error messages are stored in C<$img-E<gt>{ERRSTR}>, but since no
-object is created this is the only way to give back errors.
-C<$Imager::ERRSTR> is also used to report all errors not directly
-associated with an image object. Examples:
+An Image object is created with C<$img = Imager-E<gt>new()> Should
+this fail for some reason an explanation can be found in
+C<$Imager::ERRSTR> usually error messages are stored in
+C<$img-E<gt>{ERRSTR}>, but since no object is created this is the only
+way to give back errors.  C<$Imager::ERRSTR> is also used to report
+all errors not directly associated with an image object. Examples:
 
-    $img=Imager->new(); # This is an empty image it's size is 0 by 0
-    $img->open(file=>'lena.png',type=>'png'); # this initializes from file
+    $img=Imager->new(); # This is an empty image (size is 0 by 0)
+    $img->open(file=>'lena.png',type=>'png'); # initializes from file
 
-or if you want to start clean:
+or if you want to start clean image:
 
-    $img=Imager->new(xsize=>400,ysize=>300,channels=>4);
+    $img=Imager->new(xsize=>400,ysize=>300,channels=>3);
 
-The latter example creates a completely black image of width 400
-and height 300 and 4 channels.
+The latter example creates a completely black image of width 400 and
+height 300 and 4 channels.
 
 To create a color object call the function i_color_new,
-C<$color=i_color_new($r,$g,$b,$a)>. The parameters are all from 0 to 255
-and are all converted to integers. Each is the red, green, blue, and alpha
-component of the color respectively.  This object can then be passed to 
-functions that require a color parameter.
+C<$color=i_color_new($r,$g,$b,$a)>. The parameters are all from 0 to
+255 and are all converted to integers. Each is the red, green, blue,
+and alpha component of the color respectively.  This object can then
+be passed to functions that require a color parameter.
 
-=head2 Loading and saving images
+=head2 Reading and writing images
 
-C<$img-E<gt>open()> has two parameters, 'file' and 'type', for type 'raw' two
-extra parameters are necessary 'xsize' and 'ysize', if the 'channel'
-parameter is omitted for 'raw' it is assumed to be 3.  Gif and Png
-images that have a palette are converted to 24 bit when read.
-Grayscale jpegs are still 1 channel images in memory though.  For jpeg
-images the iptc header information (stored in the APP13 header) is
-avaliable to some degree. You can get the raw header with
-C<$img-E<gt>{IPTCRAW}>, but you can also retrieve the most basic information
-with C<%hsh=$img-E<gt>parseiptc()> as always patches are welcome.
+C<$img-E<gt>read()> has generally has two parameters, 'file' and
+'type'.  If the type of the file can be determined from the suffix of
+the file it can be omitted.  Format dependant parameters are: For
+images of type 'raw' two extra parameters are needed 'xsize' and
+'ysize', if the 'channel' parameter is omitted for type 'raw' it is
+assumed to be 3.  gif and png images might have a palette are
+converted to truecolor bit when read.  Alpha channel is preserved for
+png images irregardless of them being in RGB or gray colorspace.
+Similarly grayscale jpegs are one channel images after reading them.
+For jpeg images the iptc header information (stored in the APP13
+header) is avaliable to some degree. You can get the raw header with
+C<$img-E<gt>{IPTCRAW}>, but you can also retrieve the most basic
+information with C<%hsh=$img-E<gt>parseiptc()> as always patches are
+welcome.
 
-C<$img-E<gt>write> has the same interface as C<open()>, for jpeg quality can be
-adjusted via the 'jpegquality' parameter (0-100).  The number of
-colorplanes in gifs are set with 'gifplanes' and should be between 1
-(2 color) and 8 (256 colors).  It is also possible to choose between
-two quantizing methods with the parameter gifquant. If set to mc it
-uses the mediancut algorithm from either giflibrary. If set to lm it
-uses a local means algorithm. It is then possible to give some extra
-settings. lmdither is the dither deviation amount in pixels (manhattan
-distance).  lmfixed can be an array ref who holds an array of i_color
-objects.
+*Note that load() is now an alias for read but will be removed later*
 
-=head2 Image Methods
+C<$img-E<gt>write> has the same interface as C<open()>.  The earlier
+comments on C<read()> for autodetecting filetypes apply.  For jpegs
+quality can be adjusted via the 'jpegquality' parameter (0-100).  The
+number of colorplanes in gifs are set with 'gifplanes' and should be
+between 1 (2 color) and 8 (256 colors).  It is also possible to choose
+between two quantizing methods with the parameter 'gifquant'. If set
+to mc it uses the mediancut algorithm from either giflibrary. If set
+to lm it uses a local means algorithm. It is then possible to give
+some extra settings. lmdither is the dither deviation amount in pixels
+(manhattan distance).  lmfixed can be an array ref who holds an array
+of i_color objects.  Note that the local means algorithm needs much
+more cpu time but also gives considerable better results than the
+median cut algorithm.
 
-box
-arc
 
+=head2 Obtaining/setting attributes of images
 
-The Imager object have several methods to operate on the images,
-here is a reference oriented list:
+To get the size of an image in pixels the C<$img-E<gt>getwidth()> and
+C<$img-E<gt>getheight()> are used.  To get the number of channels in
+an image C<$img-E<gt>getchannels()> is used.  $img-E<gt>getmask() and
+$img-E<gt>setmask() are used to get/set the channel mask of the image.
 
-  $img->polyline(points=>[[$x0,$y0],[$x1,$y1],[$x2,$y2],[$x3,$y3]],color=>$red);
-  $img->polyline(x=>[$x0,$x1,$x2,$x3],y=>[$y0,$y1,$y2,$y3],antialias=>1);
+The mask of an image describes which channels are updated when some
+operation is performed on an image.  Naturally it is not possible to
+apply masks to operations like scaling that alter the dimensions of
+images.
 
-polyline is used to draw multilple lines between a series of points.
-The point set can either be specified as an arrayref to an array of 
-array references (where each such array represents a point.  The other way
-is to specify two arrayreferences 
+=head2 Drawing Methods
 
-=head2 Filters
+IMPLEMENTATION MORE OR LESS DONE CHECK THE TESTS
 
-A special image method is the filter method. An example is:
+DOCUMENTATION OF THIS SECTION OUT OF SYNC
 
-  $img->filter(type=>'autolevels');
+It is possible to draw with graphics primitives onto images.  Such
+primitives include boxes, arcs, circles and lines.  A reference
+oriented list follows.
 
-This will call the autolevels filter.  Here is a list of the filters
-that are always avaliable in Imager.  This list can be obtained by 
-running the filterlist.perl script that comes with the module source.
+Box:
+  $img->box(color=>$blue,xmin=>10,ymin=>30,xmax=>200,ymax=>300,filled=>1);
 
-  Filter          Arguments
-  turbnoise       
-  autolevels      lsat(0.1) usat(0.1) skew(0)
-  radnoise        
-  noise           amount(3) subtype(0)
-  contrast        intensity
-  hardinvert      
+The Above example calls the C<box> method for the image and the box
+covers the pixels with in the rectangle specified.  If C<filled> is
+ommited it is drawn as an outline.  If any of the edges of the box are
+ommited it will snap to the outer edge of the image in that direction.
+Also if a color is omitted a color with (255,255,255,255) is used
+instead.
 
-The default values are in parenthesis.  All parameters must have some
-value but if a parameter has a default value it may be omitted 
-when calling the filter function.
+Arc:
+  $img->arc(color=>$red, r=20, x=>200, y=>100, d1=>10, d2=>20 );
+
+This creates a red arc with a 'center' at (200, 100) and spans 10
+degrees and the slice has a radius of 20. SEE section on BUGS.
+
+Circle:
+  $img->circle(color=>$green, r=50, x=>200, y=>100 );
+
+This creates a green circle with its center at (200, 100) and has a
+radius of 20.
+
+  $img->polyline(points=>[[$x0,$y0],[$x1,$y1],[$x2,$y2]],color=>$red);
+  $img->polyline(x=>[$x0,$x1,$x2],y=>[$y0,$y1,$y2],antialias=>1);
+
+Polyline is used to draw multilple lines between a series of points.
+The point set can either be specified as an arrayref to an array of
+array references (where each such array represents a point).  The
+other way is to specify two array references.
 
 =head2 Text rendering
 
-So far there are only the functional interface is implemented for text 
+So far there are only the functional interface is implemented for text
 rendering.
 
-=head2 Transformations
 
-Another special image method is transform.  It can be used to generate
-warps and rotations and such features.  It can be given 
-the operations in postfix notation or the module Affix::Infix2Postfix
-can be used.  Look in the test case t/t55trans.t for an example.
+=head2 Image resizing
 
-
-=head2 Internals
-
-An image object is a wrapper around the raw handle to an image.  It is
-stored in the IMG value of the object hash.  When Imager->new() is
-called the IMG member is set to undef by default but if you give it
-arguments like $img=Imager->new(xsize=>100,ysize=>100); then it
-will return a 3 channel image of size 100 x 100..
-
-
-$img->getwidth() and $img->getheight() are used to get the dimensions
-of the image.  $img->getmask() and $img->setmask() are used to get/set
-the channel mask of the image.
-
-To scale an image so porportions are maintained use the $img->scale()
-method.  if you give either a xpixels or ypixels parameter they will
-determine the width or height respectively.  If both are given the one
-resulting in a larger image is used.  example: $img is 700 pixels wide
-and 500 pixels tall.
+To scale an image so porportions are maintained use the
+C<$img-E<gt>scale()> method.  if you give either a xpixels or ypixels
+parameter they will determine the width or height respectively.  If
+both are given the one resulting in a larger image is used.  example:
+C<$img> is 700 pixels wide and 500 pixels tall.
 
   $img->scale(xpixels=>400); # 400x285
   $img->scale(ypixels=>400); # 560x400
@@ -891,15 +1013,48 @@ and 500 pixels tall.
   $img->scale(scalefactor=>0.25); 175x125 $img->scale(); # 350x250
 
 if you want to create low quality previews of images you can pass
-qtype=>'preview' to scale and it will use nearest neighbor sampling
-instead of filtering. It is much faster but also generates worse
-looking images - especially if the original has a lot of sharp
+C<qtype=E<gt>'preview'> to scale and it will use nearest neighbor
+sampling instead of filtering. It is much faster but also generates
+worse looking images - especially if the original has a lot of sharp
 variations and the scaled image is by more than 3-5 times smaller than
 the original.
 
 If you need to scale images per axis it is best to do it simply by
 calling scaleX and scaleY.  You can pass either 'scalefactor' or
 'pixels' to both functions.
+
+
+=head2 Filters
+
+A special image method is the filter method. An example is:
+
+  $img->filter(type=>'autolevels');
+
+This will call the autolevels filter.  Here is a list of the filters
+that are always avaliable in Imager.  This list can be obtained by
+running the C<filterlist.perl> script that comes with the module
+source.
+
+  Filter          Arguments
+  turbnoise       
+  autolevels      lsat(0.1) usat(0.1) skew(0)
+  radnoise        
+  noise           amount(3) subtype(0)
+  contrast        intensity
+  hardinvert      
+
+The default values are in parenthesis.  All parameters must have some
+value but if a parameter has a default value it may be omitted when
+calling the filter function.
+
+
+=head2 Transformations
+
+Another special image method is transform.  It can be used to generate
+warps and rotations and such features.  It can be given the operations
+in postfix notation or the module Affix::Infix2Postfix can be used.
+Look in the test case t/t55trans.t for an example.
+
 
 =head2 Plugins
 
@@ -927,13 +1082,30 @@ dyntest.c modified and recompiled.
 An example plugin comes with the module - Please send feedback to 
 addi@umich.edu if you test this.
 
+Note: This seems to test ok on the following systems.
+Linux, Solaris, HPUX, OpenBSD - If you test this on other systems
+please let me know.
+
+=head2 Internals
+
+DOCUMENTATION OF THIS SECTION INCOMPLETE
+
+An image object is a wrapper around the raw handle to an image.  It is
+stored in the IMG value of the object hash.  When C<Imager-E<gt>new()> is
+called the IMG member is set to undef by default but if you give it
+arguments like C<$img=Imager-E<gt>new(xsize=E<gt>100,ysize=E<gt>100)> then it
+will return a 3 channel image of size 100 x 100..
+
+
 =head1 Functional interface
+
+DOCUMENTATION OF THIS SECTION OUT OF SYNC WITH CODE
 
 Use only if you cannot do what you need to do with
 the OO interface. This is mostly intended for 
 people who want to develop the OO interface or
 the XS part of the module.
- 
+
   $bool   = i_has_format($str);
   
   $colref = i_color_set($colref,$r,$g,$b,$a);
@@ -995,19 +1167,37 @@ the XS part of the module.
   		    $storechannels,$interleave);
             i_writeraw($imref,$fd);
   
-  
-  
+
+=head1 BUGS
+
+This documentation is all messy!
+
+box, arc, circle do not support antialiasing yet.  arc, is only filled
+as of yet.  Some routines do not return $self where they should.  This
+affects code like this, C<$img-E<gt>box()-E<gt>arc()> where an object
+is expected.
+
+When saving Gif images the program does NOT try to shave of extra
+colors if it is possible.  If you specify 128 colors and there are
+only 2 colors used - it will have a 128 colortable anyway.
+
+There are some undocumented functions lying around - you can look at
+the *sigh* ugly list of EXPORT symbols at the top of Imager.pm and try
+to find out what a call does if you feel adventureus
+
+
+=head1 TODO
+
+Fix the bugs ofcourse and look in the TODO file
+
 =head1 AUTHOR
 
 Arnar M. Hrafnkelsson, addi@umich.edu
 
 =head1 SEE ALSO
 
-perl(1).
+perl(1), Affix::Infix2Postfix(3).
 http://www.eecs.umich.edu/~addi/perl/Imager/
 
+
 =cut
-
-
-
-

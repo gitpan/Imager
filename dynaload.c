@@ -1,6 +1,7 @@
 #include "dynaload.h"
 
-/* char dl_errorstring[256]; */
+/* These functions are all shared - then comes platform dependant code */
+
 
 int getint(void *hv_t,char *key,int *store) {
   SV** svpp;
@@ -65,6 +66,8 @@ DSO_open(char* file,char** evalstring) {
 
   *evalstring=NULL;
 
+  
+
   if ( (tt_handle = shl_load(file, BIND_DEFERRED,0L)) == NULL) return NULL; 
   if ( (shl_findsym(&tt_handle, "evalstr",TYPE_UNDEFINED,(void*)evalstring))) return NULL;
   if ( (shl_findsym(&tt_handle, "symbol_table",TYPE_UNDEFINED,(void*)&plugin_symtab))) return NULL;
@@ -94,6 +97,14 @@ DSO_close(void *ptr) {
 
 #else
 
+/* OS/2 has no dlclose; Perl doesn't provide one. */
+#ifdef __EMX__ /* OS/2 */
+int
+dlclose(minthandle_t h) {
+  return DosFreeModule(h) ? -1 : 0;
+}
+#endif /* __EMX__ */
+
 
 void*
 DSO_open(char* file,char** evalstring) {
@@ -102,18 +113,60 @@ DSO_open(char* file,char** evalstring) {
   func_ptr *function_list;
   DSO_handle *dso_handle;
   int i;
+  void (*f)(void *s,void *u); /* these will just have to be void for now */
   
   *evalstring=NULL;
-  if ( (d_handle = dlopen(file, RTLD_LAZY)) == NULL) return NULL;
-  if ( (*evalstring = (char *)dlsym(d_handle, "evalstr")) == NULL) return NULL;
 
-  if ( (plugin_symtab = dlsym(d_handle, "symbol_table")) == NULL) return NULL;
-  if ( (plugin_utiltab = dlsym(d_handle, "util_table")) == NULL) return NULL;
+  mm_log( (1,"DSO_open(file '%s' (0x%08X), evalstring 0x%08X)\n",file,file,evalstring) );
 
-  (*plugin_symtab)=&symbol_table;
-  (*plugin_utiltab)=&UTIL_table;
+  if ( (d_handle = dlopen(file, RTLD_LAZY)) == NULL) {
+    mm_log( (1,"DSO_open: dlopen failed: %s.\n",dlerror()) );
+    return NULL;
+  }
 
-  if ( (function_list=(func_ptr *)dlsym(d_handle, "function_list")) == NULL) return NULL;
+  if ( (*evalstring = (char *)dlsym(d_handle, I_EVALSTR)) == NULL) {
+    mm_log( (1,"DSO_open: dlsym didn't find '%s': %s.\n",I_EVALSTR,dlerror()) );
+    return NULL;
+  }
+
+  /*
+
+    I'll just leave this thing in here for now if I need it real soon
+
+   mm_log( (1,"DSO_open: going to dlsym '%s'\n", I_SYMBOL_TABLE ));
+   if ( (plugin_symtab = dlsym(d_handle, I_SYMBOL_TABLE)) == NULL) {
+     mm_log( (1,"DSO_open: dlsym didn't find '%s': %s.\n",I_SYMBOL_TABLE,dlerror()) );
+     return NULL;
+   }
+  
+   mm_log( (1,"DSO_open: going to dlsym '%s'\n", I_UTIL_TABLE ));
+    if ( (plugin_utiltab = dlsym(d_handle, I_UTIL_TABLE)) == NULL) {
+     mm_log( (1,"DSO_open: dlsym didn't find '%s': %s.\n",I_UTIL_TABLE,dlerror()) );
+     return NULL;
+   }
+
+  */
+
+
+  mm_log( (1,"DSO_open: going to dlsym '%s'\n", I_INSTALL_TABLES ));
+  if ( (f = dlsym(d_handle, I_INSTALL_TABLES)) == NULL) {
+    mm_log( (1,"DSO_open: dlsym didn't find '%s': %s.\n",I_INSTALL_TABLES,dlerror()) );
+    return NULL;
+  }
+
+  mm_log( (1,"Calling install_tables\n") );
+  f(&symbol_table,&UTIL_table);
+  mm_log( (1,"Call ok.\n") );
+
+  /* (*plugin_symtab)=&symbol_table;
+     (*plugin_utiltab)=&UTIL_table; */
+  
+  mm_log( (1,"DSO_open: going to dlsym '%s'\n", I_FUNCTION_LIST ));
+  if ( (function_list=(func_ptr *)dlsym(d_handle, I_FUNCTION_LIST)) == NULL) {
+    mm_log( (1,"DSO_open: dlsym didn't find '%s': %s.\n",I_FUNCTION_LIST,dlerror()) );
+    return NULL;
+  }
+  
   if ( (dso_handle=(DSO_handle*)malloc(sizeof(DSO_handle))) == NULL) return NULL;
   
   dso_handle->handle=d_handle; /* needed to close again */
@@ -131,3 +184,11 @@ DSO_close(void *ptr) {
 }
 
 #endif
+
+
+
+
+
+
+
+

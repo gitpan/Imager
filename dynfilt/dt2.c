@@ -1,7 +1,4 @@
-#include "../plug.h"
-
-symbol_table_t *symbol_table;
-UTIL_table_t *util_table;
+#include "pluginst.h"
 
 
 char evalstr[]="Description string of plugin dyntest - kind of like";
@@ -73,8 +70,3 @@ func_ptr function_list[]={
 
 
 /* Remember to double backslash backslashes within Double quotes in C */
-
-
-
-
-

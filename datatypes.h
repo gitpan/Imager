@@ -10,8 +10,7 @@ typedef struct { unsigned char c,m,y,k; } cmyk_color;
 
 typedef int undef_int; /* special value to put in typemaps to retun undef on 0 and 1 on 1 */
 
-typedef union
-{
+typedef union {
   gray_color gray;
   rgb_color rgb;
   rgba_color rgba;

@@ -54,6 +54,8 @@ dynaload.h
 ext.h
 plug.h
 filterlist.perl
+errep.perl
+dynfilt/pluginst.h
 dynfilt/dyntest.c
 dynfilt/dt2.c
 dynfilt/compile.txt

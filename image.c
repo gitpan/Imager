@@ -174,6 +174,8 @@ i_img_setmask(i_img *im,int ch_mask) { im->ch_mask=ch_mask; }
 int
 i_img_getmask(i_img *im) { return im->ch_mask; }
 
+int
+i_img_getchannels(i_img *im) { return im->channels; }
 
 int
 i_ppix(i_img *im,int x,int y,i_color *val) { return im->i_f_ppix(im,x,y,val); }
@@ -185,12 +187,12 @@ int
 i_ppix_d(i_img *im,int x,int y,i_color *val) {
   int ch;
   
-  if ( x>-1 && x<im->xsize && y>-1 && y<im->ysize )
-    {
-      for(ch=0;ch<im->channels;ch++)
-	if (im->ch_mask&(1<<ch)) im->data[(x+y*im->xsize)*im->channels+ch]=val->channel[ch];
-      return 0;
-    }
+  if ( x>-1 && x<im->xsize && y>-1 && y<im->ysize ) {
+    for(ch=0;ch<im->channels;ch++)
+      if (im->ch_mask&(1<<ch)) 
+	im->data[(x+y*im->xsize)*im->channels+ch]=val->channel[ch];
+    return 0;
+  }
   return -1; /* error was clipped */
 }
 
@@ -199,7 +201,8 @@ int
 i_gpix_d(i_img *im,int x,int y,i_color *val) {
   int ch;
   if (x>-1 && x<im->xsize && y>-1 && y<im->ysize) {
-    for(ch=0;ch<im->channels;ch++) val->channel[ch]=im->data[(x+y*im->xsize)*im->channels+ch];
+    for(ch=0;ch<im->channels;ch++) 
+    	val->channel[ch]=im->data[(x+y*im->xsize)*im->channels+ch];
     return 0;
   }
   return -1; /* error was cliped */
@@ -252,20 +255,20 @@ i_copyto(i_img *im,i_img *src,int x1,int y1,int x2,int y2,int tx,int ty) {
   i_color pv;
   int x,y,t,ttx,tty,tt,ch;
 
-  mm_log((1,"i_copyto(im* 0x%x,src 0x%x,x1 %d,y1 %d,x2 %d,y2 %d,tx %d,ty %d)\n",im,src,x1,y1,x2,y2,tx,ty));
-
   if (x2<x1) { t=x1; x1=x2; x2=t; }
   if (y2<y1) { t=y1; y1=y2; y2=t; }
 
-  ttx=tx;
-  for(x=x1;x<x2;x++) {
+  mm_log((1,"i_copyto(im* 0x%x,src 0x%x,x1 %d,y1 %d,x2 %d,y2 %d,tx %d,ty %d)\n",im,src,x1,y1,x2,y2,tx,ty));
+
     tty=ty;
     for(y=y1;y<y2;y++) {
+    ttx=tx;
+    for(x=x1;x<x2;x++) {
       i_gpix(src,x,y,&pv);
       i_ppix(im,ttx,tty,&pv);
-      tty++;
-    }
     ttx++;
+    }
+    tty++;
   }
 }
 
@@ -508,10 +511,63 @@ i_img_diff(i_img *im1,i_img *im2) {
   mm_log((1,"i_img_diff <- (%.2f)\n",tdiff));
 }
 
+/* just a tiny demo of haar wavelets */
+
+i_img*
+i_haar(i_img *im) {
+  int *f;
+  int mx,my;
+  int fx,fy;
+  int x,y;
+  int ch,c;
+  int i1,i2;
+  int MM,mm;
+  i_img *new_img,*new_img2;
+  i_color val1,val2,dval1,dval2;
+  
+  mx=im->xsize;
+  my=im->ysize;
+  fx=(mx+1)/2;
+  fy=(my+1)/2;
+
+
+  /* horizontal pass */
+  
+  new_img=i_img_empty_ch(NULL,fx*2,fy*2,im->channels);
+  new_img2=i_img_empty_ch(NULL,fx*2,fy*2,im->channels);
+
+  c=0; 
+  for(y=0;y<my;y++) for(x=0;x<fx;x++) {
+    i_gpix(im,x*2,y,&val1);
+    i_gpix(im,x*2+1,y,&val2);
+    for(ch=0;ch<im->channels;ch++) {
+      dval1.channel[ch]=(val1.channel[ch]+val2.channel[ch])/2;
+      dval2.channel[ch]=(255+val1.channel[ch]-val2.channel[ch])/2;
+    }
+    i_ppix(new_img,x,y,&dval1);
+    i_ppix(new_img,x+fx,y,&dval2);
+  }
+
+  for(y=0;y<fy;y++) for(x=0;x<mx;x++) {
+    i_gpix(new_img,x,y*2,&val1);
+    i_gpix(new_img,x,y*2+1,&val2);
+    for(ch=0;ch<im->channels;ch++) {
+      dval1.channel[ch]=(val1.channel[ch]+val2.channel[ch])/2;
+      dval2.channel[ch]=(255+val1.channel[ch]-val2.channel[ch])/2;
+    }
+    i_ppix(new_img2,x,y,&dval1);
+    i_ppix(new_img2,x,y+fy,&dval2);
+  }
+
+  i_img_destroy(new_img);
+  return new_img2;
+}
+
 
 symbol_table_t symbol_table={i_has_format,i_color_set,i_color_info,
 			     i_img_new,i_img_empty,i_img_empty_ch,i_img_exorcise,
 			     i_img_info,i_img_setmask,i_img_getmask,i_ppix,i_gpix,
 			     i_box,i_draw,i_arc,i_copyto,i_copyto_trans,i_rubthru};
+
 
 

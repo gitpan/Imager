@@ -22,18 +22,21 @@
  * you have a PNG file, and call png_set_sig_bytes().
  */
 
+/* this is a way to get number of channels from color space 
+ * Color code to channel number */
+
+int CC2C[PNG_COLOR_MASK_PALETTE|PNG_COLOR_MASK_COLOR|PNG_COLOR_MASK_ALPHA];
+
+
 #define PNG_BYTES_TO_CHECK 4
-int check_if_png(char *file_name, FILE **fp)
-{
+int check_if_png(char *file_name, FILE **fp) {
    char buf[PNG_BYTES_TO_CHECK];
-
+   
    /* Open the prospective PNG file. */
-   if ((*fp = fopen(file_name, "rb")) != NULL);
-      return 0;
-
+   if ((*fp = fopen(file_name, "rb")) != NULL) return 0;
+   
    /* Read in some of the signature bytes */
-   if (fread(buf, 1, PNG_BYTES_TO_CHECK, *fp) != PNG_BYTES_TO_CHECK)
-      return 0;
+   if (fread(buf, 1, PNG_BYTES_TO_CHECK, *fp) != PNG_BYTES_TO_CHECK) return 0;
 
    /* Compare the first PNG_BYTES_TO_CHECK bytes of the signature.
       Return nonzero (true) if they match */
@@ -55,6 +58,7 @@ i_readpng(i_img *im,int fd) {
   png_uint_32 width, height;
   int bit_depth, color_type, interlace_type;
   int number_passes,y;
+  int channels;
   
   FILE *fp;
   unsigned int sig_read;
@@ -62,6 +66,8 @@ i_readpng(i_img *im,int fd) {
   char b[256];
 
   sig_read=0;
+
+
 
   if ((fp = fdopen(fd,"r")) == NULL) {
     mm_log((1,"can't fdopen.\n"));
@@ -89,6 +95,7 @@ i_readpng(i_img *im,int fd) {
    * the normal method of doing things with libpng).  REQUIRED unless you
    * set up your own error handlers in the png_create_read_struct() earlier.
    */
+  
   if (setjmp(png_ptr->jmpbuf)) {
     /* Free all of the memory associated with the png_ptr and info_ptr */
     png_destroy_read_struct(&png_ptr, &info_ptr, (png_infopp)NULL);
@@ -105,13 +112,27 @@ i_readpng(i_img *im,int fd) {
   /* The call to png_read_info() gives us all of the information from the
    * PNG file before the first IDAT (image data chunk).  REQUIRED
    */
-
+  
   png_read_info(png_ptr, info_ptr);
   png_get_IHDR(png_ptr, info_ptr, &width, &height, &bit_depth, &color_type,
 	       &interlace_type, NULL, NULL);
-
-  im=i_img_empty_ch(im,width,height,3);
   
+  mm_log((1,
+	  "png_get_IHDR results: width %d, height %d, bit_depth %d,color_type %d,interlace_type %d\n",
+	  width,height,bit_depth,color_type,interlace_type));
+
+  CC2C[PNG_COLOR_TYPE_GRAY]=1;
+  CC2C[PNG_COLOR_TYPE_PALETTE]=3;
+  CC2C[PNG_COLOR_TYPE_RGB]=3;
+  CC2C[PNG_COLOR_TYPE_RGB_ALPHA]=4;
+  CC2C[PNG_COLOR_TYPE_GRAY_ALPHA]=2;
+
+  channels=CC2C[color_type];
+  
+  mm_log((1,"channels %d\n",channels));
+  
+  im=i_img_empty_ch(im,width,height,channels);
+
   /**** Set up the data transformations you want.  Note that these are all
    **** optional.  Only call them if you want/need them.  Many of the
    **** transformations only work on specific types of images, and many
@@ -147,7 +168,7 @@ i_readpng(i_img *im,int fd) {
   
   png_read_update_info(png_ptr, info_ptr);
 
-  for (y = 0; y < height; y++) { png_read_row(png_ptr,(png_bytep) &(im->data[3*width*y]), NULL); }
+  for (y = 0; y < height; y++) { png_read_row(png_ptr,(png_bytep) &(im->data[channels*width*y]), NULL); }
 
   /* read rest of file, and get additional chunks in info_ptr - REQUIRED */
   png_read_end(png_ptr, info_ptr); 
@@ -159,11 +180,7 @@ i_readpng(i_img *im,int fd) {
   return im;
 }
 
-
-
-
-
-
+  
 
 
 undef_int
@@ -172,11 +189,11 @@ i_writepng(i_img *im,int fd) {
   png_structp png_ptr;
   png_infop info_ptr;
   int width,height,y;
-
+  int cspace,channels;
   /*  png_color_8 sig_bit;*/
 
   mm_log((1,"i_writepng(0x%x,fd %d)\n",im,fd));
-
+  
   if ((fp = fdopen(fd,"w")) == NULL) {
     mm_log((1,"can't fdopen.\n"));
     exit(1);
@@ -185,13 +202,21 @@ i_writepng(i_img *im,int fd) {
   height=im->ysize;
   width=im->xsize;
 
+  channels=im->channels;
+
+  if (channels>2) { cspace=PNG_COLOR_TYPE_RGB; channels-=3; }
+  else { cspace=PNG_COLOR_TYPE_GRAY; channels--; }
+  
+  if (channels) cspace|=PNG_COLOR_MASK_ALPHA;
+  channels=im->channels;
+
   /* Create and initialize the png_struct with the desired error handler
    * functions.  If you want to use the default stderr and longjump method,
    * you can supply NULL for the last three parameters.  We also check that
    * the library version is compatible with the one used at compile time,
    * in case we are using dynamically linked libraries.  REQUIRED.
    */
-
+  
   png_ptr = png_create_write_struct(PNG_LIBPNG_VER_STRING,NULL,NULL,NULL);
   
   if (png_ptr == NULL) {
@@ -206,7 +231,7 @@ i_writepng(i_img *im,int fd) {
     png_destroy_write_struct(&png_ptr,  (png_infopp)NULL);
     return(0);
   }
-
+  
   /* Set error handling.  REQUIRED if you aren't supplying your own
    * error hadnling functions in the png_create_write_struct() call.
    */
@@ -227,10 +252,12 @@ i_writepng(i_img *im,int fd) {
    * PNG_INTERLACE_ADAM7, and the compression_type and filter_type MUST
    * currently be PNG_COMPRESSION_TYPE_BASE and PNG_FILTER_TYPE_BASE. REQUIRED
    */
-  png_set_IHDR(png_ptr, info_ptr, width, height, 8, PNG_COLOR_TYPE_RGB,
+
+  png_set_IHDR(png_ptr, info_ptr, width, height, 8, cspace,
 	       PNG_INTERLACE_NONE, PNG_COMPRESSION_TYPE_BASE, PNG_FILTER_TYPE_BASE);
+
   png_write_info(png_ptr, info_ptr);
-  for (y = 0; y < height; y++) png_write_row(png_ptr, (png_bytep) &(im->data[3*width*y]));
+  for (y = 0; y < height; y++) png_write_row(png_ptr, (png_bytep) &(im->data[channels*width*y]));
   png_write_end(png_ptr, info_ptr);
   png_destroy_write_struct(&png_ptr, (png_infopp)NULL);
 

@@ -46,6 +46,7 @@ void i_img_info(i_img *im,int *info);
 
 void i_img_setmask(i_img *im,int ch_mask);
 int i_img_getmask(i_img *im);
+int i_img_getchannels(i_img *im);
 
 /* Base functions */
 
@@ -68,6 +69,7 @@ void i_copyto_trans(i_img *im,i_img *src,int x1,int y1,int x2,int y2,int tx,int 
 void i_rubthru(i_img *im,i_img *src,int tx,int ty);
 
 void i_bezier_multi(i_img *im,int l,double *x,double *y,i_color *val);
+void i_poly_aa(i_img *im,int l,double *x,double *y,i_color *val);
 
 /* image processing functions */
 
@@ -133,6 +135,7 @@ undef_int i_writeppm(i_img *im,int fd);
 
 i_img* i_scaleaxis(i_img *im, float Value, int Axis);
 i_img* i_scale_nn(i_img *im, float scx, float scy);
+i_img* i_haar(i_img *im);
 
 i_img* i_transform(i_img *im, int *opx,int opxl,int *opy,int opyl,double parm[],int parmlen);
 

@@ -114,6 +114,10 @@ int
 i_img_getmask(im)
 	     i_img*    im
 
+int
+i_img_getchannels(im)
+	     i_img*    im
+
 
 void
 i_draw(im,x1,y1,x2,y2,val)
@@ -194,6 +198,39 @@ i_bezier_multi(im,xc,yc,val)
 	       y[i]=(double)SvNV(sv2);
 	     }
              i_bezier_multi(im,len,x,y,val);
+
+
+void
+i_poly_aa(im,xc,yc,val)
+    	     i_img*    im
+             Imager::Color  val
+	     PREINIT:
+	     double   *x,*y;
+	     int       len;
+	     AV       *av1;
+	     AV       *av2;
+	     SV       *sv1;
+	     SV       *sv2;
+	     int i;
+	     PPCODE:
+	     i_color_info(val);
+	     if (!SvROK(ST(1))) croak("Imager: Parameter 1 to i_bezier_multi must be a reference to an array\n");
+	     if (SvTYPE(SvRV(ST(1))) != SVt_PVAV) croak("Imager: Parameter 1 to i_bezier_multi must be a reference to an array\n");
+	     if (!SvROK(ST(2))) croak("Imager: Parameter 1 to i_bezier_multi must be a reference to an array\n");
+	     if (SvTYPE(SvRV(ST(2))) != SVt_PVAV) croak("Imager: Parameter 1 to i_bezier_multi must be a reference to an array\n");
+	     av1=(AV*)SvRV(ST(1));
+	     av2=(AV*)SvRV(ST(2));
+	     if (av_len(av1) != av_len(av2)) croak("Imager: x and y arrays to i_bezier_multi must be equal length\n");
+	     len=av_len(av1)+1;
+	     x=mymalloc( len*sizeof(double) );
+	     y=mymalloc( len*sizeof(double) );
+	     for(i=0;i<len;i++) {
+	       sv1=(*(av_fetch(av1,i,0)));
+	       sv2=(*(av_fetch(av2,i,0)));
+	       x[i]=(double)SvNV(sv1);
+	       y[i]=(double)SvNV(sv2);
+	     }
+             i_poly_aa(im,len,x,y,val);
 
 
 
@@ -511,6 +548,10 @@ i_scale_nn(im,scx,scy)
        	     i_img*    im
              float     scx
              float     scy
+
+i_img*
+i_haar(im)
+       	     i_img*    im
 
 
 i_img*

@@ -1,13 +1,9 @@
-#include "../plug.h"
-
-symbol_table_t *symbol_table;
-UTIL_table_t *util_table;
+#include "pluginst.h"
 
 
 char evalstr[]="Description string of plugin dyntest - kind of like";
+
 void null_plug(void *ptr) { }
-
-
 
 /* Example dynamic filter - level stretch (linear) - note it only stretches and doesn't compress */
 
@@ -73,8 +69,4 @@ func_ptr function_list[]={
 
 
 /* Remember to double backslash backslashes within Double quotes in C */
-
-
-
-
 

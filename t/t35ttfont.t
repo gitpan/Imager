@@ -45,6 +45,7 @@ i_tt_cp($overlay,5,50,1,$fontname,50.0,'XMCLH',5,1);
 i_draw($overlay,0,50,100,50,$bgcolor);
 
 open(FH,">testout/t35ttfont.ppm") || die "cannot open testout/t35ttfont.ppm\n";
+binmode(FH);
 i_writeppm($overlay,fileno(FH));
 close(FH);
 
@@ -57,6 +58,7 @@ $backgr=i_img_empty_ch(undef,280,150,3);
 i_tt_text($backgr,10,100,$bgcolor,$fontname,150.0,'test',4,1);
 
 open(FH,">testout/t35ttfont2.ppm") || die "cannot open testout/t35ttfont.ppm\n";
+binmode(FH);
 i_writeppm($backgr,fileno(FH));
 close(FH);
 

@@ -4,6 +4,7 @@
 
 #include "ext.h"
 
+
 #define getINT(k,s) (util_table->getint(INP,k,s))
 #define getDOUBLE(k,s) (util_table->getdouble(INP,k,s))
 #define getVOID(k,s) (util_table->getvoid(INP,k,(void**)s))

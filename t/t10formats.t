@@ -38,12 +38,14 @@ if (!i_has_format("jpeg")) {
     print "ok 3 # skip\n";
 } else {
     open(FH,">testout/t10.jpg") || die "cannot open testout/t10.jpg for writing\n";
+    binmode(FH);
     i_writejpeg($img,fileno(FH),30);
     close(FH);
 
     print "ok 2\n";
 
     open(FH,"testout/t10.jpg") || die "cannot open testout/t10.jpg\n";
+    binmode(FH);
     ($cmpimg,undef)=i_readjpeg($cmpimg,fileno(FH));
     close(FH);
 
@@ -56,12 +58,14 @@ if (!i_has_format("png")) {
     print "ok 5 # skip\n";
 } else {
     open(FH,">testout/t10.png") || die "cannot open testout/t10.png for writing\n";
+    binmode(FH);
     i_writepng($img,fileno(FH)) || die "Cannot write testout/t10.png\n";
     close(FH);
 
     print "ok 4\n";
 
     open(FH,"testout/t10.png") || die "cannot open testout/t10.png\n";
+    binmode(FH);
     $cmpimg=i_readpng($cmpimg,fileno(FH)) || die "Cannot read testout/t10.pmg\n";
     close(FH);
 
@@ -70,12 +74,14 @@ if (!i_has_format("png")) {
 }
 
 open(FH,">testout/t10.raw") || die "Cannot open testout/t10.raw for writing\n";
+binmode(FH);
 i_writeraw($img,fileno(FH)) || die "Cannot write testout/t10.raw\n";
 close(FH);
 
 print "ok 6\n";
 
 open(FH,"testout/t10.raw") || die "Cannot open testout/t15.raw\n";
+binmode(FH);
 $cmpimg=i_readraw($cmpimg,fileno(FH),150,150,3,3,0) || die "Cannot read testout/t10.raw\n";
 close(FH);
 
@@ -83,12 +89,14 @@ print "# raw average mean square pixel difference: ",sqrt(i_img_diff($img,$cmpim
 print "ok 7\n";
 
 open(FH,">testout/t10.ppm") || die "Cannot open testout/t10.ppm\n";
+binmode(FH);
 i_writeppm($img,fileno(FH)) || die "Cannot write testout/t10.ppm\n";
 close(FH);
 
 print "ok 8\n";
 
 open(FH,"testout/t10.ppm") || die "Cannot open testout/t10.ppm\n";
+binmode(FH);
 $cmpimg=i_readppm($cmpimg,fileno(FH)) || die "Cannot read testout/t10.ppm\n";
 close(FH);
 
@@ -99,12 +107,14 @@ if (!i_has_format("gif")) {
     print "ok 11 # skip\n";
 } else {
     open(FH,">testout/t10.gif") || die "Cannot open testout/t10.gif\n";
+    binmode(FH);
     i_writegifmc($img,fileno(FH),8) || die "Cannot write testout/t10.gif\n";
     close(FH);
 
     print "ok 10\n";
 
     open(FH,"testout/t10.gif") || die "Cannot open testout/t10.gif\n";
+    binmode(FH);
     $img=i_readgif(undef,fileno(FH)) || die "Cannot read testout/t10.gif\n";
     close(FH);
 

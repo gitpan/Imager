@@ -51,7 +51,7 @@ i_readgif(i_img *im,int fd) {
   
   if ((GifRow = (GifRowType) mymalloc(Size)) == NULL)
     m_fatal(0,"Failed to allocate memory required, aborted."); /* First row. */
-  
+
   for (i = 0; i < GifFile->SWidth; i++) GifRow[i] = GifFile->SBackGroundColor;
   
   /* Scan the content of the GIF file and load the image(s) in: */
@@ -71,7 +71,9 @@ i_readgif(i_img *im,int fd) {
       Col = GifFile->Image.Left;
       Width = GifFile->Image.Width;
       Height = GifFile->Image.Height;
-      mm_log((1,"i_readgif: Image %d at (%d, %d) [%dx%d]: \n",++ImageNum, Col, Row, Width, Height));
+      ImageNum++;
+      mm_log((1,"i_readgif: Image %d at (%d, %d) [%dx%d]: \n",ImageNum, Col, Row, Width, Height));
+
       if (GifFile->Image.Left + GifFile->Image.Width > GifFile->SWidth ||
 	  GifFile->Image.Top + GifFile->Image.Height > GifFile->SHeight) {
 	fprintf(stderr, "Image %d is not confined to screen dimension, aborted.\n");
@@ -98,7 +100,6 @@ i_readgif(i_img *im,int fd) {
       }
       else {
 	for (i = 0; i < Height; i++) {
-	  Row++;
 	  if (DGifGetLine(GifFile, &GifRow[Col], Width) == GIF_ERROR) {
 	    mm_log((1,"fatal\n"));
 	    exit(-1);
@@ -111,7 +112,7 @@ i_readgif(i_img *im,int fd) {
 	    col.rgb.b = ColorMapEntry->Blue;
 	    i_ppix(im,x,Row,&col);
 	  }
-	  
+	  Row++;
 	}
       }
       break;

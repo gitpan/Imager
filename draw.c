@@ -284,12 +284,102 @@ i_bezier_multi(i_img *im,int l,double *x,double *y,i_color *val) {
   myfree(bzcoef);
 }
 
+struct p_point {
+  int n;
+  double x,y;
+};
+
+struct p_line  {
+  int n;
+  double x1,y1;
+  double x2,y2;
+  double miny,maxy;
+};
+
+
+int
+p_compy(void *p1, void *p2) {
+  /* p_compy(const struct p_point *p1, const struct p_point *p2) { */
+  struct p_point *pp1,*pp2;
+  pp1=p1;
+  pp2=p2;
+  if (pp1->y > pp2->y) return 1;
+  if (pp1->y < pp2->y) return -1;
+  return 0;
+}
 
 
 
 
+/* Antialiasing polygon algorithm 
+   specs:
+     1. only nice polygons - no crossovers
+     2. floating point co-ordinates
+     3. full antialiasing ( complete spectrum of blends )
+     4. uses hardly any memory
+     5. no subsampling phase
+
+   For each interval we must: 
+     1. find which lines are in it
+     2. order the lines from in increasing x order.
+        since we are assuming no crossovers it is sufficent
+        to check a single point on each line.
+*/
+
+
+double
+p_eval_aty(struct p_line *l,double y) {
+  double x;
+  
+  
+}
+
+
+void
+i_poly_aa(i_img *im,int l,double *x,double *y,i_color *val) {
+  int i,s,cy,miny,maxy;
+  double comp=0.01;
+  struct p_point *pset;
+  struct p_line *lset;
+  
+  if ( (pset=mymalloc(sizeof(struct p_point)*l)) == NULL) { m_fatal(2,"malloc failed\n"); return; }
+  if ( (lset=mymalloc(sizeof(struct p_line)*l)) == NULL) { m_fatal(2,"malloc failed\n"); return; }
+
+  for(i=0;i<l;i++) {
+    pset[i].n=i;
+    pset[i].x=x[i];
+    pset[i].y=y[i];
+    
+    lset[i].n=i;
+    lset[i].x1=x[i];
+    lset[i].y1=y[i];
+    lset[i].x2=x[(i+1)%l];
+    lset[i].y2=y[(i+1)%l];
+    lset[i].miny=min(lset[i].y1,lset[i].y2);
+    lset[i].maxy=max(lset[i].y1,lset[i].y2);
+  }
+
+  qsort(pset,l,sizeof(struct p_point),p_compy);
+
+  printf("POST point list\n");
+  for(i=0;i<l;i++) {
+    printf("%d [ %d ] %f %f\n",i,pset[i].n,pset[i].x,pset[i].y);
+  }
+  
+  printf("line list\n");
+  for(i=0;i<l;i++) {
+    printf("%d [ %d ] (%.2f , %.2f) -> (%.2f , %.2f) yspan ( %.2f , %.2f )\n",i,lset[i].n,lset[i].x1,lset[i].y1,lset[i].x2,lset[i].y2,lset[i].miny,lset[i].maxy);
+  }
+  
+  miny=pset[0].y;
+  maxy=ceil(pset[i-1].y);
+  for(cy=miny;cy<=maxy;cy++) {
+    
 
 
 
+  }
 
 
+  
+}

@@ -35,6 +35,7 @@ if (!(i_has_format("t1")) ) {
      print "bbox: ($bbox[0], $bbox[1]) - ($bbox[2], $bbox[3])\n";
 
      open(FH,">testout/t30t1font.ppm") || die "cannot open testout/t35t1font.ppm\n";
+     binmode(FH);
      i_writeppm($overlay,fileno(FH));
      close(FH);
 
@@ -47,6 +48,7 @@ if (!(i_has_format("t1")) ) {
      i_t1_text($backgr,10,100,$bgcolor,0,150.0,'test',4,1);
 
      open(FH,">testout/t35t1font2.ppm") || die "cannot open testout/t35t1font.ppm\n";
+     binmode(FH);
      i_writeppm($backgr,fileno(FH));
      close(FH);
 
