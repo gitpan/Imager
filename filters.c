@@ -216,7 +216,7 @@ void i_bumpmap(i_img *im, i_img *bump, int channel, int light_x, int light_y, in
     }
   }
 
-  i_copyto(im, &new_im, 0, 0, (int)im->xsize, (int)im->ysize, 0, 0, NULL);
+  i_copyto(im, &new_im, 0, 0, (int)im->xsize, (int)im->ysize, 0, 0);
   
   i_img_exorcise(&new_im);
 }
@@ -314,7 +314,7 @@ unsigned char saturate(int in) {
   return 0;
 }
 
-/* These functions written by Arnar M. Hrafnkelsson (mbl.is) */
+/* These functions written by Arnar M. Hrafnkelsson (addi@umich.edu) */
 
 void
 i_watermark(i_img *im,i_img *wmark,int tx,int ty,int pixdiff) {
@@ -330,4 +330,185 @@ i_watermark(i_img *im,i_img *wmark,int tx,int ty,int pixdiff) {
     i_ppix(im,tx+vx,ty+vy,&val);
   }
 }
+
+
+
+
+void
+i_autolevels(i_img *im,float lsat,float usat,float skew) {
+  i_color val;
+  int i,t,x,y,rhist[256],ghist[256],bhist[256];
+  int rsum,rmin,rmax;
+  int gsum,gmin,gmax;
+  int bsum,bmin,bmax;
+  int rcl,rcu,gcl,gcu,bcl,bcu;
+
+  int rskl,rsku;
+  
+
+  mm_log((1,"i_autolevels(im *0x%X, lsat %f,usat %f,skew %f)\n", im, lsat,usat,skew));
+
+  rsum=gsum=bsum=0;
+  for(i=0;i<256;i++) rhist[i]=ghist[i]=bhist[i]=0;
+  /* create histogram for each channel */
+  for(y = 0; y < im->ysize; y++) for(x = 0; x < im->xsize; x++) {
+    i_gpix(im, x, y, &val);
+    rhist[val.channel[0]]++;
+    ghist[val.channel[1]]++;
+    bhist[val.channel[2]]++;
+  }
+
+  for(i=0;i<256;i++) {
+    rsum+=rhist[i];
+    gsum+=ghist[i];
+    bsum+=bhist[i];
+  }
+  
+  /*  printf("\n\nhistogram\n");
+      for(i=0;i<256;i++) printf("%03d %03d %03d\n",rhist[i],ghist[i],bhist[i]); */
+  
+  rmin=gmin=bmin=0;
+  rmax=gmax=bmax=255;
+  
+  rcu=rcl=gcu=gcl=bcu=bcl=0;
+  
+  for(i=0;i<256;i++) { 
+    rcl+=rhist[i]; if ( (rcl<rsum*lsat) ) { rmin=i; }
+    rcu+=rhist[255-i]; if ( (rcu<rsum*usat) ) { rmax=255-i; }
+
+    gcl+=ghist[i]; if ( (gcl<gsum*lsat) ) { gmin=i; }
+    gcu+=ghist[255-i]; if ( (gcu<gsum*usat) ) { gmax=255-i; }
+
+    bcl+=bhist[i]; if ( (bcl<bsum*lsat) ) { bmin=i; }
+    bcu+=bhist[255-i]; if ( (bcu<bsum*usat) ) { bmax=255-i; }
+  }
+
+  /*  printf("rmin=%d rmax=%d\n",rmin,rmax);
+      printf("gmin=%d gmax=%d\n",gmin,gmax);
+      printf("bmin=%d bmax=%d\n",bmin,bmax);  */
+
+  for(y = 0; y < im->ysize; y++) for(x = 0; x < im->xsize; x++) {
+    i_gpix(im, x, y, &val);
+    val.channel[0]=saturate((val.channel[0]-rmin)*255/(rmax-rmin));
+    val.channel[1]=saturate((val.channel[1]-gmin)*255/(gmax-gmin));
+    val.channel[2]=saturate((val.channel[2]-bmin)*255/(bmax-bmin));
+
+    /*    printf("(%d,%d) -> %f\n",x,y,PerlinNoise_2D(x,y)); */
+    i_ppix(im, x, y, &val);
+  }
+
+  /*    i_ppix(im, x, y, &rcolor); */
+}
+
+
+/* What follows is a very bad rip of perlins 2d noise function */
+
+float
+Noise(int x, int y) {
+  int n = x + y * 57; 
+  n = (n<<13) ^ n;
+  return ( 1.0 - ( (n * (n * n * 15731 + 789221) + 1376312589) & 0x7fffffff) / 1073741824.0);
+}
+
+float
+SmoothedNoise1(float x, float y) {
+  float corners = ( Noise(x-1, y-1)+Noise(x+1, y-1)+Noise(x-1, y+1)+Noise(x+1, y+1) ) / 16;
+  float sides   = ( Noise(x-1, y)  +Noise(x+1, y)  +Noise(x, y-1)  +Noise(x, y+1) ) /  8;
+  float center  =  Noise(x, y) / 4;
+  return corners + sides + center;
+}
+
+float C_Interpolate(float a,float b,float x) {
+  /*  float ft = x * 3.1415927; */
+  float ft = x * PI;
+  float f = (1 - cos(ft)) * .5;
+  return  a*(1-f) + b*f;
+}
+
+
+float
+InterpolatedNoise(float x, float y) {
+
+  int integer_X = x;
+  float fractional_X = x - integer_X;
+  int integer_Y = y;
+  float fractional_Y = y - integer_Y;
+
+  float v1 = SmoothedNoise1(integer_X,     integer_Y);
+  float v2 = SmoothedNoise1(integer_X + 1, integer_Y);
+  float v3 = SmoothedNoise1(integer_X,     integer_Y + 1);
+  float v4 = SmoothedNoise1(integer_X + 1, integer_Y + 1);
+
+  float i1 = C_Interpolate(v1 , v2 , fractional_X);
+  float i2 = C_Interpolate(v3 , v4 , fractional_X);
+
+  return C_Interpolate(i1 , i2 , fractional_Y);
+}
+
+float
+PerlinNoise_2D(float x, float y) {
+  int i,frequency;
+  float amplitude;
+  float total = 0;
+  int persistence=2;
+  int Number_Of_Octaves=6;
+  int p = persistence;
+  int n = Number_Of_Octaves - 1;
+
+  for(i=0;i<n;i++) {
+    frequency = 2*i;
+    amplitude = PI;
+    total = total + InterpolatedNoise(x * frequency, y * frequency) * amplitude;
+  }
+
+  return total;
+}
+
+
+void
+i_radnoise(i_img *im,int xo,int yo,float rscale,float ascale) {
+  int x,y,ch;
+  i_color val;
+  float pn;
+  unsigned char v;
+  float scale=10;
+  float xc,yc,r;
+  double a;
+  
+  for(y = 0; y < im->ysize; y++) for(x = 0; x < im->xsize; x++) {
+    xc=(float)x-xo+0.5;
+    yc=(float)y-yo+0.5;
+    r=rscale*sqrt(xc*xc+yc*yc)+1.2;
+    a=(PI+atan2(yc,xc))*ascale;
+    v=saturate(128+100*(PerlinNoise_2D(a,r)));
+    /* v=saturate(120+12*PerlinNoise_2D(xo+(float)x/scale,yo+(float)y/scale));  Good soft marble */ 
+    for(ch=0;ch<im->channels;ch++) val.channel[ch]=v;
+    i_ppix(im, x, y, &val);
+  }
+}
+
+void
+i_turbnoise(i_img *im,float xo,float yo,float scale) {
+  int x,y,ch;
+  float pn;
+  unsigned char v;
+  i_color val;
+
+  /*  i_radnoise(im,250,250);
+      return; */
+
+  for(y = 0; y < im->ysize; y++) for(x = 0; x < im->xsize; x++) {
+    /*    v=saturate(125*(1.0+PerlinNoise_2D(xo+(float)x/scale,yo+(float)y/scale))); */
+    v=saturate(120*(1.0+sin(xo+(float)x/scale+PerlinNoise_2D(xo+(float)x/scale,yo+(float)y/scale))));
+    for(ch=0;ch<im->channels;ch++) val.channel[ch]=v;
+    i_ppix(im, x, y, &val);
+  }
+}
+
+
+
+
+
+
+
 

@@ -9,19 +9,21 @@
 BEGIN { $| = 1; print "1..11\n"; }
 END {print "not ok 1\n" unless $loaded;}
 use Imager;
+use Data::Dumper;
 $loaded = 1;
 print "ok 1\n";
 
-init_log("testout/t10formats.log",1);
 
+
+init_log("testout/t10formats.log",1);
 
 i_has_format("jpeg") && print "# has jpeg\n";
 i_has_format("png") && print "# has png\n";
 i_has_format("gif") && print "# has gif\n";
 
-$green=i_color_set(undef,0,255,0,0);
-$blue=i_color_set(undef,0,0,255,0);
-$red=i_color_set(undef,255,0,0,0);
+$green=i_color_new(0,255,0,0);
+$blue=i_color_new(0,0,255,0);
+$red=i_color_new(255,0,0,0);
 
 $img=i_img_empty_ch(undef,150,150,3);
 $cmpimg=i_img_empty_ch(undef,150,150,3);
@@ -80,7 +82,6 @@ close(FH);
 print "# raw average mean square pixel difference: ",sqrt(i_img_diff($img,$cmpimg))/150*150,"\n";
 print "ok 7\n";
 
-
 open(FH,">testout/t10.ppm") || die "Cannot open testout/t10.ppm\n";
 i_writeppm($img,fileno(FH)) || die "Cannot write testout/t10.ppm\n";
 close(FH);
@@ -98,7 +99,7 @@ if (!i_has_format("gif")) {
     print "ok 11 # skip\n";
 } else {
     open(FH,">testout/t10.gif") || die "Cannot open testout/t10.gif\n";
-    i_writegif($img,fileno(FH),8) || die "Cannot write testout/t10.gif\n";
+    i_writegifmc($img,fileno(FH),8) || die "Cannot write testout/t10.gif\n";
     close(FH);
 
     print "ok 10\n";

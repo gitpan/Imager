@@ -19,7 +19,7 @@ init_log(const char* name,int onoff) {
     if (name==NULL) {
       lg_file=stderr;
     } else {
-      if (NULL == (lg_file=fopen(name, "a")) ) { 
+      if (NULL == (lg_file=fopen(name, "w+")) ) { 
 	fprintf(stderr,"Cannot open file '%s'\n",name);
 	exit(2);
       }

@@ -114,6 +114,49 @@ Revision history for Perl extension Imager.
 	  - Fixed a bug in the scaling routine - it wasn't
 	  handling 0< cases.
 
+0.22	Sat Oct  9 07:04:14 1999
+	  - Added a new method to write gif images - now 
+	  it is possible to have a part of a palette fixed.
+	  this is very usefull if one needs to make sure that
+	  some color like white is in the pallete.  This method
+	  also allows some ditherding and gives better colormap
+	  than the mediancut from the gif libraries.  It does
+	  need much more cpu power though.  Hopefully later versions
+	  will be faster.
+
+0.23	**************** Internal release only
+	  - Fixed the %instances bug - caused ALL memory to be leaked.
+	  Added real noise function - need feedback on how it should
+	  be used. Also box(), and polyline are now in place.  Polygon
+	  is missing but antialiased line drawing with integer endpoints are
+          done but should be replaced with a version that can have 
+	  floating point endvalues. Two noise filters addded.
+
+0.24	**************** Internal release only
+	  - Converted i_color into an object from a reference, so now it's
+	giving an object instead of a void ptr or an integer or something.
+
+0.25	**************** Internal release only
+	  - Added basic Truetype functionality - still needs a rewrite
+	to be decent. Currently it's a port of a demo program that
+	uses an awful amount of global variables and there is much IO since
+	no caching of glyphs is done.
+
+0.26    Tue Nov 23 03:57:00 EST 1999 > Development release <
+	  - Added transformations so that an image can be wrapped.
+	To achive decent speed a C based stackmachine is included. As a result
+	transformations need to be specified in rpn (postfix) notation. It
+	also can use the Affix::Infix2Postfix class to do the conversion for it.
+
+0.27    Tue Nov 23 03:57:00 EST 1999
+	  - This is a bugfix version mostly, thanks to claes for pointing
+	out the problems - fixed palette saving wasn't working correctly after
+	version 0.24 - rather surprised this didn't crash everything.
+	Also fixed that for t1 fonts the bounding box wasn't being reported 
+	unless the font had been used before.  This is either a bug in t1lib
+	or a mistake in it's documentation.  Another lingering bug since 0.24
+	what that $img->box() wasn't creating it's default color properly.
+	Added i_tt_text() method and more debuging to the truetype routines.      	
+
+
 ===================================================
-
-

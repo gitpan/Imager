@@ -6,11 +6,27 @@
 
 #define minmax(a,b,i) ( ((a>=i)?a: ( (b<=i)?b:i   )) )
 
-i_color *i_color_set(i_color *cl,unsigned char r,unsigned char g,unsigned char b,unsigned char a) {
+i_color *
+i_color_set(i_color *cl,unsigned char r,unsigned char g,unsigned char b,unsigned char a) {
   mm_log((1,"i_set_i_color(cl* 0x%x,r %d,g %d,b %d,a %d)\n",cl,r,g,b,a));
   if (cl == NULL)
     if ( (cl=mymalloc(sizeof(i_color))) == NULL)
       m_fatal(2,"malloc() error\n");
+  cl->rgba.r=r;
+  cl->rgba.g=g;
+  cl->rgba.b=b;
+  cl->rgba.a=a;
+  mm_log((1,"(0x%x) <- i_set_color\n",cl));
+  return cl;
+}
+
+i_color *
+i_color_new(unsigned char r,unsigned char g,unsigned char b,unsigned char a) {
+  i_color *cl=NULL;
+
+  mm_log((1,"i_set_i_color(r %d,g %d,b %d,a %d)\n",cl,r,g,b,a));
+
+  if ( (cl=mymalloc(sizeof(i_color))) == NULL) m_fatal(2,"malloc() error\n");
   cl->rgba.r=r;
   cl->rgba.g=g;
   cl->rgba.b=b;
@@ -27,12 +43,21 @@ i_color_add(i_color *dst,i_color *src,int ch) {
   }
 }
 
-void i_color_info(i_color *cl) {
+void
+i_color_info(i_color *cl) {
   mm_log((1,"i_color_info(cl* 0x%x)\n",cl));
   mm_log((1,"i_color_info: (%d,%d,%d,%d)\n",cl->rgba.r,cl->rgba.g,cl->rgba.b,cl->rgba.a));
 }
 
-i_img *i_img_new() {
+void
+ICL_DESTROY(i_color *cl) {
+  mm_log((1,"ICL_DESTROY(cl* 0x%x)\n",cl));
+  myfree(cl);
+}
+
+
+i_img *
+i_img_new() {
   i_img *im;
   
   mm_log((1,"i_img_struct()\n"));
@@ -54,7 +79,8 @@ i_img *i_img_new() {
   return im;
 }
 
-i_img *i_img_empty(i_img *im,int x,int y) {
+i_img *
+i_img_empty(i_img *im,int x,int y) {
   mm_log((1,"i_img_empty(*im 0x%x,x %d,y %d)\n",im,x,y));
   if (im==NULL)
     if ( (im=mymalloc(sizeof(i_img))) == NULL)
@@ -77,7 +103,8 @@ i_img *i_img_empty(i_img *im,int x,int y) {
 }
 
 
-i_img *i_img_empty_ch(i_img *im,int x,int y,int ch) {
+i_img *
+i_img_empty_ch(i_img *im,int x,int y,int ch) {
   mm_log((1,"i_img_empty_ch(*im 0x%x,x %d,y %d,ch %d)\n",im,x,y,ch));
   if (im==NULL)
     if ( (im=mymalloc(sizeof(i_img))) == NULL)
@@ -141,8 +168,11 @@ i_img_info(i_img *im,int *info) {
   }
 }
 
-void i_img_setmask(i_img *im,int ch_mask) { im->ch_mask=ch_mask; }
-int i_img_getmask(i_img *im) { return im->ch_mask; }
+void
+i_img_setmask(i_img *im,int ch_mask) { im->ch_mask=ch_mask; }
+
+int
+i_img_getmask(i_img *im) { return im->ch_mask; }
 
 
 int
@@ -189,11 +219,11 @@ i_gpix_pch(i_img *im,int x,int y,int ch) {
 */
 
 void
-i_copyto(i_img *im,i_img *src,int x1,int y1,int x2,int y2,int tx,int ty,i_color *trans) {
+i_copyto_trans(i_img *im,i_img *src,int x1,int y1,int x2,int y2,int tx,int ty,i_color *trans) {
   i_color pv;
   int x,y,t,ttx,tty,tt,ch;
 
-  mm_log((1,"i_copyto(im* 0x%x,src 0x%x,x1 %d,y1 %d,x2 %d,y2 %d,tx %d,ty %d,trans* 0x%x)\n",im,src,x1,y1,x2,y2,tx,ty,trans));
+  mm_log((1,"i_copyto_trans(im* 0x%x,src 0x%x,x1 %d,y1 %d,x2 %d,y2 %d,tx %d,ty %d,trans* 0x%x)\n",im,src,x1,y1,x2,y2,tx,ty,trans));
 
   if (x2<x1) { t=x1; x1=x2; x2=t; }
   if (y2<y1) { t=y1; y1=y2; y2=t; }
@@ -215,6 +245,28 @@ i_copyto(i_img *im,i_img *src,int x1,int y1,int x2,int y2,int tx,int ty,i_color 
 	}
       ttx++;
     }
+}
+
+void
+i_copyto(i_img *im,i_img *src,int x1,int y1,int x2,int y2,int tx,int ty) {
+  i_color pv;
+  int x,y,t,ttx,tty,tt,ch;
+
+  mm_log((1,"i_copyto(im* 0x%x,src 0x%x,x1 %d,y1 %d,x2 %d,y2 %d,tx %d,ty %d)\n",im,src,x1,y1,x2,y2,tx,ty));
+
+  if (x2<x1) { t=x1; x1=x2; x2=t; }
+  if (y2<y1) { t=y1; y1=y2; y2=t; }
+
+  ttx=tx;
+  for(x=x1;x<x2;x++) {
+    tty=ty;
+    for(y=y1;y<y2;y++) {
+      i_gpix(src,x,y,&pv);
+      i_ppix(im,ttx,tty,&pv);
+      tty++;
+    }
+    ttx++;
+  }
 }
 
 
@@ -247,7 +299,8 @@ i_rubthru(i_img *im,i_img *src,int tx,int ty) {
     }
 }
 
-float Lanczos(float x) {
+float
+Lanczos(float x) {
   float PIx, PIx2;
   
   PIx = PI * x;
@@ -390,6 +443,47 @@ i_scale_nn(i_img *im, float scx, float scy) {
 }
 
 
+
+
+
+
+
+
+
+i_img*
+i_transform(i_img *im, int *opx,int opxl,int *opy,int opyl,double parm[],int parmlen) {
+  double rx,ry;
+  int nxsize,nysize,nx,ny;
+  i_img *new_img;
+  i_color val;
+  
+  
+  mm_log((1,"i_transform(im 0x%x, opx 0x%x, opxl %d, opy 0x%x, opyl %d, parm 0x%x, parmlen %d)\n",im,opx,opxl,opy,opyl,parm,parmlen));
+
+  nxsize = im->xsize;
+  nysize = im->ysize ;
+  
+  new_img=i_img_empty_ch(NULL,nxsize,nysize,im->channels);
+  /*   fprintf(stderr,"parm[2]=%f\n",parm[2]);   */
+  for(ny=0;ny<nysize;ny++) for(nx=0;nx<nxsize;nx++) {
+    /*     parm[parmlen-2]=(double)nx;
+	   parm[parmlen-1]=(double)ny; */
+
+    parm[0]=(double)nx;
+    parm[1]=(double)ny;
+
+    /*     fprintf(stderr,"(%d,%d) ->",nx,ny);  */
+    rx=op_run(opx,opxl,parm,parmlen);
+    ry=op_run(opy,opyl,parm,parmlen);
+    /*    fprintf(stderr,"(%f,%f)\n",rx,ry); */
+    i_gpix(im,rx,ry,&val);
+    i_ppix(new_img,nx,ny,&val);
+  }
+
+  mm_log((1,"(0x%x) <- i_transform\n",new_img));
+  return new_img;
+}
+
 float
 i_img_diff(i_img *im1,i_img *im2) {
   int x,y,ch,xb,yb,chb;
@@ -415,10 +509,9 @@ i_img_diff(i_img *im1,i_img *im2) {
 }
 
 
-
-
 symbol_table_t symbol_table={i_has_format,i_color_set,i_color_info,
 			     i_img_new,i_img_empty,i_img_empty_ch,i_img_exorcise,
 			     i_img_info,i_img_setmask,i_img_getmask,i_ppix,i_gpix,
-			     i_box,i_draw,i_arc,i_copyto,i_rubthru};
+			     i_box,i_draw,i_arc,i_copyto,i_copyto_trans,i_rubthru};
+
 

@@ -4,10 +4,9 @@ use Imager;
 
 $loaded = 1;
 
-$Imager::DEBUG=1;
+$Imager::DEBUG=0;
 
-$ENV{T1LIB_CONFIG}='fonts/t1/t1lib.config';
-Imager::init(log=>'testout/t00basic.log');
+Imager::init('log'=>'testout/t60dyntest.log');
 
 $img=Imager->new() || die "unable to create image object\n";
 

@@ -65,9 +65,8 @@ func_ptr function_list[]={
   },{
     "lin_stretch",
     lin_stretch,
-    "callseq => ['image','a','b'],
-    callsub => sub { my %hsh=@_; DSO_call($DSO_handle,1,\\%hsh); } 
-
+    "callseq => ['image','a','b'], \
+    callsub => sub { my %hsh=@_; DSO_call($DSO_handle,1,\\%hsh); } \
     "
   },
   {NULL,NULL,NULL}};

@@ -1,5 +1,5 @@
-#ifndef _IMAGE_TYPES_H_
-#define _IMAGE_TYPES_H_
+#ifndef _DATATYPES_H_
+#define _DATATYPES_H_
 
 #define MAXCHANNELS 4
 
@@ -32,6 +32,19 @@ struct _i_img {
 
 typedef struct _i_img i_img;
 
+
+/* Helper datatypes */
+
+/* Octtree */
+
+struct octt {
+  struct octt *t[8]; 
+  int cnt;
+};
+
+struct octt *octt_new();
+void octt_add(struct octt *ct,unsigned char r,unsigned char g,unsigned char b);
+void octt_dump(struct octt *ct);
+void octt_count(struct octt *ct,int *tot);
+
 #endif
-
-

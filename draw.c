@@ -14,7 +14,7 @@ i_mmarray_cr(i_mmarray *ar,int l) {
 void
 i_mmarray_dst(i_mmarray *ar) {
   ar->lines=0;
-  if (ar->data != NULL) { free(ar->data); ar->data=NULL; }
+  if (ar->data != NULL) { myfree(ar->data); ar->data=NULL; }
 }
 
 void
@@ -170,3 +170,126 @@ i_draw(i_img *im,int x1,int y1,int x2,int y2,i_color *val) {
     }
   mm_log((1,"i_draw: alpha=%f.\n",alpha));
 }
+
+void
+i_line_aa(i_img *im,int x1,int y1,int x2,int y2,i_color *val) {
+  i_color tval;
+  float alpha;
+  float dsec,dfrac;
+  int temp,dx,dy,isec,ch;
+
+  mm_log((1,"i_draw(im* 0x%x,x1 %d,y1 %d,x2 %d,y2 %d,val 0x%x)\n",im,x1,y1,x2,y2,val));
+
+  dy=y2-y1;
+  dx=x2-x1;
+
+  if (abs(dx)>abs(dy)) { /* alpha < 1 */
+    if (x2<x1) { temp=x1; x1=x2; x2=temp; temp=y1; y1=y2; y2=temp; }
+    alpha=(float)(y2-y1)/(float)(x2-x1);
+
+    dsec=y1;
+    while(x1<=x2) {
+      isec=(int)dsec;
+      dfrac=dsec-isec;
+      /*      dfrac=1-(1-dfrac)*(1-dfrac); */
+      /* This is something we can play with to try to get better looking lines */
+
+      i_gpix(im,x1,isec,&tval);
+      for(ch=0;ch<im->channels;ch++) tval.channel[ch]=(unsigned char)(dfrac*(float)tval.channel[ch]+(1-dfrac)*(float)val->channel[ch]);
+      i_ppix(im,x1,isec,&tval);
+      
+      i_gpix(im,x1,isec+1,&tval);
+      for(ch=0;ch<im->channels;ch++) tval.channel[ch]=(unsigned char)((1-dfrac)*(float)tval.channel[ch]+dfrac*(float)val->channel[ch]);
+      i_ppix(im,x1,isec+1,&tval);
+      
+      dsec+=alpha;
+      x1++;
+    }
+  } else {
+    if (y2<y1) { temp=y1; y1=y2; y2=temp; temp=x1; x1=x2; x2=temp; }
+    alpha=(float)(x2-x1)/(float)(y2-y1);
+    dsec=x1;
+    while(y1<=y2) {
+      isec=(int)dsec;
+      dfrac=dsec-isec;
+      /*      dfrac=sqrt(dfrac); */
+      /* This is something we can play with */
+      i_gpix(im,isec,y1,&tval);
+      for(ch=0;ch<im->channels;ch++) tval.channel[ch]=(unsigned char)(dfrac*(float)tval.channel[ch]+(1-dfrac)*(float)val->channel[ch]);
+      i_ppix(im,isec,y1,&tval);
+
+      i_gpix(im,isec+1,y1,&tval);
+      for(ch=0;ch<im->channels;ch++) tval.channel[ch]=(unsigned char)((1-dfrac)*(float)tval.channel[ch]+dfrac*(float)val->channel[ch]);
+      i_ppix(im,isec+1,y1,&tval);
+
+      dsec+=alpha;
+      y1++;
+    }
+  }
+}
+
+double
+perm(int n,int k) {
+  double r;
+  int i;
+  r=1;
+  for(i=k+1;i<=n;i++) r*=i;
+  for(i=1;i<=(n-k);i++) r/=i;
+  return r;
+}
+
+
+/* Note in calculating t^k*(1-t)^(n-k) 
+   we can start by using t^0=1 so this simplifies to
+   t^0*(1-t)^n - we want to multiply that with t/(1-t) each iteration
+   to get a new level - this may lead to errors who knows lets test it */
+
+void
+i_bezier_multi(i_img *im,int l,double *x,double *y,i_color *val) {
+  double *bzcoef;
+  double t,cx,cy;
+  int k,i;
+  int lx,ly;
+  int n=l-1;
+  double itr,ccoef;
+
+  bzcoef=mymalloc(sizeof(double)*l);
+  for(k=0;k<l;k++) bzcoef[k]=perm(n,k);
+  i_color_info(val);
+
+
+  /*  for(k=0;k<l;k++) printf("bzcoef: %d -> %f\n",k,bzcoef[k]); */
+  i=0;
+  for(t=0;t<=1;t+=0.025) {
+    cx=cy=0;
+    itr=t/(1-t);
+    ccoef=pow(1-t,n);
+    for(k=0;k<l;k++) {
+      /*      cx+=bzcoef[k]*x[k]*pow(t,k)*pow(1-t,n-k); 
+	      cy+=bzcoef[k]*y[k]*pow(t,k)*pow(1-t,n-k);*/
+
+      cx+=bzcoef[k]*x[k]*ccoef;
+      cy+=bzcoef[k]*y[k]*ccoef;
+      ccoef*=itr;
+    }
+    /*    printf("%f -> (%d,%d)\n",t,(int)(0.5+cx),(int)(0.5+cy)); */
+    if (i++) { 
+      i_line_aa(im,lx,ly,(int)(0.5+cx),(int)(0.5+cy),val);
+    }
+      /*     i_ppix(im,(int)(0.5+cx),(int)(0.5+cy),val); */
+    lx=(int)(0.5+cx);
+    ly=(int)(0.5+cy);
+  }
+  i_color_info(val);
+  myfree(bzcoef);
+}
+
+
+
+
+
+
+
+
+
+

@@ -1,6 +1,6 @@
 #include "image.h"
 #include "gif_lib.h"
-
+#include "gifquant.h"
 
 /* Make some variables global, so we could access them faster: */
 static int
@@ -14,10 +14,9 @@ static int
 static ColorMapObject
     *ColorMap;
 
-static void DumpScreen2RGB(char *FileName, int OneFileFlag,
+/* static void DumpScreen2RGB(char *FileName, int OneFileFlag,
 			   GifRowType *ScreenBuffer,
-			   int ScreenWidth, int ScreenHeight);
-
+			   int ScreenWidth, int ScreenHeight); */
 
 
 i_img *
@@ -150,29 +149,69 @@ i_readgif(i_img *im,int fd) {
 
 
 
+undef_int
+i_writegif(i_img *im,int fd,int colors,int pixdev,int fixedlen,i_color fixed[]) {
+  int i;
+  int Error, NumFiles, SizeFlag, x,y,ColorMapSize;
+  unsigned long Size;
 
+  GifByteType *RedBuffer = NULL, *GreenBuffer = NULL, *BlueBuffer = NULL,*OutputBuffer = NULL;
+  GifByteType *RedP, *GreenP, *BlueP;
+  ColorMapObject *OutputColorMap = NULL;
+  GifFileType *GifFile;
+  GifByteType *Ptr;
+  
+  i_color col;
+  
+  mm_log((1,"i_writegif(0x%x, fd %d, colors %d, pixdev %d, fixedlen %d, fixed 0x%X)\n",im,fd,colors,pixdev,fixedlen,fixed));
 
+  if (!(im->channels==3)) m_fatal(0,"Unable to write gif, improper colorspace.\n");
+  
+  ColorMapSize = 1 << colors;
 
+  Size = ((long) im->xsize) * im->ysize * sizeof(GifByteType);
+  
+  if ((OutputColorMap = MakeMapObject(ColorMapSize, NULL)) == NULL) m_fatal(0,"Failed to allocate memory for Output colormap.");
+  if ((OutputBuffer = (GifByteType *) mymalloc(im->xsize * im->ysize * sizeof(GifByteType))) == NULL)
+    m_fatal(0,"Failed to allocate memory for output buffer.");
+  
+  gifquant(im, &ColorMapSize, OutputBuffer, OutputColorMap->Colors,pixdev,fixedlen,fixed);
 
+  if ((GifFile = EGifOpenFileHandle(fd)) == NULL) {
+    mm_log((1,"Error in EGifOpenFileHandle, unable to write image.\n"));
+    return(0);
+  }
+  
+  if (EGifPutScreenDesc(GifFile,im->xsize, im->ysize, colors, 0,OutputColorMap) == GIF_ERROR ||
+      EGifPutImageDesc(GifFile,0, 0, im->xsize, im->ysize, FALSE, NULL) == GIF_ERROR) {
+    mm_log((1,"Error in EGifOpenFileHandle, unable to write image.\n"));
+    if (GifFile != NULL) EGifCloseFile(GifFile);
+    return(0);
+  }
+  
+  Ptr = OutputBuffer;
 
+  for (y = 0; y < im->ysize; y++) {
+    if (EGifPutLine(GifFile, Ptr, im->xsize) == GIF_ERROR) {
+      mm_log((1,"Error in EGifOpenFileHandle, unable to write image.\n"));
+      if (GifFile != NULL) EGifCloseFile(GifFile);
+      return(0);
+    }
+    
+    Ptr += im->xsize;
+  }
 
-
-
-
-
-
-
-
-
-
-
-
-
+  if (EGifCloseFile(GifFile) == GIF_ERROR) {
+    mm_log((1,"Error in EGifCloseFile, unable to write image.\n"));
+    return(0);
+  }
+  return(1);
+}
 
 
 
 undef_int
-i_writegif(i_img *im,int fd,int colors) {
+i_writegifmc(i_img *im,int fd,int colors) {
   int Error, NumFiles, SizeFlag, x,y,ColorMapSize;
   unsigned long Size;
 
@@ -264,7 +303,6 @@ i_writegif(i_img *im,int fd,int colors) {
     return(0);
   }
 
-  
   Ptr = OutputBuffer;
 
   for (y = 0; y < im->ysize; y++) {

@@ -1,5 +1,10 @@
 #include <stdio.h>
+
+#if (LOSNAME == hpux)
+#include <dl.h>
+#else 
 #include <dlfcn.h>
+#endif 
 
 #include "EXTERN.h"
 #include "perl.h"

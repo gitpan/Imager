@@ -27,7 +27,7 @@ dynamic ::       '.$libstr.(join("\n",map { qq{
 
 $_.\$(SO): $_\$(OBJ_EXT)
 	LD_RUN_PATH="\$(LD_RUN_PATH)" \$(LD) -o \$\@ \$(LDDLFLAGS) \$(OTHERLDFLAGS) $_\$(OBJ_EXT)
-	\$(CHMOD) \$(PERM_RWX) \$\@
+#	\$(CHMOD) \$(PERM_RWX) \$\@
 
 } } @plugins)).'
 

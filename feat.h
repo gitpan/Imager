@@ -13,6 +13,9 @@ static char *i_format_list[]={
 #ifdef HAVE_LIBT1
   "t1",
 #endif
+#ifdef HAVE_LIBTT
+  "tt",
+#endif
   "raw",
   "ppm",
   NULL};

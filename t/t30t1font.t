@@ -12,7 +12,7 @@ use Imager;
 $loaded = 1;
 print "ok 1\n";
 
-init_log("testout/t35t1font.log",1);
+init_log("testout/t30t1font.log",1);
 
 
 if (!(i_has_format("t1")) ) {
@@ -25,14 +25,16 @@ if (!(i_has_format("t1")) ) {
      i_init_fonts();
      i_t1_set_aa(1);
 
+     $bgcolor=i_color_new(255,0,0,0);
+     $overlay=i_img_empty_ch(undef,200,70,3);
 
-     $bgcolor=i_color_set(undef,255,0,0,0);
-     $overlay=i_img_empty_ch(undef,100,70,3);
+#     i_t1_cp($overlay,5,50,1,0,50.0,'XMCLH',5,1);
+#     i_draw($overlay,0,50,100,50,$bgcolor);
 
-     i_t1_cp($overlay,5,50,1,0,50.0,'test',4,1);
-     i_draw($overlay,0,50,100,50,$bgcolor);
+     @bbox=i_t1_bbox(0,50.0,'XMCLH',5);
+     print "bbox: ($bbox[0], $bbox[1]) - ($bbox[2], $bbox[3])\n";
 
-     open(FH,">testout/t35t1font.ppm") || die "cannot open testout/t35t1font.ppm\n";
+     open(FH,">testout/t30t1font.ppm") || die "cannot open testout/t35t1font.ppm\n";
      i_writeppm($overlay,fileno(FH));
      close(FH);
 

@@ -65,7 +65,7 @@ $formats{'gif'}={
     libpath=>'/usr/local/lib',
     libcheck=>'-f libgif.a || -f libgif.so',
     libfiles=>'-lgif',
-    objfiles=>'gif.o',
+    objfiles=>'gifquant.o gif.o',
     docs=>q{
   gif is the de facto standard for webgraphics at the moment,
   it does have some patent problems. If you have giflib and
@@ -82,7 +82,7 @@ $formats{'ungif'}={
     libpath=>'/usr/local/lib',
     libcheck=>'-f libungif.a || -f libungif.so',
     libfiles=>'-lungif',
-    objfiles=>'gif.o',
+    objfiles=>'gifquant.o gif.o',
     docs=>q{
   gif is the de facto standard for webgraphics at the moment,
   it does have some patent problems. If you have libungif and
@@ -101,9 +101,26 @@ $formats{'T1-fonts'}={
     objfiles=>'',
     docs=>q{
   postscript t1 fonts are scalable fonts. They can include 
-  ligatures and kerning information and generally yeild good
+  ligatures and kerning information and generally yield good
   visual quality. We depend on libt1 to rasterize the fonts
   for use in images.}
+};
+
+$formats{'TT-fonts'}={
+    order=>'31',
+    def=>'HAVE_LIBTT',
+    incpath=>'/usr/local/include',
+    inccheck=>'-f freetype.h',
+    libpath=>'/usr/local/lib',
+    libcheck=>'-f libttf.a || -f libttf.so',
+    libfiles=>'-lttf',
+    objfiles=>'',
+    docs=>q{
+  Truetype fonts are scalable fonts. They can include 
+  kerning and hinting information and generally yield good
+  visual quality esp on low resultions. The freetype library is
+  used to rasterize for us. The only drawback is that there
+  are alot of badly designed fonts out there.}
 };
 
 
@@ -120,7 +137,7 @@ EOF
 
 
 for $frm(sort { $formats{$b}{order} <=> $formats{$a}{order} } keys %formats) {
-  SW:
+  SWX:
     if ($formats{$frm}{docs}) { print "\n",$formats{$frm}{docs},"\n\n"; }
     print "Enable $frm support: ";
     $gz=<STDIN>;
@@ -129,9 +146,9 @@ for $frm(sort { $formats{$b}{order} <=> $formats{$a}{order} } keys %formats) {
 	if ($gz eq 'n') {
 	    delete $formats{$frm};
 	}
-    } else { goto SW; }
+    } else { goto SWX; }
 }
-	
+
 
 
 for $frm(values %formats) {
@@ -141,19 +158,22 @@ for $frm(values %formats) {
     $F_OBJECT.=' '.$frm->{objfiles};
 }
 
+$OSLIBS='';
+
+if ($^O eq 'hpux') { $OSLIBS.=' -ldld '; }
 
 %opts=(
     'NAME'	=> 'Imager',
     'VERSION_FROM' => 'Imager.pm', # finds $VERSION
-    'LIBS'	=> ''.$F_LIBS,
-    'DEFINE'	=> ''.$F_DEFINE.$EXTDEF,
+    'LIBS'	=> '-lm '.$OSLIBS.$F_LIBS,
+    'DEFINE'	=> ''.$F_DEFINE.$EXTDEF." -DLOSNAME=$^O",
     'INC'	=> ''.$F_INC,
-    'OBJECT'    => 'Imager.o draw.o image.o io.o log.o gaussian.o conv.o ppm.o raw.o feat.o font.o filters.o dynaload.o'.$F_OBJECT,
+    'OBJECT'    => 'Imager.o draw.o image.o io.o log.o gaussian.o conv.o ppm.o raw.o feat.o font.o filters.o dynaload.o stackmach.o datatypes.o '.$F_OBJECT,
 #    'CCFLAGS'   => '-Wall -Wno-unused',
-    'dist'      => {TARFLAGS => 'cvfF',
-		    COMPRESS => 'gzip -9',
-                    SUFFIX   => '.gz',
-                   },
+#    'dist'      => {TARFLAGS => 'cvfF',
+#		    COMPRESS => 'gzip -9',
+#                    SUFFIX   => '.gz',
+#                   },
 );
 
 if ($DEB) { print Data::Dumper::Dumper(\%opts); }

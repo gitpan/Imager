@@ -16,16 +16,14 @@
 
 -- It would be nice to get the lowest version number of all the libraries the module depends on
 
--- Get smaller test images - one idea is to use a single ppm image and start by testing the writers.
-
 -- Make the install more userfriendly
 
 -- Write Docs for the lowlevel interface
 
 -- Write the highlevel (OO) interface to the functions.
 
--- Enhance the font interface and add support for bitmap and freetype fonts
+-- Enhance the font interface and add support for bitmap fonts
 
 ==============
 
-	That is all I can think of at the moment as always ideas/fixes to amh@mbl.is.
+	That is all I can think of at the moment as always ideas/fixes to addi@umich.edu

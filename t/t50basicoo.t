@@ -27,11 +27,17 @@ for(keys %hsh) { print "# $_\n"; }
 
 $img = Imager->new();
 
-$img->open(file=>'testout/t10.jpg',type=>'jpeg') || print "failed: ",$img->{ERRSTR},"\n";
-$img->open(file=>'testout/t10.png',type=>'png') || print "failed: ",$img->{ERRSTR},"\n";
-$img->open(file=>'testout/t10.raw',type=>'raw',xsize=>150,ysize=>150) || print "failed: ",$img->{ERRSTR},"\n";
-$img->open(file=>'testout/t10.ppm',type=>'ppm') || print "failed: ",$img->{ERRSTR},"\n";
-$img->open(file=>'testout/t10.gif',type=>'gif') || print "failed: ",$img->{ERRSTR},"\n";
+@all=qw(gif jpg png ppm raw);
+
+
+for(@all) {
+  if (!$hsh{$_}) { next; }
+  print "#opening format: $_\n";
+  $img->open(file=>"testout/t10.$_",type=>$_,xsize=>150,ysize=>150) || die "failed: ",$img->{ERRSTR},"\n";
+}
+
+$img2=$img->crop(width=>50,height=>50);
+$img2->write(file=>'testout/t50.ppm',type=>'ppm');
 
 undef($img);
 

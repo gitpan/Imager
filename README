@@ -18,8 +18,8 @@ The libraries it uses are:
   gif: http://www.arrakeen.demon.co.uk/giflib/  
 or at: http://prtr-13.ucsc.edu/~badger/software/giflib.shtml
 
-   t1: ftp://ftp.neuroinformatik.ruhr-uni-bochum.de/pub/software/t1lib/t1lib-0.9.tar.gz. 
-or at: ftp://sunsite.unc.edu/pub/Linux/libs/graphics/t1lib-0.9.tar.gz 
+   t1: ftp://ftp.neuroinformatik.ruhr-uni-bochum.de/pub/software/t1lib/
+or at: ftp://sunsite.unc.edu/pub/Linux/libs/graphics/
 
 =================
 
@@ -33,7 +33,7 @@ pretty pointless to have malloc debug enabled with no logging.
 
 The Imager module homepage is currently at:
 
- http://gauss.mbl.is/~amh/Imager/
+ http://www.eecs.umich.edu/~addi/perl/Imager/
 
 The current docs are rather bad as I've been busy adding features
 but hopefully they will be updated soon.  Until then you'll just
@@ -43,5 +43,18 @@ rather verbose debugging output from the C code.
 
 =================
 
-Thanks go to Claes, Schwern, Tkil, Sky, Merlyn, lucs, PerlJam, Veblen, Dngor,
-Gbarr, Mjd, Jerome and Jalex and anyone else in case I forgot someone.
+Thanks go to:
+ Claes Jacobson      ( Claes )
+ Schwern
+ Tkil 
+ Sky 
+ Randal R. Schwartz  ( Merlyn )
+ lucs 
+ PerlJam
+ Nicholas Dronen     ( Veblen )
+ Rocco Caputo        ( Dngor )
+ Graham barr         ( Gbarr )
+ Mark-Jason Dominus  ( Mjd )
+ Jerome
+ Jason Alexander     ( Jalex )
+ Tony Cook           ( TonyC )

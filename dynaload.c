@@ -46,6 +46,54 @@ extern symbol_table_t symbol_table;
   can be supplied to the parser for evaling.
 */
 
+void
+DSO_call(DSO_handle *handle,int func_index,HV* hv) {
+ (handle->function_list[func_index].iptr)((void*)hv);
+}
+
+
+#if (LOSNAME == hpux)
+
+void*
+DSO_open(char* file,char** evalstring) {
+  void *d_handle,**plugin_symtab,**plugin_utiltab;
+  int  rc,*iptr, (*fptr)(int);
+  func_ptr *function_list;
+  DSO_handle *dso_handle;
+  int i;
+
+  *evalstring=NULL;
+  if ( (d_handle = (void*)shl_load(file, BIND_DEFERRED,NULL)) == NULL) return NULL;
+  if ( (shl_findsym((shl_t*)d_handle, "evalstr",TYPE_UNDEFINED,(void*)evalstring))) return NULL;
+
+  if ( (shl_findsym((shl_t*)d_handle, "symbol_table",TYPE_UNDEFINED,(void*)&plugin_symtab))) return NULL;
+  if ( (shl_findsym((shl_t*)d_handle, "util_table",TYPE_UNDEFINED,&plugin_utiltab))) return NULL;
+
+  (*plugin_symtab)=&symbol_table;
+  (*plugin_utiltab)=&UTIL_table;
+
+  if ( (shl_findsym((shl_t*)d_handle, "function_list",TYPE_UNDEFINED,(func_ptr*)&function_list))) return NULL;
+
+  if ( (dso_handle=(DSO_handle*)malloc(sizeof(DSO_handle))) == NULL) return NULL;
+
+  dso_handle->handle=d_handle; /* needed to close again */
+  dso_handle->function_list=function_list;
+  if ( (dso_handle->filename=(char*)malloc(strlen(file))) == NULL) { free(dso_handle); return NULL; }
+  strcpy(dso_handle->filename,file);
+
+  return (void*)dso_handle;
+}
+
+undef_int
+DSO_close(void *ptr) {
+  DSO_handle *handle=(DSO_handle*) ptr;
+  return !shl_unload((shl_t)(handle->handle));
+}
+
+
+#else
+
+
 void*
 DSO_open(char* file,char** evalstring) {
   void *d_handle,**plugin_symtab,**plugin_utiltab;
@@ -75,15 +123,10 @@ DSO_open(char* file,char** evalstring) {
   return (void*)dso_handle;
 }
 
-void
-DSO_call(DSO_handle *handle,int func_index,HV* hv) {
- (handle->function_list[func_index].iptr)((void*)hv);
-}
-
 undef_int
 DSO_close(void *ptr) {
   DSO_handle *handle=(DSO_handle*) ptr;
   return !dlclose(handle->handle);
 }
 
-
+#endif
