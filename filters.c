@@ -64,7 +64,7 @@ void i_noise(i_img *im, float amount, unsigned char type) {
   int new_color;
   float damount = amount * 2;
   i_color rcolor;
-  int color_inc;
+  int color_inc = 0;
   
   mm_log((1,"i_noise(im *0x%x, intensity %f\n", im, amount));
   
@@ -127,7 +127,6 @@ Apply's an image onto another
 void i_applyimage(i_img *im, i_img *add_im, unsigned char mode) {
   int x, y;
   int mx, my;
-  i_color src_color, dst_color;
 
   mm_log((1, "i_applyimage(im *0x%x, add_im *0x%x, mode %d", im, add_im, mode));
   
@@ -146,12 +145,11 @@ void i_bumpmap(i_img *im, i_img *bump, int channel, int light_x, int light_y, in
   int x, y, ch;
   int mx, my;
   i_color x1_color, y1_color, x2_color, y2_color, dst_color;
-  double nX, nY, lX, lY;
+  double nX, nY;
   double tX, tY, tZ;
   double aX, aY, aL;
   double fZ;
   unsigned char px1, px2, py1, py2;
-  double kx, ky;
 
   i_img new_im;
 
@@ -267,10 +265,8 @@ void i_postlevels(i_img *im, int levels) {
 void i_mosaic(i_img *im, int size) {
   int x, y, ch;
   int lx, ly, z;
-  float nc;
   long sqrsize;
 
-  i_img new_im;
   i_color rcolor;
   long col[256];
   
@@ -317,9 +313,12 @@ unsigned char saturate(int in) {
 /* These functions written by Arnar M. Hrafnkelsson (addi@umich.edu) */
 
 void
-i_watermark(i_img *im,i_img *wmark,int tx,int ty,int pixdiff) {
-  int vx,vy,ch;
-  i_color val,wval;
+i_watermark(i_img *im, i_img *wmark, int tx, int ty, int pixdiff) {
+  int vx, vy, ch;
+  i_color val, wval;
+
+  wmark = NULL; /* FIXME: Why is wmark not used here? */
+
   for(vx=0;vx<128;vx++) for(vy=0;vy<110;vy++) {
     
     i_gpix(im,tx+vx,ty+vy,&val);
@@ -337,13 +336,12 @@ i_watermark(i_img *im,i_img *wmark,int tx,int ty,int pixdiff) {
 void
 i_autolevels(i_img *im,float lsat,float usat,float skew) {
   i_color val;
-  int i,t,x,y,rhist[256],ghist[256],bhist[256];
+  int i,x,y,rhist[256],ghist[256],bhist[256];
   int rsum,rmin,rmax;
   int gsum,gmin,gmax;
   int bsum,bmin,bmax;
   int rcl,rcu,gcl,gcu,bcl,bcu;
 
-  int rskl,rsku;
   
 
   mm_log((1,"i_autolevels(im *0x%X, lsat %f,usat %f,skew %f)\n", im, lsat,usat,skew));
@@ -450,9 +448,7 @@ PerlinNoise_2D(float x, float y) {
   int i,frequency;
   float amplitude;
   float total = 0;
-  int persistence=2;
   int Number_Of_Octaves=6;
-  int p = persistence;
   int n = Number_Of_Octaves - 1;
 
   for(i=0;i<n;i++) {
@@ -469,9 +465,7 @@ void
 i_radnoise(i_img *im,int xo,int yo,float rscale,float ascale) {
   int x,y,ch;
   i_color val;
-  float pn;
   unsigned char v;
-  float scale=10;
   float xc,yc,r;
   double a;
   
@@ -490,12 +484,8 @@ i_radnoise(i_img *im,int xo,int yo,float rscale,float ascale) {
 void
 i_turbnoise(i_img *im,float xo,float yo,float scale) {
   int x,y,ch;
-  float pn;
   unsigned char v;
   i_color val;
-
-  /*  i_radnoise(im,250,250);
-      return; */
 
   for(y = 0; y < im->ysize; y++) for(x = 0; x < im->xsize; x++) {
     /*    v=saturate(125*(1.0+PerlinNoise_2D(xo+(float)x/scale,yo+(float)y/scale))); */

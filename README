@@ -50,6 +50,12 @@ IM_DEBUG_MALLOC if true malloc debugging will be compiled into the module
                 do not use IM_DEBUG_MALLOC in production - this slows
                 everything down
 
+IM_CFLAGS       Extra flags to pass to the compiler
+IM_LFLAGS       Extra flags to pass to the linker
+IM_DFLAGS       Extra flags to pass to the preprocessor
+
+
+
 When finding the libraries has been sorted out it's time for
 
 $ make 
@@ -58,12 +64,46 @@ and if that works then do
 
 $ make test
 
-If either fails do take a peek at the file errop.perl.  It's creates a
+If either fails do take a peek at the file errep.perl.  It's creates a
 file report.txt.  This is some information which will help me discover
 where the problem is so I can try to fix it in future releases.  If
 you find running it ok (just remember - no warranty!) please send the
-report.txt via email to addi@umich.edu .  If it worked just continue
-with the installation as normally (with make install).
+report.txt via email to addi@umich.edu .
+
+Troubleshooting tips:
+
+A common problem is that libgif/libungif are sometimes linked to the X
+libraries and then running the tests fails.  In that case something
+like:
+
+$ IM_LFLAGS="-L/usr/X11R6/lib -lX11" perl Makefile.PL
+
+Which simply sets the environment variables for the extra libraries 
+to include the X libraries (which we do not use at all, but must
+included since libgif has been linked with it).
+
+Also note that libgif has a few bugs: You can run something like
+
+$ perl -Iblib/lib -Iblib/arch t/t10formats.t
+
+This way you can see what comments the test script prints out.
+t/t10formats.t checks for an bug in libgiff and prints out a patch
+if that bug is present, note that this bug only affects the more
+"advanced" features of libgif.
+
+Imager needs to have a fairly recent libtiff installed (we know it
+it runs fine with 3.5.5).  In the future we might consider supporting older
+libtiff versions.  For now you can either configure Imager manually (by
+setting the IM_MANUAL environment variable to 1, in sh:
+
+$ IM_MANUAL=1 perl Makefile.PL
+
+and simply say no to tiff support when asked if you want it, the same thing
+can be used to circumvent problems in gifs to get Imager going.
+
+
+If it worked just continue with the installation as normally 
+(with make install).
 
 ========================
 3. External dependencies
@@ -78,12 +118,15 @@ needs for specific features.  The libraries it uses are:
   you also need zlib to use png:  ftp://ftp.uu.net/pub/archiving/zip/zlib
 
   gif: http://www.arrakeen.demon.co.uk/giflib/  
-or at: http://prtr-13.ucsc.edu/~badger/software/giflib.shtml
+or at: http://prtr-13.ucsc.edu/~badger/software/libungif/index.shtml
+
+ tiff: http://www.libtiff.org/
 
    t1: ftp://ftp.neuroinformatik.ruhr-uni-bochum.de/pub/software/t1lib/
 or at: ftp://sunsite.unc.edu/pub/Linux/libs/graphics/
 
    tt: http://www.freetype.org/
+
 
 Precompiled versions of some of the libraries might be found at:
 
@@ -134,11 +177,11 @@ rather verbose debugging output from the C code.
 ========================
 
 Thanks go to:
+  Tony Cook           ( TonyC )
   Claes Jacobson      ( Claes )
   Philip Gwyn         ( Leolo )
   Brad Murray         ( HalfJack )
   Nicholas Dronen     ( Veblen )
-  Tony Cook           ( TonyC )
   Michael G Schwern   ( Schwern )
   Rocco Caputo        ( Dngor )
   Graham barr         ( Gbarr )
@@ -151,5 +194,6 @@ Thanks go to:
   Luc St-Louis        ( Lucs )
   PerlJam             ( )
   Roderick Schertler  ( Roderick )
+  Nathan Torkington   ( gnat )
 
 (and just to play it safe) all those I forgot to mention.

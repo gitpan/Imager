@@ -10,6 +10,7 @@ typedef struct {
 
 
 typedef struct {
+  int (*getstr)(void *hv_t,char* key,char **store);
   int (*getint)(void *hv_t,char *key,int *store);
   int (*getdouble)(void *hv_t,char* key,double *store);
   int (*getvoid)(void *hv_t,char* key,void **store);

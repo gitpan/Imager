@@ -4,6 +4,9 @@ static char *i_format_list[]={
 #ifdef HAVE_LIBJPEG
   "jpeg",
 #endif
+#ifdef HAVE_LIBTIFF
+  "tiff",
+#endif
 #ifdef HAVE_LIBPNG
   "png",
 #endif

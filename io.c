@@ -6,11 +6,9 @@
 
 
 
-
+/* FIXME: make allocation dynamic */
 
 #ifdef IMAGER_DEBUG_MALLOC
-
-#include <stdlib.h>
 
 #define MAXMAL 1024
 #define MAXDESC 65
@@ -24,7 +22,7 @@ typedef struct {
 malloc_entry malloc_pointers[MAXMAL];
 static int malloc_need_init=1;
 
-/* #define mymalloc(x) (mymalloc_file_line(x,__FILE__,__LINE__)) */
+#define mymalloc(x) (mymalloc_file_line(x,__FILE__,__LINE__)) 
 
 void
 malloc_state() {
@@ -35,7 +33,7 @@ malloc_state() {
     mm_log((0,"%d: %d (0x%x) : %s\n",i,malloc_pointers[i].size,malloc_pointers[i].point,malloc_pointers[i].comm));
     total+=malloc_pointers[i].size;
   }
-  if (total==0 ) mm_log((0,"No memory currently used!\n"));
+  if (total==0 ) mm_log((0,"No memory currently used!\n"))
   else mm_log((0,"total: %d\n",total));
 }
 
@@ -120,6 +118,13 @@ myfree(void *p) {
 }
 
 #endif /* IMAGER_MALLOC_DEBUG */
+
+
+
+
+
+
+
 
 
 

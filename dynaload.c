@@ -3,9 +3,25 @@
 /* These functions are all shared - then comes platform dependant code */
 
 
+int getstr(void *hv_t,char *key,char **store) {
+  SV** svpp;
+  HV* hv=(HV*)hv_t;
+
+  mm_log((1,"getstr(hv_t 0x%X, key %s, store 0x%X)\n",hv_t,key,store));
+
+  if ( !hv_exists(hv,key,strlen(key)) ) return 0;
+
+  svpp=hv_fetch(hv, key, strlen(key), 0);
+  *store=SvPV(*svpp, PL_na );
+
+  return 1;
+}
+
 int getint(void *hv_t,char *key,int *store) {
   SV** svpp;
   HV* hv=(HV*)hv_t;  
+
+  mm_log((1,"getint(hv_t 0x%X, key %s, store 0x%X)\n",hv_t,key,store));
 
   if ( !hv_exists(hv,key,strlen(key)) ) return 0;
 
@@ -18,6 +34,8 @@ int getdouble(void *hv_t,char* key,double *store) {
   SV** svpp;
   HV* hv=(HV*)hv_t;
 
+  mm_log((1,"getdouble(hv_t 0x%X, key %s, store 0x%X)\n",hv_t,key,store));
+
   if ( !hv_exists(hv,key,strlen(key)) ) return 0;
   svpp=hv_fetch(hv, key, strlen(key), 0);
   *store=(float)SvNV(*svpp);
@@ -27,6 +45,8 @@ int getdouble(void *hv_t,char* key,double *store) {
 int getvoid(void *hv_t,char* key,void **store) {
   SV** svpp;
   HV* hv=(HV*)hv_t;
+
+  mm_log((1,"getvoid(hv_t 0x%X, key %s, store 0x%X)\n",hv_t,key,store));
 
   if ( !hv_exists(hv,key,strlen(key)) ) return 0;
 
@@ -39,6 +59,8 @@ int getvoid(void *hv_t,char* key,void **store) {
 int getobj(void *hv_t,char *key,char *type,void **store) {
   SV** svpp;
   HV* hv=(HV*)hv_t;
+
+  mm_log((1,"getobj(hv_t 0x%X, key %s,type %s, store 0x%X)\n",hv_t,key,type,store));
 
   if ( !hv_exists(hv,key,strlen(key)) ) return 0;
 
@@ -56,7 +78,7 @@ int getobj(void *hv_t,char *key,char *type,void **store) {
 }
 
 
-UTIL_table_t UTIL_table={getint,getdouble,getvoid,getobj};
+UTIL_table_t UTIL_table={getstr,getint,getdouble,getvoid,getobj};
 extern symbol_table_t symbol_table;
 
 /*
@@ -139,11 +161,10 @@ dlclose(minthandle_t h) {
 
 void*
 DSO_open(char* file,char** evalstring) {
-  void *d_handle,**plugin_symtab,**plugin_utiltab;
-  int  rc,*iptr, (*fptr)(int);
+  void *d_handle;
   func_ptr *function_list;
   DSO_handle *dso_handle;
-  int i;
+
   void (*f)(void *s,void *u); /* these will just have to be void for now */
   
   *evalstring=NULL;

@@ -17,12 +17,11 @@ gauss(int x,float std) {
 
 void
 i_gaussian(i_img *im,float stdev) {
-  int i,k,l,rc,c,ch;
+  int i,l,c,ch;
   float pc;
   float coeff[21];
   i_color rcolor;
   float res[11];
-  unsigned char *tdata;
   i_img timg;
 
   mm_log((1,"i_gaussian(im* 0x%x,stdev %.2f)\n",im,stdev));

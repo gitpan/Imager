@@ -1,4 +1,4 @@
-BEGIN { $| = 1; print "1..3\n"; }
+BEGIN { $| = 1; print "1..5\n"; }
 END {print "not ok 1\n" unless $loaded;}
 use Imager;
 
@@ -18,6 +18,8 @@ sub skip {
     print $_[0];
     print "ok 2 # skip\n";
     print "ok 3 # skip\n";
+    print "ok 4 # skip\n";
+    print "ok 5 # skip\n";
     exit(0);
 }
 
@@ -30,3 +32,24 @@ print "ok 2\n";
 $nimg->write(type=>'ppm',file=>'testout/t55.ppm') || die "error in write()\n";
 
 print "ok 3\n";
+
+# the original test didn't produce many parameters - this one
+# produces more parameters, which revealed a memory allocation bug
+# (sizeof(double) vs sizeof(int))
+sub skip2 { 
+    print $_[0];
+    print "ok 4 # skip\n";
+    print "ok 5 # skip\n";
+    exit(0);
+}
+$nimg=$img->transform(xexpr=>'x+0.1*y+5*sin(y/10.0+1.57)',
+	yexpr=>'y+10*sin((x+y-0.785)/10)') 
+	|| skip2 ( "\# warning ".$img->{'ERRSTR'}."\n" );
+
+print "ok 4\n";
+$nimg->write(type=>'ppm',file=>'testout/t55b.ppm') 
+	|| die "error in write()\n";
+
+print "ok 5\n";
+
+

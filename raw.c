@@ -28,7 +28,7 @@
 
 void
 expandchannels(unsigned char *inbuffer,unsigned char *outbuffer,int chunks,int datachannels,int storechannels) {
-  int ch,ind,i;
+  int ch,i;
   if (inbuffer==outbuffer) return; /* Check if data is already in expanded format */
   for(ch=0;ch<chunks;ch++) for (i=0;i<storechannels;i++) outbuffer[ch*storechannels+i]=inbuffer[ch*datachannels+i];
 }
@@ -36,7 +36,7 @@ expandchannels(unsigned char *inbuffer,unsigned char *outbuffer,int chunks,int d
 i_img *
 i_readraw(int fd,int x,int y,int datachannels,int storechannels,int intrl) {
   i_img* im;
-  int rc,i,k,blocks;
+  int rc,k;
   
   unsigned char *inbuffer;
   unsigned char *ilbuffer;

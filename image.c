@@ -6,6 +6,9 @@
 
 #define minmax(a,b,i) ( ((a>=i)?a: ( (b<=i)?b:i   )) )
 
+/* Hack around an obscure linker bug on solaris - probably due to builtin gcc thingies */
+void fake() { ceil(1); }
+
 /* i_color_set:: Overwrite a color with new values.
 
    cl - pointer to color object
@@ -60,6 +63,7 @@ i_color_new(unsigned char r,unsigned char g,unsigned char b,unsigned char a) {
    ch - number of channels
 */
 
+void
 i_color_add(i_color *dst,i_color *src,int ch) {
   int tmp,i;
   for(i=0;i<ch;i++) {
@@ -99,7 +103,7 @@ ICL_DESTROY(i_color *cl) {
 i_img *
 IIM_new(int x,int y,int ch) {
   i_img *im;
-  mm_log((1,"IIM_new(%d,y %d,ch %d)\n",im,x,y,ch));
+  mm_log((1,"IIM_new(x %d,y %d,ch %d)\n",x,y,ch));
 
   im=i_img_empty_ch(NULL,x,y,ch);
   
@@ -350,7 +354,7 @@ i_copyto_trans(i_img *im,i_img *src,int x1,int y1,int x2,int y2,int tx,int ty,i_
 void
 i_copyto(i_img *im,i_img *src,int x1,int y1,int x2,int y2,int tx,int ty) {
   i_color pv;
-  int x,y,t,ttx,tty,tt,ch;
+  int x,y,t,ttx,tty;
 
   if (x2<x1) { t=x1; x1=x2; x2=t; }
   if (y2<y1) { t=y1; y1=y2; y2=t; }
@@ -390,7 +394,7 @@ i_copy(i_img *im,i_img *src) {
 void
 i_rubthru(i_img *im,i_img *src,int tx,int ty) {
   i_color pv,orig,dest;
-  int x,y,t,ttx,tty,tt;
+  int x,y,ttx,tty;
 
   mm_log((1,"i_rubthru(im 0x%x,src 0x%x,tx %d,ty %d)\n",im,src,tx,ty));
 
@@ -568,7 +572,6 @@ i_transform(i_img *im, int *opx,int opxl,int *opy,int opyl,double parm[],int par
   i_img *new_img;
   i_color val;
   
-  
   mm_log((1,"i_transform(im 0x%x, opx 0x%x, opxl %d, opy 0x%x, opyl %d, parm 0x%x, parmlen %d)\n",im,opx,opxl,opy,opyl,parm,parmlen));
 
   nxsize = im->xsize;
@@ -624,13 +627,10 @@ i_img_diff(i_img *im1,i_img *im2) {
 
 i_img*
 i_haar(i_img *im) {
-  int *f;
   int mx,my;
   int fx,fy;
   int x,y;
   int ch,c;
-  int i1,i2;
-  int MM,mm;
   i_img *new_img,*new_img2;
   i_color val1,val2,dval1,dval2;
   
@@ -679,7 +679,7 @@ int
 i_count_colors(i_img *im,int maxc) {
   struct octt *ct;
   int x,y;
-  int xsize,ysize,channels;
+  int xsize,ysize;
   i_color val;
   int colorcnt;
 
@@ -690,7 +690,7 @@ i_count_colors(i_img *im,int maxc) {
   ct=octt_new();
  
   colorcnt=0;
-  for(x=0;x<xsize;x++) for(y=0;y<ysize;y++) {
+  for(y=0;y<ysize;y++) for(x=0;x<xsize;x++) {
     i_gpix(im,x,y,&val);
     colorcnt+=octt_add(ct,val.rgb.r,val.rgb.g,val.rgb.b);
     if (colorcnt > maxc) { octt_delete(ct); return -1; }
@@ -706,4 +706,184 @@ symbol_table_t symbol_table={i_has_format,i_color_set,i_color_info,
 			     i_box,i_draw,i_arc,i_copyto,i_copyto_trans,i_rubthru};
 
 
+/*
+=item i_gen_reader(i_gen_read_data *info, char *buf, int length)
 
+Performs general read buffering for file readers that permit reading
+to be done through a callback.
+
+The final callback gets two parameters, a I<need> value, and a I<want>
+value, where I<need> is the amount of data that the file library needs
+to read, and I<want> is the amount of space available in the buffer
+maintained by these functions.
+
+This means if you need to read from a stream that you don't know the
+length of, you can return I<need> bytes, taking the performance hit of
+possibly expensive callbacks (eg. back to perl code), or if you are
+reading from a stream where it doesn't matter if some data is lost, or
+if the total length of the stream is known, you can return I<want>
+bytes.
+
+=cut 
+*/
+
+int
+i_gen_reader(i_gen_read_data *gci, char *buf, int length) {
+  int total;
+
+  if (length < gci->length - gci->cpos) {
+    /* simplest case */
+    memcpy(buf, gci->buffer+gci->cpos, length);
+    gci->cpos += length;
+    return length;
+  }
+  
+  total = 0;
+  memcpy(buf, gci->buffer+gci->cpos, gci->length-gci->cpos);
+  total  += gci->length - gci->cpos;
+  length -= gci->length - gci->cpos;
+  buf    += gci->length - gci->cpos;
+  if (length < (int)sizeof(gci->buffer)) {
+    int did_read;
+    int copy_size;
+    while (length
+	   && (did_read = (gci->cb)(gci->userdata, gci->buffer, length, 
+				    sizeof(gci->buffer))) > 0) {
+      gci->cpos = 0;
+      gci->length = did_read;
+
+      copy_size = min(length, gci->length);
+      memcpy(buf, gci->buffer, copy_size);
+      gci->cpos += copy_size;
+      buf += copy_size;
+      total += copy_size;
+      length -= copy_size;
+    }
+  }
+  else {
+    /* just read the rest - too big for our buffer*/
+    int did_read;
+    while ((did_read = (gci->cb)(gci->userdata, buf, length, length)) > 0) {
+      length -= did_read;
+      total += did_read;
+      buf += did_read;
+    }
+  }
+  return total;
+}
+
+/*
+=item i_gen_read_data_new(i_read_callback_t cb, char *userdata)
+
+For use by callback file readers to initialize the reader buffer.
+
+Allocates, initializes and returns the reader buffer.
+
+See also L<image.c/free_gen_read_data> and L<image.c/i_gen_reader>.
+
+=cut
+*/
+i_gen_read_data *
+i_gen_read_data_new(i_read_callback_t cb, char *userdata) {
+  i_gen_read_data *self = mymalloc(sizeof(i_gen_read_data));
+  self->cb = cb;
+  self->userdata = userdata;
+  self->length = 0;
+  self->cpos = 0;
+
+  return self;
+}
+
+/*
+=item free_gen_read_data(i_gen_read_data *)
+
+Cleans up.
+
+=cut
+*/
+void free_gen_read_data(i_gen_read_data *self) {
+  myfree(self);
+}
+
+/*
+=item i_gen_writer(i_gen_write_data *info, char const *data, int size)
+
+Performs write buffering for a callback based file writer.
+
+Failures are considered fatal, if a write fails then data will be
+dropped.
+
+=cut
+*/
+int 
+i_gen_writer(
+i_gen_write_data *self, 
+char const *data, 
+int size)
+{
+  if (self->filledto && self->filledto+size > self->maxlength) {
+    if (self->cb(self->userdata, self->buffer, self->filledto)) {
+      self->filledto = 0;
+    }
+    else {
+      self->filledto = 0;
+      return 0;
+    }
+  }
+  if (self->filledto+size <= self->maxlength) {
+    /* just save it */
+    memcpy(self->buffer+self->filledto, data, size);
+    self->filledto += size;
+    return 1;
+  }
+  /* doesn't fit - hand it off */
+  return self->cb(self->userdata, data, size);
+}
+
+/*
+=item i_gen_write_data_new(i_write_callback_t cb, char *userdata, int max_length)
+
+Allocates and initializes the data structure used by i_gen_writer.
+
+This should be released with L<image.c/free_gen_write_data>
+
+=cut
+*/
+i_gen_write_data *i_gen_write_data_new(i_write_callback_t cb, 
+				       char *userdata, int max_length)
+{
+  i_gen_write_data *self = mymalloc(sizeof(i_gen_write_data));
+  self->cb = cb;
+  self->userdata = userdata;
+  self->maxlength = min(max_length, sizeof(self->buffer));
+  if (self->maxlength < 0)
+    self->maxlength = sizeof(self->buffer);
+  self->filledto = 0;
+
+  return self;
+}
+
+/*
+=item free_gen_write_data(i_gen_write_data *info, int flush)
+
+Cleans up the write buffer.
+
+Will flush any left-over data if I<flush> is non-zero.
+
+Returns non-zero if flush is zero or if info->cb() returns non-zero.
+
+Return zero only if flush is non-zero and info->cb() returns zero.
+ie. if it fails.
+
+=cut
+*/
+
+int free_gen_write_data(i_gen_write_data *info, int flush)
+{
+  int result = !flush || 
+    info->filledto == 0 ||
+    info->cb(info->userdata, info->buffer, info->filledto);
+  myfree(info);
+
+  return result;
+}

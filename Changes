@@ -188,7 +188,7 @@ Revision history for Perl extension Imager.
 	when passing files to read or save from the filename.
 	Also all of the tests except dynamic loading now pass on OS/2.
 
-0.32    NO TIME YET ** Now in beta10 **
+0.32    Tue Feb 29 17:26:00 2000 CPAN RELEASE
           - Added the getcolorcount method.  Fixed interlace handling
 	on png images.  Fixed the missing channel count in crop()
 	method. Rewrote most of t1lib database stuff - created color
@@ -207,13 +207,121 @@ Revision history for Perl extension Imager.
 	**** If you had any code that didn't use the OO interface ****
 	****         It will probably not work any longer         ****
 	
+0.33	Beta -- No final
+	  - Fixed the end message from Imager 0.32.  Destroy called
+	on an empty image.  Did some work on the polygon method.  
+	Some clean up in the Makefile.PL script.  Fixed a buffer
+	overrun in the t_transform in Imager.XS.  Fixed the 
+	error handling in the jpeg loader.  It now correctly
+	returns undef if a load on an image fails.  It also 
+	sends the error messages to the log file.  Added errstr()
+	method to the image object.  Added a new way to read()
+	objects from scalars.  So far this is only implemented for
+	jpeg, png and gif.  ppm and raw soon - as always if someone
+	wants to do an overhaul on the ppm stuff feel free.  It seems
+	like such a basic format that interfacing with a library is more
+	work than implementing all of the needed routines instead.
+
+0.34    Beta -- No final
+	  - Bunch of documentation fixes, backed out ppm code.
+	Put in TonyC's giant transform2 patch.  Fixed the patch
+	to make it ansi compliant.  Fixed a bunch of bugs in the
+	Freetype code with regard to vertical and horizontal 
+	positioning and bounding boxes.  Cleaned up a lot of the
+	code so it runs under -Wall.  Code that is still in 
+	development such as the polygon converter do not compile
+	cleanly.  Fixed the non antialiased versions of truetype
+	dump to image routines.  Also removed the FIXME for the 
+	hardcoding of antialias in the Imager string method.
+	Fixed sign error and a missing cache of the bounding box
+	calculation for the rasterize function.  Removed some
+	debugging code I forgot to remove.  Added iolayer.h
+	and iolayer.c but they don't do anything for now.
+	
+0.35	pre2 -- No time yet
+	  - Fixed some compile warnings for various files under -Wall.
+	Added functionality for jpeg reading of seekable files, it's not
+	really working yet.  This version is pretty much *not* working.
+	Do not install unless you intend to do a lot of development.
+	Repeat - it doesn't even pass tests (but it compiles).  Ok now reading
+	jpegs works from scalars, my guess is that it also works from non
+	seeking sources such as sockets or pipes.
+
+0.35  pre3 - No time yet
+	  - Added the *right* patch from Tony which combines
+	the common code from i_readgif and i_readgif_scalar into
+	i_readgif_low.  Added tiff reading support through iolayer.
+
+0.35  pre4 - No time yet
+	  - Added tiff writing (no options) support through
+	iolayer.  Also made some small fixes for the iolayer reading
+	(was always doing two reads when one was needed).  Patched the
+	Imager::read() call so that it now uses a mixture of old and new
+	functions.  
+
+0.35  pre5 - No time yet
+	  - Fixed various gnu'isms in the c code (some bugs in the link list
+	implmentation).  Fixed missing #skip codes when gif format is not
+	present in any form.  Added fixes for 5.004_04 in the transform2 function.
+	Made sure it compiles cleanly with sun's cc.  Switched from a .jpeg
+	for transform2 check to a .ppm file so it runs when jpeg is not 
+	present.  Added a test for tiff files in t10formats.t.
 
 
+0.35  pre6 - No time yet
+	  - Fixes to Makefile.PL.  Should find freetype includes on more
+	distributions now.  Ran tests on Solaris and Hpux, minor fixes.
+	Compiles with some warnings on with both hpux and solaris' cc.  
+	Made some minor changes to the documentation.  Fixes to tiff.c log
+	code.
 
-	For latest status check the Imager-devel pages:
+0.35  pre7 - No time yet
+	  - Fixes 64 bit bug on freebsd.  While libtiff mirrors the effects of
+	lseek it's toff_t is a uint32, while lseek uses off_t which can be a 64
+	bit quantity.  Added the IM_LFLAGS environment variable to help
+	people with broken libgifs (that want to link with X).
+
+0.35  Sun Jan 28 19:42:59 EST 2001
+	  - More makefile fixes, fixed a few signedness warnings.  
+	Checked to see if it compiled cleanly on Solaris and HPUX.
+	Fixed a 5.004_04 warning and added more ENV flags for makefile.
+
+~~~~~~~~~~~~~^ ^ ^~~~~~~~~~~~~~
+
+
+0.36	TODO list
+	iolayer:
+	- Add scalar/mmap to iolayer
+	- Add close() code to iolayer
+	- Merge callback interface into iolayer
+	- Add interface for writing to all formats but tiff
+	- Add interface for reading for png (started), 
+	  gif (merge with cb patch), ppm and raw
+	- Add make new tests once all formats support io_layer
+	- Implment the maxread threshold (Indicates how far 
+          a library can read before it indicates that it's done).
+
+	MultiImage & metadata support:
+	- Figure what interface should be between C and perl?
+	- How to store data in the C interface for tags/metadata?
+
+	Old sins:
+	- Make sure everything is doable with the OO interface
+	- Split the other classes into seperate files
+	- Compile with memory debugging enabled and fix leaks
+	- Check if hashbox code is choosing the wrong closest color
+
+	Documentation:
+	- Add to the documentation
+	- Write a tutorial?
+	- Write a guide to installing the helper libraries
+	- Go through the entire project and add comments in pod
+          so doco.perl can be used to read them.
+
+===================================================
+
+	For latest versions check the Imager-devel pages:
 	http://www.eecs.umich.edu/~addi/perl/Imager/devel/
-
-
 
 ===================================================
 

@@ -1,6 +1,10 @@
 #ifndef _IO_H_
 #define _IO_H_
 #include <stdio.h>
+#include <sys/stat.h>
+#include <unistd.h>
+#include <sys/mman.h>
+
 #include "log.h"
 
 
@@ -9,10 +13,12 @@
 #ifdef IMAGER_DEBUG_MALLOC
 
 #define mymalloc(x) (mymalloc_file_line((x), __FILE__, __LINE__))
+#define myfree(x) (myfree_file_line((x), __FILE__, __LINE__))
+
 void malloc_state();
 void* mymalloc_file_line(int size,char* file,int line);
 void* mymalloc_comm(int size,char *comm);
-#define  myfree(x) (myfree_file_line((x), __FILE__, __LINE__))
+
 void  myfree_file_line(void *p, char*file, int line);
 
 #else

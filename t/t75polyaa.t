@@ -18,33 +18,37 @@ print "ok 1\n";
 init_log("testout/t75aapolyaa.log",1);
 
 $green=i_color_new(0,255,0,0);
-$red=i_color_new(255,0,0,0);
 
 
-#$img=Imager->new(xsize=>400,ysize=>400);
-$img=Imager->new(xsize=>20,ysize=>20);
+$img=Imager->new(xsize=>10,ysize=>10);
 
-$nums=100;
-$rn=120;
+#$nums=10;
+#$rn=10;
 
-@rand=map { rand($rn) } 0..$nums-1;
+#@rand=map { rand($rn) } 0..$nums-1;
+#@angle=sort { $a<=>$b } map { rand(360) } 0..$nums-1;
 
-@angle=sort { $a<=>$b } map { rand(360) } 0..$nums-1;
-
-@x=map { 200+(50+$rand[$_])*cos($angle[$_]/180*3.1415) } 0..$nums-1;
-@y=map { 200+(50+$rand[$_])*sin($angle[$_]/180*3.1415) } 0..$nums-1;
+#@x=map { 25+(10+$rand[$_])*cos($angle[$_]/180*3.1415) } 0..$nums-1;
+#@y=map { 25+(10+$rand[$_])*sin($angle[$_]/180*3.1415) } 0..$nums-1;
 
 #i_poly_aa($img,[50,300,290,200],[50,60,190,220],$green);
 
-@x=(2,5,9);
-@y=(2,10,3);
+$x1=16;
+$y1=10;
+
+@x=(1, $x1, $x1);
+@y=(1,  1, $y1);
+
+@x=map { $_+0.5 } (0, 8, 8);
+@y=map { $_+0.5 } (0, 4, 0);
 
 i_poly_aa($img->{IMG},\@x,\@y,$green);
 
 push(@x,$x[0]);
 push(@y,$y[0]);
 
-$img->polyline(color=>$red,'x'=>\@x,'y'=>\@y,antialias=>0);
+#$red=i_color_new(255,0,0,0);
+#$img->polyline(color=>$red,'x'=>\@x,'y'=>\@y,antialias=>0);
 print "ok 2\n";
 
 open(FH,">testout/t75.ppm") || die "Cannot open testout/t75.ppm\n";

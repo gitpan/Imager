@@ -13,7 +13,7 @@
 
 void
 i_conv(i_img *im,float *coeff,int len) {
-  int i,k,l,rc,c,ch,center;
+  int i,l,c,ch,center;
   float pc;
   i_color rcolor;
   float res[11];

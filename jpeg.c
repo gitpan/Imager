@@ -1,9 +1,106 @@
 #include <stdio.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <setjmp.h>
 
+#include "iolayer.h"
 #include "image.h"
 #include "jpeglib.h"
+
+
+unsigned char fake_eoi[]={(JOCTET) 0xFF,(JOCTET) JPEG_EOI};
+
+/* Handlers to read from memory */
+
+typedef struct {
+  struct jpeg_source_mgr pub;	/* public fields */
+  char *data;
+  int length;
+  JOCTET * buffer;		/* start of buffer */
+  boolean start_of_file;	/* have we gotten any data yet? */
+} scalar_source_mgr;
+
+typedef scalar_source_mgr *scalar_src_ptr;
+
+static void
+scalar_init_source (j_decompress_ptr cinfo) {
+  scalar_src_ptr src = (scalar_src_ptr) cinfo->src;
+  
+  /* We reset the empty-input-file flag for each image,
+   * but we don't clear the input buffer.
+   * This is correct behavior for reading a series of images from one source.
+   */
+  src->start_of_file = TRUE;
+}
+
+static boolean
+scalar_fill_input_buffer (j_decompress_ptr cinfo) {
+  scalar_src_ptr src = (scalar_src_ptr) cinfo->src;
+  size_t nbytes;
+  
+  if (src->start_of_file) {
+    nbytes=src->length;
+    src->buffer=src->data;
+  } else {
+    /* Insert a fake EOI marker */
+    src->buffer = fake_eoi;
+    nbytes = 2;
+  }
+
+  src->pub.next_input_byte = src->buffer;
+  src->pub.bytes_in_buffer = nbytes;
+  src->start_of_file = FALSE;
+  return TRUE;
+}
+
+static void
+scalar_skip_input_data (j_decompress_ptr cinfo, long num_bytes) {
+  scalar_src_ptr src = (scalar_src_ptr) cinfo->src;
+  
+  /* Just a dumb implementation for now.  Could use fseek() except
+   * it doesn't work on pipes.  Not clear that being smart is worth
+   * any trouble anyway --- large skips are infrequent.
+   */
+  
+  if (num_bytes > 0) {
+    while (num_bytes > (long) src->pub.bytes_in_buffer) {
+      num_bytes -= (long) src->pub.bytes_in_buffer;
+      (void) scalar_fill_input_buffer(cinfo);
+      /* note we assume that fill_input_buffer will never return FALSE,
+       * so suspension need not be handled.
+       */
+    }
+    src->pub.next_input_byte += (size_t) num_bytes;
+    src->pub.bytes_in_buffer -= (size_t) num_bytes;
+  }
+}
+
+static void
+scalar_term_source (j_decompress_ptr cinfo) {  /* no work necessary here */ }
+
+static void
+jpeg_scalar_src(j_decompress_ptr cinfo, char *data, int length) {
+  scalar_src_ptr src;
+  
+  if (cinfo->src == NULL) {	/* first time for this JPEG object? */
+    cinfo->src = (struct jpeg_source_mgr *) (*cinfo->mem->alloc_small) ((j_common_ptr) cinfo, JPOOL_PERMANENT,sizeof(scalar_source_mgr));
+    src = (scalar_src_ptr) cinfo->src;
+  }
+  
+  src = (scalar_src_ptr) cinfo->src;
+  src->data = data;
+  src->length = length;
+  src->pub.init_source = scalar_init_source;
+  src->pub.fill_input_buffer = scalar_fill_input_buffer;
+  src->pub.skip_input_data = scalar_skip_input_data;
+  src->pub.resync_to_restart = jpeg_resync_to_restart; /* use default method */
+  src->pub.term_source = scalar_term_source;
+  src->pub.bytes_in_buffer = 0; /* forces fill_input_buffer on first read */
+  src->pub.next_input_byte = NULL; /* until buffer loaded */
+}
+
+
+
 
 undef_int
 i_writejpeg(i_img *im,int fd,int qfactor) {
@@ -161,20 +258,73 @@ APP13_handler (j_decompress_ptr cinfo) {
   return TRUE;
 }
 
+
+
+
+
+
+
+
+
+
+
+
+METHODDEF(void)
+my_output_message (j_common_ptr cinfo)
+{
+  char buffer[JMSG_LENGTH_MAX];
+
+  /* Create the message */
+  (*cinfo->err->format_message) (cinfo, buffer);
+
+  /* Send it to stderr, adding a newline */
+  mm_log((1, "%s\n", buffer));
+}
+
+
+
+
+
+
+struct my_error_mgr {
+  struct jpeg_error_mgr pub;	/* "public" fields */
+  jmp_buf setjmp_buffer;	/* for return to caller */
+};
+
+typedef struct my_error_mgr * my_error_ptr;
+
+/* Here's the routine that will replace the standard error_exit method */
+
+METHODDEF(void)
+my_error_exit (j_common_ptr cinfo) {
+  /* cinfo->err really points to a my_error_mgr struct, so coerce pointer */
+  my_error_ptr myerr = (my_error_ptr) cinfo->err;
+  
+  /* Always display the message. */
+  /* We could postpone this until after returning, if we chose. */
+  (*cinfo->err->output_message) (cinfo);
+  
+  /* Return control to the setjmp point */
+  longjmp(myerr->setjmp_buffer, 1);
+}
+
+
+
+
+
+
 i_img*
 i_readjpeg(int fd,char** iptc_itext,int *itlength) {
   i_img *im;
-  unsigned char t[2];
 
-  struct stat stbuf;
-  JSAMPLE *image_buffer;
   struct jpeg_decompress_struct cinfo;
   /* We use our private extension JPEG error handler.
    * Note that this struct must live as long as the main JPEG parameter
    * struct, to avoid dangling-pointer problems.
    */
 
-  struct jpeg_error_mgr jerr;
+  /*   struct jpeg_error_mgr jerr;*/
+  struct my_error_mgr jerr;
   FILE * infile;		/* source file */
   JSAMPARRAY buffer;		/* Output row buffer */
   int row_stride;		/* physical row width in output buffer */
@@ -191,7 +341,20 @@ i_readjpeg(int fd,char** iptc_itext,int *itlength) {
   /* Step 1: allocate and initialize JPEG decompression object */
 
   /* We set up the normal JPEG error routines, then override error_exit. */
-  cinfo.err = jpeg_std_error(&jerr);
+  cinfo.err = jpeg_std_error(&jerr.pub);
+  jerr.pub.error_exit = my_error_exit;
+  jerr.pub.output_message = my_output_message;
+  /* Establish the setjmp return context for my_error_exit to use. */
+  if (setjmp(jerr.setjmp_buffer)) {
+    /* If we get here, the JPEG code has signaled an error.
+     * We need to clean up the JPEG object, close the input file, and return.
+     */
+    jpeg_destroy_decompress(&cinfo); 
+    fclose(infile);
+    *iptc_itext=NULL;
+    *itlength=0;
+    return NULL;
+  }
   
   /* Now we can initialize the JPEG decompression object. */
   jpeg_create_decompress(&cinfo);
@@ -286,4 +449,259 @@ i_readjpeg(int fd,char** iptc_itext,int *itlength) {
   mm_log((1,"i_readjpeg -> (0x%x)\n",im));
   return im;
 }
+
+
+
+i_img*
+i_readjpeg_scalar(char *data, int length,char** iptc_itext,int *itlength) {
+  i_img *im;
+
+  struct jpeg_decompress_struct cinfo;
+  struct my_error_mgr jerr;
+  JSAMPARRAY buffer;		/* Output row buffer */
+  int row_stride;		/* physical row width in output buffer */
+
+  mm_log((1,"i_readjpeg_scalar(data 0x%08x, length %d,iptc_itext 0x%x)\n",data,length,iptc_itext));
+  iptc_text=iptc_itext;
+
+  cinfo.err = jpeg_std_error(&jerr.pub);
+  jerr.pub.error_exit = my_error_exit;
+  jerr.pub.output_message = my_output_message;
+  if (setjmp(jerr.setjmp_buffer)) {
+    jpeg_destroy_decompress(&cinfo); 
+    *iptc_itext=NULL;
+    *itlength=0;
+    return NULL;
+  }
+  
+  jpeg_create_decompress(&cinfo);
+  jpeg_set_marker_processor(&cinfo, JPEG_APP13, APP13_handler);
+  jpeg_scalar_src(&cinfo, data, length );
+  (void) jpeg_read_header(&cinfo, TRUE);
+  (void) jpeg_start_decompress(&cinfo);
+  im=i_img_empty_ch(NULL,cinfo.output_width,cinfo.output_height,cinfo.output_components);
+  row_stride = cinfo.output_width * cinfo.output_components;
+  buffer = (*cinfo.mem->alloc_sarray) ((j_common_ptr) &cinfo, JPOOL_IMAGE, row_stride, 1);
+  while (cinfo.output_scanline < cinfo.output_height) {
+    (void) jpeg_read_scanlines(&cinfo, buffer, 1);
+    memcpy(im->data+im->channels*im->xsize*(cinfo.output_scanline-1),buffer[0],row_stride);
+  }
+  (void) jpeg_finish_decompress(&cinfo);
+  jpeg_destroy_decompress(&cinfo);
+  *itlength=tlength;
+  mm_log((1,"i_readjpeg_scalar -> (0x%x)\n",im));
+  return im;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#define JPGS 1024
+
+
+
+typedef struct {
+  struct jpeg_source_mgr pub;	/* public fields */
+  io_glue *data;
+  JOCTET *buffer;		/* start of buffer */
+  int length;			/* Do I need this? */
+  boolean start_of_file;	/* have we gotten any data yet? */
+} wiol_source_mgr;
+
+typedef wiol_source_mgr *wiol_src_ptr;
+
+static void
+wiol_init_source (j_decompress_ptr cinfo) {
+  wiol_src_ptr src = (wiol_src_ptr) cinfo->src;
+  
+  /* We reset the empty-input-file flag for each image,
+   * but we don't clear the input buffer.
+   * This is correct behavior for reading a series of images from one source.
+   */
+  src->start_of_file = TRUE;
+}
+
+static boolean
+wiol_fill_input_buffer(j_decompress_ptr cinfo) {
+  wiol_src_ptr src = (wiol_src_ptr) cinfo->src;
+  ssize_t nbytes; /* We assume that reads are "small" */
+  
+  mm_log((1,"wiol_fill_input_buffer(cinfo 0x%p)\n"));
+  
+  nbytes = src->data->readcb(src->data, src->buffer, JPGS);
+  
+  if (nbytes <= 0) { /* Insert a fake EOI marker */
+    src->pub.next_input_byte = fake_eoi;
+    src->pub.bytes_in_buffer = 2;
+  } else {
+    src->pub.next_input_byte = src->buffer;
+    src->pub.bytes_in_buffer = nbytes;
+  }
+  src->start_of_file = FALSE;
+  return TRUE;
+}
+
+static void
+wiol_skip_input_data (j_decompress_ptr cinfo, long num_bytes) {
+  wiol_src_ptr src = (wiol_src_ptr) cinfo->src;
+  
+  /* Just a dumb implementation for now.  Could use fseek() except
+   * it doesn't work on pipes.  Not clear that being smart is worth
+   * any trouble anyway --- large skips are infrequent.
+   */
+  
+  if (num_bytes > 0) {
+    while (num_bytes > (long) src->pub.bytes_in_buffer) {
+      num_bytes -= (long) src->pub.bytes_in_buffer;
+      (void) wiol_fill_input_buffer(cinfo);
+      /* note we assume that fill_input_buffer will never return FALSE,
+       * so suspension need not be handled.
+       */
+    }
+    src->pub.next_input_byte += (size_t) num_bytes;
+    src->pub.bytes_in_buffer -= (size_t) num_bytes;
+  }
+}
+
+static void
+wiol_term_source (j_decompress_ptr cinfo) {
+  /* no work necessary here */ 
+  wiol_src_ptr src;
+  if (cinfo->src != NULL) {
+    src = (wiol_src_ptr) cinfo->src;
+    myfree(src->buffer);
+  }
+}
+
+static void
+jpeg_wiol_src(j_decompress_ptr cinfo, io_glue *ig, int length) {
+  wiol_src_ptr src;
+  
+  if (cinfo->src == NULL) {	/* first time for this JPEG object? */
+    cinfo->src = (struct jpeg_source_mgr *) (*cinfo->mem->alloc_small) 
+      ((j_common_ptr) cinfo, JPOOL_PERMANENT,sizeof(wiol_source_mgr));
+    src = (wiol_src_ptr) cinfo->src;
+  }
+
+  /* put the request method call in here later */
+  io_glue_commit_types(ig);
+  
+  src         = (wiol_src_ptr) cinfo->src;
+  src->data   = ig;
+  src->buffer = mymalloc( JPGS );
+  src->length = length;
+
+  src->pub.init_source       = wiol_init_source;
+  src->pub.fill_input_buffer = wiol_fill_input_buffer;
+  src->pub.skip_input_data   = wiol_skip_input_data;
+  src->pub.resync_to_restart = jpeg_resync_to_restart; /* use default method */
+  src->pub.term_source       = wiol_term_source;
+  src->pub.bytes_in_buffer   = 0; /* forces fill_input_buffer on first read */
+  src->pub.next_input_byte   = NULL; /* until buffer loaded */
+}
+
+
+
+
+
+
+
+
+
+
+
+
+i_img*
+i_readjpeg_wiol(io_glue *data, int length, char** iptc_itext, int *itlength) {
+  i_img *im;
+
+  struct jpeg_decompress_struct cinfo;
+  struct my_error_mgr jerr;
+  JSAMPARRAY buffer;		/* Output row buffer */
+  int row_stride;		/* physical row width in output buffer */
+
+  mm_log((1,"i_readjpeg_wiol(data 0x%p, length %d,iptc_itext 0x%p)\n", data, iptc_itext));
+
+  iptc_text = iptc_itext;
+  cinfo.err = jpeg_std_error(&jerr.pub);
+  jerr.pub.error_exit     = my_error_exit;
+  jerr.pub.output_message = my_output_message;
+
+  /* Set error handler */
+  if (setjmp(jerr.setjmp_buffer)) {
+    jpeg_destroy_decompress(&cinfo); 
+    *iptc_itext=NULL;
+    *itlength=0;
+    return NULL;
+  }
+  
+  jpeg_create_decompress(&cinfo);
+  jpeg_set_marker_processor(&cinfo, JPEG_APP13, APP13_handler);
+  jpeg_wiol_src(&cinfo, data, length);
+
+  (void) jpeg_read_header(&cinfo, TRUE);
+  (void) jpeg_start_decompress(&cinfo);
+  im=i_img_empty_ch(NULL,cinfo.output_width,cinfo.output_height,cinfo.output_components);
+  row_stride = cinfo.output_width * cinfo.output_components;
+  buffer = (*cinfo.mem->alloc_sarray) ((j_common_ptr) &cinfo, JPOOL_IMAGE, row_stride, 1);
+  while (cinfo.output_scanline < cinfo.output_height) {
+    (void) jpeg_read_scanlines(&cinfo, buffer, 1);
+    memcpy(im->data+im->channels*im->xsize*(cinfo.output_scanline-1),buffer[0],row_stride);
+  }
+  (void) jpeg_finish_decompress(&cinfo);
+  jpeg_destroy_decompress(&cinfo);
+  *itlength=tlength;
+  mm_log((1,"i_readjpeg_wiol -> (0x%x)\n",im));
+  return im;
+}
+
 
