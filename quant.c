@@ -68,9 +68,9 @@ static void translate_addi(i_quantize *, i_img *, i_palidx *);
 */
 i_palidx *quant_translate(i_quantize *quant, i_img *img) {
   i_palidx *result;
-	mm_log((1, "quant_translate(quant %p, img %p)\n", quant, img));
+  mm_log((1, "quant_translate(quant %p, img %p)\n", quant, img));
 
-	result = mymalloc(img->xsize * img->ysize);
+  result = mymalloc(img->xsize * img->ysize);
 
   switch (quant->translate) {
 #ifdef HAVE_LIBGIF
@@ -82,17 +82,17 @@ i_palidx *quant_translate(i_quantize *quant, i_img *img) {
   case pt_closest:
     translate_closest(quant, img, result);
     break;
-
+    
   case pt_errdiff:
     translate_errdiff(quant, img, result);
     break;
-
+    
   case pt_perturb:
   default:
     translate_addi(quant, img, result);
     break;
   }
-
+  
   return result;
 }
 
@@ -118,7 +118,7 @@ static void translate_giflib(i_quantize *quant, i_img *img, i_palidx *out) {
   
   i_color col;
 
-	mm_log((1,"i_writegif(quant %p, img %p, out %p)\n", quant, img, out));
+  mm_log((1,"translate_giflib(quant %p, img %p, out %p)\n", quant, img, out));
   
   /*if (!(im->channels==1 || im->channels==3)) { fprintf(stderr,"Unable to write gif, improper colorspace.\n"); exit(3); }*/
   
@@ -1035,6 +1035,7 @@ translate_errdiff(i_quantize *quant, i_img *img, i_palidx *out) {
     memset(err+(maph-1)*errw, 0, sizeof(*err)*errw);
   }
   CF_CLEANUP;
+  myfree(err);
 }
 /* Prescan finds the boxes in the image that have the highest number of colors 
    and that result is used as the initial value for the vectores */

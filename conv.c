@@ -19,7 +19,7 @@ i_conv(i_img *im,float *coeff,int len) {
   float res[11];
   i_img timg;
 
-  mm_log((1,"i_conv(im* 0x%x,coeff 0x%x,len %d)\n",im,coeff,len));
+  mm_log((1,"i_conv(im %p, coeff %p, len %d)\n",im,coeff,len));
  
   i_img_empty_ch(&timg,im->xsize,im->ysize,im->channels);
 
@@ -32,10 +32,15 @@ i_conv(i_img *im,float *coeff,int len) {
       for(ch=0;ch<im->channels;ch++) res[ch]=0;
       for(c=0;c<len;c++)
 	if (i_gpix(im,i+c-center,l,&rcolor)!=-1) {
-	  for(ch=0;ch<im->channels;ch++) res[ch]+=(float)(rcolor.channel[ch])*coeff[c];
+	  for(ch=0;ch<im->channels;ch++) 
+            res[ch]+=(float)(rcolor.channel[ch])*coeff[c];
 	  pc+=coeff[c];
 	}
-      for(ch=0;ch<im->channels;ch++) rcolor.channel[ch]=(unsigned char)(((res[ch]/pc>255.0)?255.0:res[ch]/pc));
+      for(ch=0;ch<im->channels;ch++) {
+        double temp = res[ch]/pc;
+        rcolor.channel[ch] = 
+          temp < 0 ? 0 : temp > 255 ? 255 : (unsigned char)temp;
+      }
       i_ppix(&timg,i,l,&rcolor);
     }
   }
@@ -49,13 +54,19 @@ i_conv(i_img *im,float *coeff,int len) {
 	  for(c=0;c<len;c++)
 	    if (i_gpix(&timg,l,i+c-center,&rcolor)!=-1)
 	      {
-		for(ch=0;ch<im->channels;ch++) res[ch]+=(float)(rcolor.channel[ch])*coeff[c];
+		for(ch=0;ch<im->channels;ch++) 
+                  res[ch]+=(float)(rcolor.channel[ch])*coeff[c];
 		pc+=coeff[c];
 	      }
-	  for(ch=0;ch<im->channels;ch++) rcolor.channel[ch]=(unsigned char)(((res[ch]/(float)(pc)>255.0)?255.0:res[ch]/(float)(pc)));
+	  for(ch=0;ch<im->channels;ch++) {
+            double temp = res[ch]/pc;
+            rcolor.channel[ch]= 
+              temp < 0 ? 0 : temp > 255 ? 255 : (unsigned char)temp;
+          }
 	  i_ppix(im,l,i,&rcolor);
 	}
     }
+  i_img_exorcise(&timg);
 }
 
 

@@ -186,11 +186,22 @@ Called by any imager function before doing any other processing.
 
 =cut */
 void i_clear_error() {
+#ifdef IMAGER_DEBUG_MALLOC
+  int i;
+
+  for (i = 0; i < ERRSTK; ++i) {
+    if (error_space[i]) {
+      myfree(error_stack[i].msg);
+      error_stack[i].msg = NULL;
+      error_space[i] = 0;
+    }
+  }
+#endif
   error_sp = ERRSTK-1;
 }
 
 /*
-=item i_push_error(char const *msg)
+=item i_push_error(int code, char const *msg)
 
 Called by an imager function to push an error message onto the stack.
 
@@ -297,7 +308,7 @@ int i_failed(int code, char const *msg) {
     for (sp = error_sp; error_stack[sp].msg; ++sp) {
       total += strlen(error_stack[sp].msg) + 2;
     }
-    full = malloc(total);
+    full = mymalloc(total);
     if (!full) {
       /* just quit, at least it's on stderr */
       exit(EXIT_FAILURE);

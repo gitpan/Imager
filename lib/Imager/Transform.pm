@@ -247,6 +247,7 @@ EOS
    circleripple=>
    {
     type=>'rpnexpr',
+    desc=>'Adds a circular ripple effect',
     rpnexpr=><<'EOS',
 x y cx cy distance !dist
 @dist freq / sin !scale
@@ -268,6 +269,7 @@ EOS
    spiral=>
    {
     type=>'rpnexpr',
+    desc=>'Render a colorful spiral',
     rpnexpr=><<'EOS',
 x y cx cy distance !d y cy - x cx - atan2 !a
 @d spacing / @a + pi 2 * % !a2 
@@ -355,10 +357,10 @@ sub transform {
   my %opts = %$opts;
   $opts{$func->{type}} = $func->{$func->{type}};
   my %con = %$constants;
-  for my $name (keys %{$func->{constants}}) {
+  for my $name (keys %{$func->{'constants'}}) {
     unless (exists $con{$name}) {
-      if (exists $func->{constants}{$name}{default}) {
-	$con{$name} = $func->{constants}{$name}{default};
+      if (exists $func->{'constants'}{$name}{default}) {
+	$con{$name} = $func->{'constants'}{$name}{default};
       }
       else {
 	$self->{error} = "No value or default for constant $name";
@@ -366,10 +368,10 @@ sub transform {
       }
     }
   }
-  $opts{constants} = \%con;
-  unless (@in == @{$func->{inputs}}) {
+  $opts{'constants'} = \%con;
+  unless (@in == @{$func->{'inputs'}}) {
     $self->{error} = @in." input images given, ".
-      @{$func->{inputs}}." supplied";
+      @{$func->{'inputs'}}." supplied";
     return;
   }
 
@@ -405,21 +407,21 @@ sub describe {
 Function   : $name
 Description: $func->{desc}
 EOS
-  if ($func->{inputs} && @{$func->{inputs}}) {
+  if ($func->{'inputs'} && @{$func->{'inputs'}}) {
     $desc .= "Input images:\n";
     my $i = 1;
-    for my $in (@{$func->{inputs}}) {
+    for my $in (@{$func->{'inputs'}}) {
       $desc .= "  $i: $in->{desc}\n";
     }
   }
   else {
     $desc .= "There are no input images\n";
   }
-  if ($func->{constants} && keys %{$func->{constants}}) {
+  if ($func->{'constants'} && keys %{$func->{'constants'}}) {
     $desc .= "Input constants:\n";
-    for my $key (keys %{$func->{constants}}) {
-      $desc .= "  $key: $func->{constants}{$key}{desc}\n";
-      $desc .= "       Default: $func->{constants}{$key}{default}\n";
+    for my $key (keys %{$func->{'constants'}}) {
+      $desc .= "  $key: $func->{'constants'}{$key}{desc}\n";
+      $desc .= "       Default: $func->{'constants'}{$key}{default}\n";
     }
   }
   else {
@@ -493,7 +495,7 @@ Returns a list of input image descriptions, or the number of them,
 depending on content.
 
 The list contains hashrefs, which current contain only one member,
-desc, a description of the use of the image.
+desc, a description of the use of the input image.
 
 =item my $out = $tran->transform(\%opts, \%constants, @imgs)
 

@@ -1,6 +1,7 @@
 #include "image.h"
 #include "io.h"
 #include "log.h"
+#include "iolayer.h"
 
 #include <stdlib.h>
 #include <errno.h>
@@ -29,7 +30,7 @@ or an entire memory mapped buffer.
 
 Some of these functions are internal.
 
-=over 4
+=over
 
 =cut
 */
@@ -365,7 +366,7 @@ i_readpnm_wiol(io_glue *ig, int length) {
     
   case 4: /* binary pbm */
     for(y=0;y<height;y++) for(x=0; x<width; x+=8) {
-      if ( (uc = gnext(&buf)) ) {
+      if ( (uc = (unsigned char*)gnext(&buf)) ) {
 	int xt;
 	int pc = width-x < 8 ? width-x : 8;
 	/*	mm_log((1,"i_readpnm: y=%d x=%d pc=%d\n", y, x, pc)); */
@@ -384,7 +385,7 @@ i_readpnm_wiol(io_glue *ig, int length) {
   case 6: /* binary ppm */
     for(y=0;y<height;y++) for(x=0; x<width; x++) {
       for(ch=0; ch<channels; ch++) {
-	if ( (uc = gnext(&buf)) ) val.channel[ch] = *uc;
+	if ( (uc = (unsigned char*)gnext(&buf)) ) val.channel[ch] = *uc;
 	else {
 	  mm_log((1,"i_readpnm: gnext() returned false in data\n"));
 	  return im;
@@ -400,25 +401,52 @@ i_readpnm_wiol(io_glue *ig, int length) {
   return im;
 }
 
+
 undef_int
-i_writeppm(i_img *im,int fd) {
+i_writeppm_wiol(i_img *im, io_glue *ig) {
   char header[255];
   int rc;
+  writep write_func;
 
-  mm_log((1,"i_writeppm(im* 0x%x,fd %d)\n",im,fd));
-  
+  mm_log((1,"i_writeppm(im %p, ig %p)\n", im, ig));
   i_clear_error();
 
-  if (im->channels==3) {
+  /* Add code to get the filename info from the iolayer */
+  /* Also add code to check for mmapped code */
+
+  io_glue_commit_types(ig);
+
+  if (im->channels == 3) {
     sprintf(header,"P6\n#CREATOR: Imager\n%d %d\n255\n",im->xsize,im->ysize);
-    
-    if (mywrite(fd,header,strlen(header))<0) {
+    if (ig->writecb(ig,header,strlen(header))<0) {
       i_push_error(errno, "could not write ppm header");
       mm_log((1,"i_writeppm: unable to write ppm header.\n"));
       return(0);
     }
-    
-    rc=mywrite(fd,im->data,im->bytes);
+
+    if (!im->virtual && im->bits == i_8_bits && im->type == i_direct_type) {
+      rc = ig->writecb(ig,im->idata,im->bytes);
+    }
+    else {
+      unsigned char *data = mymalloc(3 * im->xsize);
+      if (data != NULL) {
+        int y = 0;
+        int x, ch;
+        unsigned char *p;
+        static int rgb_chan[3] = { 0, 1, 2 };
+
+        rc = 0;
+        while (y < im->ysize && rc >= 0) {
+          i_gsamp(im, 0, im->xsize, y, data, rgb_chan, 3);
+          rc = ig->writecb(ig, data, im->xsize * 3);
+        }
+        myfree(data);
+      }
+      else {
+        i_push_error(0, "Out of memory");
+        return 0;
+      }
+    }
     if (rc<0) {
       i_push_error(errno, "could not write ppm data");
       mm_log((1,"i_writeppm: unable to write ppm data.\n"));
@@ -428,13 +456,35 @@ i_writeppm(i_img *im,int fd) {
   else if (im->channels == 1) {
     sprintf(header, "P5\n#CREATOR: Imager\n%d %d\n255\n",
 	    im->xsize, im->ysize);
-    if (mywrite(fd,header, strlen(header)) < 0) {
+    if (ig->writecb(ig,header, strlen(header)) < 0) {
       i_push_error(errno, "could not write pgm header");
       mm_log((1,"i_writeppm: unable to write pgm header.\n"));
       return(0);
     }
-    
-    rc=mywrite(fd,im->data,im->bytes);
+
+    if (!im->virtual && im->bits == i_8_bits && im->type == i_direct_type) {
+      rc=ig->writecb(ig,im->idata,im->bytes);
+    }
+    else {
+      unsigned char *data = mymalloc(im->xsize);
+      if (data != NULL) {
+        int y = 0;
+        int x, ch;
+        int chan = 0;
+        unsigned char *p;
+
+        rc = 0;
+        while (y < im->ysize && rc >= 0) {
+          i_gsamp(im, 0, im->xsize, y, data, &chan, 1);
+          rc = ig->writecb(ig, data, im->xsize);
+        }
+        myfree(data);
+      }
+      else {
+        i_push_error(0, "Out of memory");
+        return 0;
+      }
+    }
     if (rc<0) {
       i_push_error(errno, "could not write pgm data");
       mm_log((1,"i_writeppm: unable to write pgm data.\n"));
@@ -446,13 +496,20 @@ i_writeppm(i_img *im,int fd) {
     mm_log((1,"i_writeppm: ppm/pgm is 1 or 3 channel only (current image is %d)\n",im->channels));
     return(0);
   }
-  
+
   return(1);
 }
 
+/*
+=back
 
+=head1 AUTHOR
 
+Arnar M. Hrafnkelsson <addi@umich.edu>
 
+=head1 SEE ALSO
 
+Imager(3)
 
-
+=cut
+*/

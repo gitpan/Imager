@@ -52,7 +52,7 @@ objects for Imager.  The typical usage pattern for data sources is:
 
 Some of these functions are internal.
 
-=over 4
+=over
 
 =cut
 */
@@ -193,6 +193,132 @@ realseek_seek(io_glue *ig, off_t offset, int whence) {
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/*
+ * Callbacks for sources that are a fixed size buffer
+ */
+
+/*
+=item buffer_read(ig, buf, count)
+
+Does the reading from a buffer source
+
+   ig    - io_glue object
+   buf   - buffer to return data in
+   count - number of bytes to read into buffer max
+
+=cut
+*/
+
+static
+ssize_t 
+buffer_read(io_glue *ig, void *buf, size_t count) {
+  io_ex_buffer *ieb = ig->exdata;
+  char        *cbuf = buf;
+
+  IOL_DEB( printf("buffer_read: fd = %d, ier->cpos = %ld, buf = %p, count = %d\n", fd, (long) ier->cpos, buf, count) );
+
+  if ( ieb->cpos+count > ig->source.buffer.len ) {
+    mm_log((1,"buffer_read: short read: cpos=%d, len=%d, count=%d\n", ieb->cpos, ig->source.buffer.len));
+    count = ig->source.buffer.len - ieb->cpos;
+  }
+  
+  memcpy(buf, ig->source.buffer.data+ieb->cpos, count);
+  ieb->cpos += count;
+  IOL_DEB( printf("buffer_read: rc = %d, count = %d\n", rc, count) );
+  return count;
+}
+
+
+/*
+=item buffer_write(ig, buf, count)
+
+Does nothing, returns -1
+
+   ig    - io_glue object
+   buf   - buffer that contains data
+   count - number of bytes to write
+
+=cut
+*/
+
+static
+ssize_t 
+buffer_write(io_glue *ig, const void *buf, size_t count) {
+  mm_log((1, "buffer_write called, this method should never be called.\n"));
+  return -1;
+}
+
+
+/*
+=item buffer_close(ig)
+
+Closes a source that can be seeked on.  Not sure if this should be an actual close
+or not.  Does nothing for now.  Should be fixed.
+
+   ig - data source
+
+=cut
+*/
+
+static
+void
+buffer_close(io_glue *ig) {
+  mm_log((1, "buffer_close(ig %p)\n", ig));
+  /* FIXME: Do stuff here */
+}
+
+
+/* buffer_seek(ig, offset, whence)
+
+Implements seeking for a buffer source.
+
+   ig     - data source
+   offset - offset into stream
+   whence - whence argument a la lseek
+
+=cut
+*/
+
+static
+off_t
+buffer_seek(io_glue *ig, off_t offset, int whence) {
+  io_ex_buffer *ieb = ig->exdata;
+  off_t reqpos = offset 
+    + (whence == SEEK_CUR)*ieb->cpos 
+    + (whence == SEEK_END)*ig->source.buffer.len;
+  
+  if (reqpos > ig->source.buffer.len) {
+    mm_log((1, "seeking out of readable range\n"));
+    return (off_t)-1;
+  }
+  
+  ieb->cpos = reqpos;
+  IOL_DEB( printf("buffer_seek(ig %p, offset %ld, whence %d)\n", ig, (long) offset, whence) );
+
+  return reqpos;
+  /* FIXME: How about implementing this offset handling stuff? */
+}
+
+
+
+
+
 /*
  * Callbacks for sources that are a chain of variable sized buffers
  */
@@ -203,7 +329,7 @@ realseek_seek(io_glue *ig, off_t offset, int whence) {
 
 static
 io_blink*
-io_blink_new() {
+io_blink_new(void) {
   io_blink *ib;
 
   mm_log((1, "io_blink_new()\n"));
@@ -244,6 +370,31 @@ io_bchain_advance(io_ex_bchain *ieb) {
   ieb->cp    = ieb->cp->next;
   ieb->cpos  = 0;
 }
+
+
+
+/*
+=item io_bchain_destroy()
+
+frees all resources used by a buffer chain.
+
+=cut
+*/
+
+void
+io_destroy_bufchain(io_ex_bchain *ieb) {
+  io_blink *cp;
+  mm_log((1, "io_destroy_bufchain(ieb %p)\n", ieb));
+  cp = ieb->head;
+  
+  while(cp) {
+    io_blink *t = cp->next;
+    myfree(cp);
+    cp = t;
+  }
+}
+
+
 
 
 /*
@@ -611,15 +762,17 @@ Sets an io_object for reading from a buffer source
 */
 
 void
-io_obj_setp_buffer(io_obj *io, void *p, size_t len) {
-  io->buffer.type = BUFFER;
-  io->buffer.c    = (char*) p;
-  io->buffer.len  = len;
+io_obj_setp_buffer(io_obj *io, char *p, size_t len, closebufp closecb, void *closedata) {
+  io->buffer.type      = BUFFER;
+  io->buffer.data      = p;
+  io->buffer.len       = len;
+  io->buffer.closecb   = closecb;
+  io->buffer.closedata = closedata;
 }
 
 
 /*
-=item io_obj_setp_cbuf(io, p)
+=item io_obj_setp_buchain(io)
 
 Sets an io_object for reading/writing from a buffer source
 
@@ -686,7 +839,7 @@ io_glue_commit_types(io_glue *ig) {
       ieb->cpos   = 0;
       ieb->gpos   = 0;
       ieb->tfill  = 0;
-      
+
       ieb->head   = io_blink_new();
       ieb->cp     = ieb->head;
       ieb->tail   = ieb->head;
@@ -699,7 +852,6 @@ io_glue_commit_types(io_glue *ig) {
     }
     break;
   case CBSEEK:
-  default:
     {
       io_ex_rseek *ier = mymalloc(sizeof(io_ex_rseek));
       
@@ -712,6 +864,20 @@ io_glue_commit_types(io_glue *ig) {
       ig->seekcb  = realseek_seek;
       ig->closecb = realseek_close;
     }
+    break;
+  case BUFFER:
+    {
+      io_ex_buffer *ieb = mymalloc(sizeof(io_ex_buffer));
+      ieb->offset = 0;
+      ieb->cpos   = 0;
+
+      ig->exdata  = ieb;
+      ig->readcb  = buffer_read;
+      ig->writecb = buffer_write;
+      ig->seekcb  = buffer_seek;
+      ig->closecb = buffer_close;
+    }
+    break;
   }
 }
 
@@ -754,8 +920,36 @@ be written to and read from later (like a pseudo file).
 
 io_glue *
 io_new_bufchain() {
-  io_glue *ig = mymalloc(sizeof(io_glue));
+  io_glue *ig;
+  mm_log((1, "io_new_bufchain()\n"));
+  ig = mymalloc(sizeof(io_glue));
   io_obj_setp_bufchain(&ig->source);
+  return ig;
+}
+
+
+
+
+
+/*
+=item io_new_buffer(data, len)
+
+Returns a new io_glue object that has the source defined as reading
+from specified buffer.  Note that the buffer is not copied.
+
+   data - buffer to read from
+   len - length of buffer
+
+=cut
+*/
+
+io_glue *
+io_new_buffer(char *data, size_t len, closebufp closecb, void *closedata) {
+  io_glue *ig;
+  mm_log((1, "io_new_buffer(data %p, len %d, closecb %p, closedata %p)\n", data, len, closecb, closedata));
+  ig = mymalloc(sizeof(io_glue));
+  memset(ig, 0, sizeof(*ig));
+  io_obj_setp_buffer(&ig->source, data, len, closecb, closedata);
   return ig;
 }
 
@@ -774,12 +968,16 @@ data from the io_glue callbacks hasn't been done yet.
 
 io_glue *
 io_new_fd(int fd) {
-  io_glue *ig = mymalloc(sizeof(io_glue));
+  io_glue *ig;
+  mm_log((1, "io_new_fd(fd %d)\n", fd));
+  ig = mymalloc(sizeof(io_glue));
+  memset(ig, 0, sizeof(*ig));
 #ifdef _MSC_VER
   io_obj_setp_cb(&ig->source, (void*)fd, _read, _write, _lseek);
 #else
   io_obj_setp_cb(&ig->source, (void*)fd, read, write, lseek);
 #endif
+  mm_log((1, "(%p) <- io_new_fd\n", ig));
   return ig;
 }
 
@@ -840,6 +1038,49 @@ Might leave us with a dangling pointer issue on some buffers.
 
 void
 io_glue_DESTROY(io_glue *ig) {
-  free(ig);
-  /* FIXME: Handle extradata and such */
+  io_type      inn = ig->source.type;
+  mm_log((1, "io_glue_DESTROY(ig %p)\n", ig));
+  
+  switch (inn) {
+  case BUFCHAIN:
+    {
+      io_ex_bchain *ieb = ig->exdata;
+      io_destroy_bufchain(ieb);
+      myfree(ieb);
+    }
+    break;
+  case CBSEEK:
+  default:
+    {
+      io_ex_rseek *ier = ig->exdata;
+      myfree(ier);
+    }
+    break;
+  case BUFFER:
+    {
+      io_ex_buffer *ieb = ig->exdata;
+      if (ig->source.buffer.closecb) {
+	mm_log((1,"calling close callback %p for io_buffer\n", ig->source.buffer.closecb));
+	ig->source.buffer.closecb(ig->source.buffer.closedata);
+      }
+      myfree(ieb);
+    }
+    break;
+  }
+  myfree(ig);
 }
+
+
+/*
+=back
+
+=head1 AUTHOR
+
+Arnar M. Hrafnkelsson <addi@umich.edu>
+
+=head1 SEE ALSO
+
+Imager(3)
+
+=cut
+*/

@@ -43,7 +43,7 @@ more for Imager.
 
 Some of these functions are internal.
 
-=over 4
+=over
 
 =cut
 
@@ -75,6 +75,11 @@ i_init_fonts() {
   
 #ifdef HAVE_LIBTT
   init_tt();
+#endif
+
+#ifdef HAVE_FT2
+  if (!i_ft2_init())
+    return 0;
 #endif
 
   return(1); /* FIXME: Always true - check the return values of the init_t1 and init_tt functions */
@@ -119,7 +124,7 @@ Shuts the t1lib font rendering engine down.
 */
 
 void
-i_close_t1() {
+i_close_t1(void) {
   T1_CloseLib();
 }
 
@@ -235,6 +240,8 @@ i_t1_cp(i_img *im,int xb,int yb,int channel,int fontnum,float points,char* str,i
   if (im == NULL) { mm_log((1,"i_t1_cp: Null image in input\n")); return(0); }
 
   glyph=T1_AASetString( fontnum, str, len, 0, T1_KERNING, points, NULL);
+  if (glyph == NULL)
+    return 0;
 
   mm_log((1,"metrics: ascent: %d descent: %d\n",glyph->metrics.ascent,glyph->metrics.descent));
   mm_log((1," leftSideBearing: %d rightSideBearing: %d\n",glyph->metrics.leftSideBearing,glyph->metrics.rightSideBearing));
@@ -334,6 +341,8 @@ i_t1_text(i_img *im,int xb,int yb,i_color *cl,int fontnum,float points,char* str
   if (im == NULL) { mm_log((1,"i_t1_cp: Null image in input\n")); return(0); }
 
   glyph=T1_AASetString( fontnum, str, len, 0, T1_KERNING, points, NULL);
+  if (glyph == NULL)
+    return 0;
 
   mm_log((1,"metrics:  ascent: %d descent: %d\n",glyph->metrics.ascent,glyph->metrics.descent));
   mm_log((1," leftSideBearing: %d rightSideBearing: %d\n",glyph->metrics.leftSideBearing,glyph->metrics.rightSideBearing));
@@ -529,13 +538,13 @@ i_tt_new(char *fontname) {
   
   /* allocate memory for the structure */
   
-  handle=mymalloc( sizeof(TT_Fonthandle) );
+  handle = mymalloc( sizeof(TT_Fonthandle) );
 
   /* load the typeface */
   error = TT_Open_Face( engine, fontname, &handle->face );
   if ( error ) {
-    if ( error == TT_Err_Could_Not_Open_File ) mm_log((1, "Could not find/open %s.\n", fontname ))
-    else mm_log((1, "Error while opening %s, error code = 0x%x.\n",fontname, error ));
+    if ( error == TT_Err_Could_Not_Open_File ) { mm_log((1, "Could not find/open %s.\n", fontname )) }
+    else { mm_log((1, "Error while opening %s, error code = 0x%x.\n",fontname, error )); }
     return NULL;
   }
   
@@ -683,10 +692,32 @@ i_tt_blit_or( TT_Raster_Map *dst, TT_Raster_Map *src,int x_off, int y_off ) {
     s = ( (char*)src->bitmap ) + y * src->cols + x1;
     d = ( (char*)dst->bitmap ) + ( y + y_off ) * dst->cols + x1 + x_off;
     
-    for ( x = x1; x < x2; ++x ) *d++ |= *s++;
+    for ( x = x1; x < x2; ++x ) {
+      if (*s > *d)
+	*d = *s;
+      d++;
+      s++;
+    }
   }
 }
 
+/* useful for debugging */
+#if 0
+
+static void dump_raster_map(FILE *out, TT_Raster_Map *bit ) {
+  int x, y;
+  fprintf(out, "cols %d rows %d  flow %d\n", bit->cols, bit->rows, bit->flow);
+  for (y = 0; y < bit->rows; ++y) {
+    fprintf(out, "%2d:", y);
+    for (x = 0; x < bit->cols; ++x) {
+      if ((x & 7) == 0 && x) putc(' ', out);
+      fprintf(out, "%02x", ((unsigned char *)bit->bitmap)[y*bit->cols+x]);
+    }
+    putc('\n', out);
+  }
+}
+
+#endif
 
 /* 
 =item i_tt_get_glyph(handle, inst, j) 
@@ -751,6 +782,7 @@ pixmaps and glyphs
 void
 i_tt_destroy( TT_Fonthandle *handle) {
   TT_Close_Face( handle->face );
+  myfree( handle );
   
   /* FIXME: Should these be freed automatically by the library? 
 
@@ -801,7 +833,7 @@ i_tt_render_glyph( TT_Glyph glyph, TT_Glyph_Metrics* gmetrics, TT_Raster_Map *bi
   if ( !smooth ) TT_Get_Glyph_Bitmap( glyph, bit, x_off * 64, y_off * 64);
   else {
     TT_F26Dot6 xmin, ymin, xmax, ymax;
-    
+
     xmin =  gmetrics->bbox.xMin & -64;
     ymin =  gmetrics->bbox.yMin & -64;
     xmax = (gmetrics->bbox.xMax + 63) & -64;
@@ -844,7 +876,7 @@ i_tt_render_all_glyphs( TT_Fonthandle *handle, int inst, TT_Raster_Map *bit, TT_
      y=-( handle->properties.horizontal->Descender * handle->instanceh[inst].imetrics.y_ppem )/(handle->properties.header->Units_Per_EM);
   */
 
-  x=cords[0]; /* FIXME: If you font is antialiased this should be expanded by one to allow for aa expansion and the allocation too - do before passing here */
+  x=-cords[0]; /* FIXME: If you font is antialiased this should be expanded by one to allow for aa expansion and the allocation too - do before passing here */
   y=-cords[1];
   
   for ( i = 0; i < len; i++ ) {
@@ -1071,7 +1103,7 @@ i_tt_text( TT_Fonthandle *handle, i_img *im, int xb, int yb, i_color *cl, float 
   ascent=cords[3];
   st_offset=cords[0];
 
-  i_tt_dump_raster_map2( im, &bit, xb-st_offset, yb-ascent, cl, smooth ); 
+  i_tt_dump_raster_map2( im, &bit, xb+st_offset, yb-ascent, cl, smooth ); 
   i_tt_done_raster_map( &bit );
 
   return 1;
@@ -1103,29 +1135,42 @@ i_tt_bbox_inst( TT_Fonthandle *handle, int inst ,const char *txt, int len, int c
   mm_log((1,"i_tt_box_inst(handle 0x%X,inst %d,txt '%.*s', len %d)\n",handle,inst,len,txt,len));
 
   upm     = handle->properties.header->Units_Per_EM;
-  gascent  = ( handle->properties.horizontal->Ascender  * handle->instanceh[inst].imetrics.y_ppem ) / upm;
-  gdescent = ( handle->properties.horizontal->Descender * handle->instanceh[inst].imetrics.y_ppem ) / upm;
+  gascent  = ( handle->properties.horizontal->Ascender  * handle->instanceh[inst].imetrics.y_ppem + upm - 1) / upm;
+  gdescent = ( handle->properties.horizontal->Descender * handle->instanceh[inst].imetrics.y_ppem - upm + 1) / upm;
   
   width   = 0;
   start   = 0;
   
-  mm_log((1, "i_tt_box_inst: glyph='%c' gascent=%d gdescent=%d\n", j, gascent, gdescent));
+  mm_log((1, "i_tt_box_inst: gascent=%d gdescent=%d\n", gascent, gdescent));
 
   first=1;
   for ( i = 0; i < len; ++i ) {
     j = ustr[i];
     if ( i_tt_get_glyph(handle,inst,j) ) {
-      width += handle->instanceh[inst].gmetrics[j].advance   / 64;
-      casc   = handle->instanceh[inst].gmetrics[j].bbox.yMax / 64;
-      cdesc  = handle->instanceh[inst].gmetrics[j].bbox.yMin / 64;
+      TT_Glyph_Metrics *gm = handle->instanceh[inst].gmetrics + j;
+      width += gm->advance   / 64;
+      casc   = (gm->bbox.yMax+63) / 64;
+      cdesc  = (gm->bbox.yMin-63) / 64;
 
       mm_log((1, "i_tt_box_inst: glyph='%c' casc=%d cdesc=%d\n", j, casc, cdesc));
 
       if (first) {
-	start    = handle->instanceh[inst].gmetrics[j].bbox.xMin / 64;
-	ascent   = handle->instanceh[inst].gmetrics[j].bbox.yMax / 64;
-	descent  = handle->instanceh[inst].gmetrics[j].bbox.yMin / 64;
+	start    = gm->bbox.xMin / 64;
+	ascent   = (gm->bbox.yMax+63) / 64;
+	descent  = (gm->bbox.yMin-63) / 64;
 	first = 0;
+      }
+      if (i == len-1) {
+	/* the right-side bearing - in case the right-side of a 
+	   character goes past the right of the advance width,
+	   as is common for italic fonts
+	*/
+	int rightb = gm->advance - gm->bearingX 
+	  - (gm->bbox.xMax - gm->bbox.xMin);
+	/* fprintf(stderr, "font info last: %d %d %d %d\n", 
+	   gm->bbox.xMax, gm->bbox.xMin, gm->advance, rightb); */
+	if (rightb < 0)
+	  width -= rightb/64;
       }
 
       ascent  = (ascent  >  casc ?  ascent : casc );
@@ -1135,7 +1180,7 @@ i_tt_bbox_inst( TT_Fonthandle *handle, int inst ,const char *txt, int len, int c
   
   cords[0]=start;
   cords[1]=gdescent;
-  cords[2]=width+start;
+  cords[2]=width;
   cords[3]=gascent;
   cords[4]=descent;
   cords[5]=ascent;
@@ -1174,3 +1219,18 @@ i_tt_bbox( TT_Fonthandle *handle, float points,char *txt,int len,int cords[6]) {
 
 
 #endif /* HAVE_LIBTT */
+
+
+/*
+=back
+
+=head1 AUTHOR
+
+Arnar M. Hrafnkelsson <addi@umich.edu>
+
+=head1 SEE ALSO
+
+Imager(3)
+
+=cut
+*/

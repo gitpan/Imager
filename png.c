@@ -1,3 +1,4 @@
+#include "iolayer.h"
 #include "image.h"
 #include "png.h"
 
@@ -31,257 +32,64 @@ int CC2C[PNG_COLOR_MASK_PALETTE|PNG_COLOR_MASK_COLOR|PNG_COLOR_MASK_ALPHA];
  
 
 
-
-
-
-
-
-
-/*
-  png_set_read_fn(png_structp read_ptr, voidp read_io_ptr, png_rw_ptr read_data_fn)
-  png_set_write_fn(png_structp write_ptr, voidp write_io_ptr, png_rw_ptr write_data_fn,
-  png_flush_ptr output_flush_fn);
-  voidp read_io_ptr = png_get_io_ptr(read_ptr);
-  voidp write_io_ptr = png_get_io_ptr(write_ptr);
-*/
-
-struct png_scalar_info {
-  char *data;
-  int length;
-  int cpos;
-};
-
-
-struct png_wiol_info {
-  io_glue *cp;
-  int length;
-  int cpos;
-};
-
 static void
-user_read_data(png_structp png_ptr,png_bytep data, png_size_t length) {
-  struct png_scalar_info *sci=(struct png_scalar_info *)png_ptr->io_ptr;
-  
-  /*   fprintf(stderr,"user_read_data: cpos %d/%d (%d)\n",sci->cpos,sci->length,length); */
-  
-  if (sci->cpos+(ssize_t)length > sci->length ) { png_error(png_ptr, "Read overflow error on a scalar."); }
-  
-  memcpy(data, sci->data+sci->cpos , length);
-  sci->cpos+=length;
-}
-
-/*
-static void
-user_write_data(png_structp png_ptr, png_bytep data, png_uint_32 length) {
-FIXME: implement these 
+wiol_read_data(png_structp png_ptr, png_bytep data, png_size_t length) {
+  io_glue *ig = (io_glue *)png_ptr->io_ptr;
+  int rc = ig->readcb(ig, data, length);
+  if (rc != length) png_error(png_ptr, "Read overflow error on an iolayer source.");
 }
 
 static void
-user_flush_data(png_structp png_ptr) {
-  FIXME: implement these 
-}
-*/
-
-
-void
-scalar_png_init_io(png_structp png_ptr,struct png_scalar_info *sci) {
-  png_ptr->io_ptr = (png_voidp)sci;
+wiol_write_data(png_structp png_ptr, png_bytep data, png_size_t length) {
+  int rc;
+  io_glue *ig = (io_glue *)png_ptr->io_ptr;
+  rc = ig->writecb(ig, data, length);
+  if (rc != length) png_error(png_ptr, "Write error on an iolayer source.");
 }
 
+static void
+wiol_flush_data(png_structp png_ptr) {
+  /* XXX : This needs to be added to the io layer */
+}
 
 
-
-
+/* Check function demo 
 
 int
 check_if_png(char *file_name, FILE **fp) {
-   char buf[PNG_BYTES_TO_CHECK];
-   
-   /* Open the prospective PNG file. */
-   if ((*fp = fopen(file_name, "rb")) != NULL) return 0;
-   
-   /* Read in some of the signature bytes */
-   if (fread(buf, 1, PNG_BYTES_TO_CHECK, *fp) != PNG_BYTES_TO_CHECK) return 0;
-
-   /* Compare the first PNG_BYTES_TO_CHECK bytes of the signature.
-      Return nonzero (true) if they match */
-
-   return(!png_sig_cmp((png_bytep)buf, (png_size_t)0, PNG_BYTES_TO_CHECK));
+  char buf[PNG_BYTES_TO_CHECK];
+  if ((*fp = fopen(file_name, "rb")) != NULL) return 0;
+  if (fread(buf, 1, PNG_BYTES_TO_CHECK, *fp) != PNG_BYTES_TO_CHECK) return 0;
+  return(!png_sig_cmp((png_bytep)buf, (png_size_t)0, PNG_BYTES_TO_CHECK));
 }
-
-/* Read a PNG file.  You may want to return an error code if the read
- * fails (depending upon the failure).  There are two "prototypes" given
- * here - one where we are given the filename, and we need to open the
- * file, and the other where we are given an open file (possibly with
- * some or all of the magic bytes read - see comments above).
- */
-
-i_img *
-i_readpng(int fd) {
-  i_img *im;
-  png_structp png_ptr;
-  png_infop info_ptr;
-  png_uint_32 width, height, y;
-  int bit_depth, color_type, interlace_type;
-  int number_passes;
-  int channels, pass;
-  
-  FILE *fp;
-  unsigned int sig_read;
-
-  sig_read = 0;
-
-  if ((fp = fdopen(fd,"r")) == NULL) {
-    mm_log((1,"can't fdopen.\n"));
-    exit(1);
-  }
-
-  mm_log((1,"i_readpng(fd %d)\n",fd));
-
-  png_ptr = png_create_read_struct(PNG_LIBPNG_VER_STRING,NULL,NULL,NULL);
-  
-  if (png_ptr == NULL) {
-    fclose(fp);
-    return 0;
-  }
-  
-  /* Allocate/initialize the memory for image information.  REQUIRED. */
-  info_ptr = png_create_info_struct(png_ptr);
-  if (info_ptr == NULL) {
-    fclose(fp);
-    png_destroy_read_struct(&png_ptr, (png_infopp)NULL, (png_infopp)NULL);
-    return 0;
-  }
-  
-  /* Set error handling if you are using the setjmp/longjmp method (this is
-   * the normal method of doing things with libpng).  REQUIRED unless you
-   * set up your own error handlers in the png_create_read_struct() earlier.
-   */
-  
-  if (setjmp(png_ptr->jmpbuf)) {
-    /* Free all of the memory associated with the png_ptr and info_ptr */
-    png_destroy_read_struct(&png_ptr, &info_ptr, (png_infopp)NULL);
-    fclose(fp);
-    /* If we get here, we had a problem reading the file */
-    return NULL;
-  }
-  
-  /* Set up the input control if you are using standard C streams */
-  png_init_io(png_ptr, fp);
-  /* If we have already read some of the signature */
-  png_set_sig_bytes(png_ptr, sig_read);
-  
-  /* The call to png_read_info() gives us all of the information from the
-   * PNG file before the first IDAT (image data chunk).  REQUIRED
-   */
-  
-  png_read_info(png_ptr, info_ptr);
-  png_get_IHDR(png_ptr, info_ptr, &width, &height, &bit_depth, &color_type,
-	       &interlace_type, NULL, NULL);
-  
-  mm_log((1,
-	  "png_get_IHDR results: width %d, height %d, bit_depth %d,color_type %d,interlace_type %d\n",
-	  width, height, bit_depth, color_type, interlace_type));
-
-  CC2C[PNG_COLOR_TYPE_GRAY]=1;
-  CC2C[PNG_COLOR_TYPE_PALETTE]=3;
-  CC2C[PNG_COLOR_TYPE_RGB]=3;
-  CC2C[PNG_COLOR_TYPE_RGB_ALPHA]=4;
-  CC2C[PNG_COLOR_TYPE_GRAY_ALPHA]=2;
-
-  channels=CC2C[color_type];
-  mm_log((1,"channels %d\n", channels));
-  
-  /**** Set up the data transformations you want.  Note that these are all
-   **** optional.  Only call them if you want/need them.  Many of the
-   **** transformations only work on specific types of images, and many
-   **** are mutually exclusive.
-   ****/
-
-  /* tell libpng to strip 16 bit/color files down to 8 bits/color */
-  png_set_strip_16(png_ptr);
-  
- 
-  /* Extract multiple pixels with bit depths of 1, 2, and 4 from a single
-   * byte into separate bytes (useful for paletted and grayscale images).
-   */
-
-  png_set_packing(png_ptr);
-
-  /* Expand paletted colors into true RGB triplets */
-  if (color_type == PNG_COLOR_TYPE_PALETTE) png_set_expand(png_ptr);
-  
-  /* Expand grayscale images to the full 8 bits from 1, 2, or 4 bits/pixel */
-  if (color_type == PNG_COLOR_TYPE_GRAY && bit_depth < 8) png_set_expand(png_ptr);
-
-  /* Expand paletted or RGB images with transparency to full alpha channels
-   * so the data will be available as RGBA quartets.
-   */
-
-  if (png_get_valid(png_ptr, info_ptr, PNG_INFO_tRNS)) {
-    channels++;
-    mm_log((1, "image has transparency, adding alpha: channels = %d\n", channels));
-    png_set_expand(png_ptr);
-  }
-  
-  /* Strip alpha bytes from the input data without combining with the
-   * background (not recommended).
-   */
-  /*
-    if ( (color_type != PNG_COLOR_TYPE_RGB_ALPHA) && (color_type != PNG_COLOR_TYPE_GRAY_ALPHA) )
-    png_set_strip_alpha(png_ptr);
-  */
-  number_passes = png_set_interlace_handling(png_ptr);
-
-  mm_log((1,"number of passes=%d\n",number_passes));
-  
-  png_read_update_info(png_ptr, info_ptr);
-
-  im = i_img_empty_ch(NULL, width, height, channels);
-  for (pass = 0; pass < number_passes; pass++)
-    for (y = 0; y < height; y++) {
-      png_read_row(png_ptr,(png_bytep) &(im->data[channels*width*y]), NULL);
-    }
-  /* read rest of file, and get additional chunks in info_ptr - REQUIRED */
-  
-  png_read_end(png_ptr, info_ptr); 
-  /* clean up after the read, and free any memory allocated - REQUIRED */
-  png_destroy_read_struct(&png_ptr, &info_ptr, (png_infopp)NULL);
-
-  fclose(fp);
-  return im;
-}
-
-  
-
+*/
 
 undef_int
-i_writepng(i_img *im,int fd) {
-  FILE *fp;
+i_writepng_wiol(i_img *im, io_glue *ig) {
   png_structp png_ptr;
   png_infop info_ptr;
   int width,height,y;
   volatile int cspace,channels;
+  double xres, yres;
+  int aspect_only, have_res;
+  double offx, offy;
+  char offunit[20] = "pixel";
 
-  mm_log((1,"i_writepng(0x%x,fd %d)\n",im,fd));
+  io_glue_commit_types(ig);
+  mm_log((1,"i_writepng(im %p ,ig %p)\n", im, ig));
   
-  if ((fp = fdopen(fd,"w")) == NULL) {
-    mm_log((1,"can't fdopen.\n"));
-    exit(1);
-  }
-
-  height=im->ysize;
-  width=im->xsize;
+  height = im->ysize;
+  width  = im->xsize;
 
   channels=im->channels;
 
-  if (channels>2) { cspace=PNG_COLOR_TYPE_RGB; channels-=3; }
+  if (channels > 2) { cspace = PNG_COLOR_TYPE_RGB; channels-=3; }
   else { cspace=PNG_COLOR_TYPE_GRAY; channels--; }
   
   if (channels) cspace|=PNG_COLOR_MASK_ALPHA;
   mm_log((1,"cspace=%d\n",cspace));
 
-  channels=im->channels;
+  channels = im->channels;
 
   /* Create and initialize the png_struct with the desired error handler
    * functions.  If you want to use the default stderr and longjump method,
@@ -292,31 +100,27 @@ i_writepng(i_img *im,int fd) {
   
   png_ptr = png_create_write_struct(PNG_LIBPNG_VER_STRING,NULL,NULL,NULL);
   
-  if (png_ptr == NULL) {
-    fclose(fp);
-    return 0;
-  }
+  if (png_ptr == NULL) return 0;
+
   
   /* Allocate/initialize the image information data.  REQUIRED */
   info_ptr = png_create_info_struct(png_ptr);
 
   if (info_ptr == NULL) {
-    fclose(fp);
     png_destroy_write_struct(&png_ptr, (png_infopp)NULL);
-    return(0);
+    return 0;
   }
   
   /* Set error handling.  REQUIRED if you aren't supplying your own
    * error hadnling functions in the png_create_write_struct() call.
    */
   if (setjmp(png_ptr->jmpbuf)) {
-    /* If we get here, we had a problem reading the file */
-    fclose(fp);
     png_destroy_write_struct(&png_ptr,  (png_infopp)NULL);
     return(0);
   }
   
-  png_init_io(png_ptr, fp);
+  png_set_write_fn(png_ptr, (png_voidp) (ig), wiol_write_data, wiol_flush_data);
+  png_ptr->io_ptr = (png_voidp) ig;
 
   /* Set the image information here.  Width and height are up to 2^31,
    * bit_depth is one of 1, 2, 4, 8, or 16, but valid values also depend on
@@ -330,40 +134,78 @@ i_writepng(i_img *im,int fd) {
   png_set_IHDR(png_ptr, info_ptr, width, height, 8, cspace,
 	       PNG_INTERLACE_NONE, PNG_COMPRESSION_TYPE_BASE, PNG_FILTER_TYPE_BASE);
 
+  have_res = 1;
+  if (i_tags_get_float(&im->tags, "i_xres", 0, &xres)) {
+    if (i_tags_get_float(&im->tags, "i_yres", 0, &yres))
+      ; /* nothing to do */
+    else
+      yres = xres;
+  }
+  else {
+    if (i_tags_get_float(&im->tags, "i_yres", 0, &yres))
+      xres = yres;
+    else
+      have_res = 0;
+  }
+  if (have_res) {
+    aspect_only = 0;
+    i_tags_get_int(&im->tags, "i_aspect_only", 0, &aspect_only);
+    xres /= 0.0254;
+    yres /= 0.0254;
+    png_set_pHYs(png_ptr, info_ptr, xres + 0.5, yres + 0.5, 
+                 aspect_only ? PNG_RESOLUTION_UNKNOWN : PNG_RESOLUTION_METER);
+  }
+
   png_write_info(png_ptr, info_ptr);
-  for (y = 0; y < height; y++) png_write_row(png_ptr, (png_bytep) &(im->data[channels*width*y]));
+
+  if (!im->virtual && im->type == i_direct_type && im->bits == i_8_bits) {
+    for (y = 0; y < height; y++) 
+      png_write_row(png_ptr, (png_bytep) &(im->idata[channels*width*y]));
+  }
+  else {
+    unsigned char *data = mymalloc(im->xsize * im->channels);
+    if (data) {
+      for (y = 0; y < height; y++) {
+        i_gsamp(im, 0, im->xsize, y, data, NULL, im->channels);
+        png_write_row(png_ptr, (png_bytep)data);
+      }
+      myfree(data);
+    }
+    else {
+      png_destroy_write_struct(&png_ptr, (png_infopp)NULL);
+      return 0;
+    }
+  }
+
   png_write_end(png_ptr, info_ptr);
+
   png_destroy_write_struct(&png_ptr, (png_infopp)NULL);
 
-  fclose(fp);
   return(1);
 }
 
 
 
+static void get_png_tags(i_img *im, png_structp png_ptr, png_infop info_ptr);
 
 i_img*
-i_readpng_scalar(char *data, int length) {
+i_readpng_wiol(io_glue *ig, int length) {
   i_img *im;
   png_structp png_ptr;
   png_infop info_ptr;
-  png_uint_32 width, height, y;
+  png_uint_32 width, height;
   int bit_depth, color_type, interlace_type;
-  int number_passes;
-  int channels, pass;
+  int number_passes,y;
+  int channels,pass;
   unsigned int sig_read;
 
-  struct png_scalar_info sci;
+  sig_read  = 0;
 
-  sci.data=data;
-  sci.length=length;
-  sci.cpos=0;
-
-  sig_read=0;
-  mm_log((1,"i_readpng_scalar(char 0x%08X, length %d)\n",data,length));
+  io_glue_commit_types(ig);
+  mm_log((1,"i_readpng_wiol(ig %p, length %d)\n", ig, length));
 
   png_ptr = png_create_read_struct(PNG_LIBPNG_VER_STRING,NULL,NULL,NULL);
-  png_set_read_fn(png_ptr, (void*) (&sci), user_read_data);
+  png_set_read_fn(png_ptr, (png_voidp) (ig), wiol_read_data);
   
   info_ptr = png_create_info_struct(png_ptr);
   if (info_ptr == NULL) {
@@ -372,18 +214,18 @@ i_readpng_scalar(char *data, int length) {
   }
   
   if (setjmp(png_ptr->jmpbuf)) {
-    mm_log((1,"i_readpng_scalar: error.\n"));
+    mm_log((1,"i_readpng_wiol: error.\n"));
     png_destroy_read_struct(&png_ptr, &info_ptr, (png_infopp)NULL);
     return NULL;
   }
-  
-  scalar_png_init_io(png_ptr, &sci);
+
+  png_ptr->io_ptr = (png_voidp) ig;
   png_set_sig_bytes(png_ptr, sig_read);
   png_read_info(png_ptr, info_ptr);
   png_get_IHDR(png_ptr, info_ptr, &width, &height, &bit_depth, &color_type, &interlace_type, NULL, NULL);
   
   mm_log((1,
-	  "png_get_IHDR results: width %d, height %d, bit_depth %d,color_type %d,interlace_type %d\n",
+	  "png_get_IHDR results: width %d, height %d, bit_depth %d, color_type %d, interlace_type %d\n",
 	  width,height,bit_depth,color_type,interlace_type));
   
   CC2C[PNG_COLOR_TYPE_GRAY]=1;
@@ -391,9 +233,10 @@ i_readpng_scalar(char *data, int length) {
   CC2C[PNG_COLOR_TYPE_RGB]=3;
   CC2C[PNG_COLOR_TYPE_RGB_ALPHA]=4;
   CC2C[PNG_COLOR_TYPE_GRAY_ALPHA]=2;
-  channels=CC2C[color_type];
-  mm_log((1,"channels %d\n",channels));
-  im=i_img_empty_ch(NULL,width,height,channels);
+  channels = CC2C[color_type];
+
+  mm_log((1,"i_readpng_wiol: channels %d\n",channels));
+
   png_set_strip_16(png_ptr);
   png_set_packing(png_ptr);
   if (color_type == PNG_COLOR_TYPE_PALETTE) png_set_expand(png_ptr);
@@ -404,96 +247,40 @@ i_readpng_scalar(char *data, int length) {
     mm_log((1, "image has transparency, adding alpha: channels = %d\n", channels));
     png_set_expand(png_ptr);
   }
-
+  
   number_passes = png_set_interlace_handling(png_ptr);
   mm_log((1,"number of passes=%d\n",number_passes));
   png_read_update_info(png_ptr, info_ptr);
-  mm_log((1,"made it to here 1\n"));
+  
+  im = i_img_empty_ch(NULL,width,height,channels);
+
   for (pass = 0; pass < number_passes; pass++)
-    for (y = 0; y < height; y++) { png_read_row(png_ptr,(png_bytep) &(im->data[channels*width*y]), NULL); }
-  mm_log((1,"made it to here 2\n"));
+    for (y = 0; y < height; y++) { png_read_row(png_ptr,(png_bytep) &(im->idata[channels*width*y]), NULL); }
+  
   png_read_end(png_ptr, info_ptr); 
-  mm_log((1,"made it to here 3\n"));
+  
+  get_png_tags(im, png_ptr, info_ptr);
+
   png_destroy_read_struct(&png_ptr, &info_ptr, (png_infopp)NULL);
-  mm_log((1,"made it to here 4\n"));
-  mm_log((1,"(0x%08X) <- i_readpng_scalar\n",im));  
+  
+  mm_log((1,"(0x%08X) <- i_readpng_scalar\n", im));  
+  
   return im;
 }
 
-
-
-
-/* i_img* */
-/* i_readpng_wiol(io_glue *ig, int length) { */
-/*   i_img *im; */
-/*   png_structp png_ptr; */
-/*   png_infop info_ptr; */
-/*   png_uint_32 width, height; */
-/*   int bit_depth, color_type, interlace_type; */
-/*   int number_passes,y; */
-/*   int channels,pass; */
-/*   unsigned int sig_read; */
-
-/*   struct png_wiol_info wi; */
-
-/*   wi.data   = ig; */
-/*   wi.length = length; */
-/*   wi.cpos   = 0; */
-    
-/*   sig_read=0; */
-/*   mm_log((1,"i_readpng_wiol(char 0x%p, length %d)\n", data, length)); */
-
-/*   png_ptr = png_create_read_struct(PNG_LIBPNG_VER_STRING,NULL,NULL,NULL); */
-/*   png_set_read_fn(png_ptr, (void*) (&wi), user_read_data); */
-  
-/*   info_ptr = png_create_info_struct(png_ptr); */
-/*   if (info_ptr == NULL) { */
-/*     png_destroy_read_struct(&png_ptr, (png_infopp)NULL, (png_infopp)NULL); */
-/*     return NULL; */
-/*   } */
-  
-/*   if (setjmp(png_ptr->jmpbuf)) { */
-/*     mm_log((1,"i_readpng_wiol: error.\n")); */
-/*     png_destroy_read_struct(&png_ptr, &info_ptr, (png_infopp)NULL); */
-/*     return NULL; */
-/*   } */
-  
-/*   scalar_png_init_io(png_ptr, &sci); */
-/*   png_set_sig_bytes(png_ptr, sig_read); */
-/*   png_read_info(png_ptr, info_ptr); */
-/*   png_get_IHDR(png_ptr, info_ptr, &width, &height, &bit_depth, &color_type, &interlace_type, NULL, NULL); */
-  
-/*   mm_log((1, */
-/* 	  "png_get_IHDR results: width %d, height %d, bit_depth %d,color_type %d,interlace_type %d\n", */
-/* 	  width,height,bit_depth,color_type,interlace_type)); */
-  
-/*   CC2C[PNG_COLOR_TYPE_GRAY]=1; */
-/*   CC2C[PNG_COLOR_TYPE_PALETTE]=3; */
-/*   CC2C[PNG_COLOR_TYPE_RGB]=3; */
-/*   CC2C[PNG_COLOR_TYPE_RGB_ALPHA]=4; */
-/*   CC2C[PNG_COLOR_TYPE_GRAY_ALPHA]=2; */
-/*   channels = CC2C[color_type]; */
-
-/*   mm_log((1,"i_readpng_wiol: channels %d\n",channels)); */
-
-/*   im = i_img_empty_ch(NULL,width,height,channels); */
-/*   png_set_strip_16(png_ptr); */
-/*   png_set_packing(png_ptr); */
-/*   if (color_type == PNG_COLOR_TYPE_PALETTE) png_set_expand(png_ptr); */
-/*   if (color_type == PNG_COLOR_TYPE_GRAY && bit_depth < 8) png_set_expand(png_ptr); */
-/*   if (png_get_valid(png_ptr, info_ptr, PNG_INFO_tRNS)) png_set_expand(png_ptr); */
-/*   number_passes = png_set_interlace_handling(png_ptr); */
-/*   mm_log((1,"number of passes=%d\n",number_passes)); */
-/*   png_read_update_info(png_ptr, info_ptr); */
-/*   mm_log((1,"made it to here 1\n")); */
-/*   for (pass = 0; pass < number_passes; pass++) */
-/*     for (y = 0; y < height; y++) { png_read_row(png_ptr,(png_bytep) &(im->data[channels*width*y]), NULL); } */
-/*   mm_log((1,"made it to here 2\n")); */
-/*   png_read_end(png_ptr, info_ptr);  */
-/*   mm_log((1,"made it to here 3\n")); */
-/*   png_destroy_read_struct(&png_ptr, &info_ptr, (png_infopp)NULL); */
-/*   mm_log((1,"made it to here 4\n")); */
-/*   mm_log((1,"(0x%08X) <- i_readpng_scalar\n",im));   */
-
-/*   return im; */
-/* } */
+static void get_png_tags(i_img *im, png_structp png_ptr, png_infop info_ptr) {
+  png_uint_32 xres, yres;
+  int unit_type;
+  if (png_get_pHYs(png_ptr, info_ptr, &xres, &yres, &unit_type)) {
+    mm_log((1,"pHYs (%d, %d) %d\n", xres, yres, unit_type));
+    if (unit_type == PNG_RESOLUTION_METER) {
+      i_tags_set_float(&im->tags, "i_xres", 0, xres * 0.0254);
+      i_tags_set_float(&im->tags, "i_yres", 0, xres * 0.0254);
+    }
+    else {
+      i_tags_addn(&im->tags, "i_xres", 0, xres);
+      i_tags_addn(&im->tags, "i_yres", 0, yres);
+      i_tags_addn(&im->tags, "i_aspect_only", 0, 1);
+    }
+  }
+}

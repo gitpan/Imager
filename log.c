@@ -31,6 +31,7 @@ init_log(const char* name,int level) {
       }
     }
   }
+  setvbuf(lg_file, NULL, _IONBF, BUFSIZ);
   mm_log((0,"Imager - log started (level = %d)\n", level));
 }
 
@@ -56,12 +57,11 @@ m_fatal(int exitcode,const char *fmt, ... ) {
 
 /*
  * Logging is inactive - insert dummy functions
-
+ */
 
 void init_log(const char* name,int onoff) {}
-void m_fatal(int exitcode,const char *fmt, ... ) { return(exitcode); }
+void m_fatal(int exitcode,const char *fmt, ... ) { exit(exitcode); }
 
-*/
 
 #endif
 
