@@ -286,10 +286,16 @@ Revision history for Perl extension Imager.
 	Checked to see if it compiled cleanly on Solaris and HPUX.
 	Fixed a 5.004_04 warning and added more ENV flags for makefile.
 
+0.36	Mon Jan 29 09:36:11 EST 2001
+	  - String as 0 or "" caused an error in $img->string().  Fixed a 
+	documentation error invoving string() method syntax.  Merged a patch
+	for non antialised truetype fonts.  Fixed an error in the Makefile.PL
+	which caused a makefile to be generated that bombed with sgi's make.
+
 ~~~~~~~~~~~~~^ ^ ^~~~~~~~~~~~~~
 
 
-0.36	TODO list
+0.37	TODO list
 	iolayer:
 	- Add scalar/mmap to iolayer
 	- Add close() code to iolayer
@@ -299,7 +305,7 @@ Revision history for Perl extension Imager.
 	  gif (merge with cb patch), ppm and raw
 	- Add make new tests once all formats support io_layer
 	- Implment the maxread threshold (Indicates how far 
-          a library can read before it indicates that it's done).
+	  a library can read before it indicates that it's done).
 
 	MultiImage & metadata support:
 	- Figure what interface should be between C and perl?
@@ -316,7 +322,7 @@ Revision history for Perl extension Imager.
 	- Write a tutorial?
 	- Write a guide to installing the helper libraries
 	- Go through the entire project and add comments in pod
-          so doco.perl can be used to read them.
+	  so doco.perl can be used to read them.
 
 ===================================================
 

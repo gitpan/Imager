@@ -70,8 +70,8 @@ exit;
 
 
 sub MY::postamble {
-'
-$(MYEXTLIB): dynfilt/Makefile
+"
+$(MYEXTLIB)".': dynfilt/Makefile
 	cd dynfilt && $(MAKE) $(PASTHRU)
 
 lib/Imager/Regops.pm : regmach.h regops.perl

@@ -726,7 +726,6 @@ i_tt_dump_raster_map2( i_img* im, TT_Raster_Map* bit, int xb, int yb, i_color *c
   char *bmap;
   i_color val;
   int c, i, ch, x, y;
-  int pixno;
   mm_log((1,"i_tt_dump_raster_map2(im 0x%x, bit 0x%X, xb %d, yb %d, cl 0x%X)\n",im,bit,xb,yb,cl));
   
   bmap = (char *)bit->bitmap;
@@ -744,8 +743,7 @@ i_tt_dump_raster_map2( i_img* im, TT_Raster_Map* bit, int xb, int yb, i_color *c
   } else {
 
     for(y=0;y<bit->rows;y++) for(x=0;x<bit->width;x++) {
-      pixno=(y*(bit->width)+x);
-      c=( bmap[pixno/8] & (128>>(pixno%8)) ) ? 255 : 0;
+      c=( bmap[y*bit->cols+x/8] & (128>>(x%8)) ) ? 255 : 0;
       i=255-c;
       i_gpix(im,x+xb,y+yb,&val);
       for(ch=0;ch<im->channels;ch++) val.channel[ch]=(c*cl->channel[ch]+i*val.channel[ch])/255;
@@ -771,7 +769,6 @@ i_tt_dump_raster_map_channel( i_img* im, TT_Raster_Map*  bit, int xb, int yb, in
   char *bmap;
   i_color val;
   int c,x,y;
-  int pixno;
 
   mm_log((1,"i_tt_dump_raster_channel(im 0x%x, bit 0x%X, xb %d, yb %d, channel %d)\n",im,bit,xb,yb,channel));
   
@@ -786,8 +783,7 @@ i_tt_dump_raster_map_channel( i_img* im, TT_Raster_Map*  bit, int xb, int yb, in
     }
   } else {
     for(y=0;y<bit->rows;y++) for(x=0;x<bit->width;x++) {
-      pixno=(y*(bit->width)+x);
-      c=( bmap[pixno/8] & (128>>(pixno%8)) ) ? 255 : 0;
+      c=( bmap[y*bit->cols+x/8] & (128>>(x%8)) ) ? 255 : 0;
       i_gpix(im,x+xb,y+yb,&val);
       val.channel[channel]=c;
       i_ppix(im,x+xb,y+yb,&val);

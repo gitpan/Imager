@@ -296,7 +296,7 @@ BEGIN {
   require Exporter;
   require DynaLoader;
 
-  $VERSION = '0.35';
+  $VERSION = '0.36';
   @ISA = qw(Exporter DynaLoader);
   bootstrap Imager $VERSION;
 }
@@ -1268,7 +1268,7 @@ sub string {
   my %input=('x'=>0, 'y'=>0, @_);
   $input{string}||=$input{text};
 
-  unless($input{string}) {
+  unless(exists $input{string}) {
     $self->{ERRSTR}="missing required parameter 'string'";
     return;
   }
@@ -1979,7 +1979,7 @@ A font must be passed to the method.
 
   $img=Imager->new();
   $img=read(file=>"test.jpg");
-  $img->string(font=>"arial.ttf",
+  $img->string(font=>$t1font,
                text=>"Model-XYZ",
                x=>0,
                y=>40,
@@ -1996,10 +1996,10 @@ values in a font, such as color and size.  If parameters are passed to
 the string function they are used instead of the defaults stored in
 the font.
 
-If string() is called with the C<channel> parameter then the color 
+If string() is called with the C<channel> parameter then the color
 isn't used and the font is drawn in only one channel.  This can
 be quite handy to create overlays.  See the examples for tips about
-this.  
+this.
 
 Sometimes it is necessary to know how much space a string takes before
 rendering it.  The bounding_box() method of a font can be used for that.
@@ -2009,7 +2009,7 @@ examples:
   @bbox=$font->bounding_box(string=>"testing",size=>15,canon=>1);
   @bbox=$font->bounding_box(string=>"testing",size=>15,x=50,y=>20);
 
-The first example gets the so called glyph metrics.  First is the 
+The first example gets the so called glyph metrics.  First is the
 
 
 

@@ -19,7 +19,6 @@ print "ok 1\n";
 
 init_log("testout/t36oofont.log", 1);
 
-my $img=Imager->new(xsize=>300, ysize=>100) or die "$Imager::ERRSTR\n";
 my $fontname_tt=$ENV{'TTFONTTEST'}||'./fontfiles/dodge.ttf';
 my $fontname_pfb=$ENV{'T1FONTTESTPFB'}||'./fontfiles/dcr10.pfb';
 
@@ -33,6 +32,7 @@ die $Imager::ERRSTR unless $red;
 
 if (i_has_format("t1") and -f $fontname_pfb) {
 
+  my $img=Imager->new(xsize=>300, ysize=>100) or die "$Imager::ERRSTR\n";
 
   my $font=Imager::Font->new(file=>$fontname_pfb,size=>25)
     or die $img->{ERRSTR};
@@ -64,7 +64,7 @@ if (i_has_format("t1") and -f $fontname_pfb) {
 
 if (i_has_format("tt") and -f $fontname_tt) {
 
-
+  my $img=Imager->new(xsize=>300, ysize=>100) or die "$Imager::ERRSTR\n";
 
   my $font=Imager::Font->new(file=>$fontname_tt,size=>25)
     or die $img->{ERRSTR};
