@@ -104,7 +104,7 @@ BEGIN {
     require Exporter;
     require DynaLoader;
 
-    $VERSION = '0.28';
+    $VERSION = '0.29';
 
     @ISA = qw(Exporter DynaLoader);
     bootstrap Imager $VERSION;
@@ -125,7 +125,7 @@ BEGIN {
 	$fontstate='no font support';
     }
 
-    %OPCODES=(Add=>[0],Sub=>[1],Mult=>[2],Div=>[3],Parm=>[4],sin=>[5],cos=>[6],x=>[4,0],y=>[4,1]);
+    %OPCODES=(Add=>[0],Sub=>[1],Mult=>[2],Div=>[3],Parm=>[4],'sin'=>[5],'cos'=>[6],'x'=>[4,0],'y'=>[4,1]);
     
     $DEBUG=0;
 

@@ -650,9 +650,16 @@ DSO_open(filename)
 	       char *evstr;
 	     PPCODE:
 	       rc=DSO_open(filename,&evstr);
-	       EXTEND(SP,2);
-	       PUSHs(sv_2mortal(newSViv((IV)rc)));
-	       if (evstr!=NULL) PUSHs(sv_2mortal(newSVpvn(evstr, strlen(evstr))));
+               if (rc!=NULL) {
+                 if (evstr!=NULL) {
+                   EXTEND(SP,2); 
+                   PUSHs(sv_2mortal(newSViv((IV)rc)));
+                   PUSHs(sv_2mortal(newSVpvn(evstr, strlen(evstr))));
+                 } else {
+                   EXTEND(SP,1);
+                   PUSHs(sv_2mortal(newSViv((IV)rc)));
+                 }
+               }
 
 
 undef_int

@@ -142,13 +142,13 @@ Revision history for Perl extension Imager.
 	uses an awful amount of global variables and there is much IO since
 	no caching of glyphs is done.
 
-0.26    Tue Nov 23 03:57:00 EST 1999 > Development release <
+0.26    Tue Nov 23 03:57:00 1999 > Development release <
 	  - Added transformations so that an image can be wrapped.
 	To achive decent speed a C based stackmachine is included. As a result
 	transformations need to be specified in rpn (postfix) notation. It
 	also can use the Affix::Infix2Postfix class to do the conversion for it.
 
-0.27    Tue Dec 28 03:57:00 EST 1999
+0.27    Tue Dec 28 03:57:00 1999 > CPAN release <
 	  - This is a bugfix version mostly, thanks to claes for pointing
 	out the problems - fixed palette saving wasn't working correctly after
 	version 0.24 - rather surprised this didn't crash everything.
@@ -159,8 +159,16 @@ Revision history for Perl extension Imager.
 	Added i_tt_text() method and more debuging to the truetype routines.      	
 	truetype testcase fixed and old debug rubish removed.
 
-0.28    Tue Jan  4 05:25:58 EST 2000
+0.28    Tue Jan  4 05:25:58 2000 > CPAN release <
 	  - Only fixes to truetype test and transformation tests.
 	Thanks to schinder of cpan testers for testing and reporting.
+
+0.29    Tue Jan  4 21:49:57 2000 > CPAN release <
+	  - fixes to get rid of warnings under pre 5.005, 
+	Fixed broken preproccessor directives to work on non gnu
+	compilers.  Fixed DSO test on HPUX - both code errors and
+	HPUX creates .sl instead of .so so the tests were failing.
+
+
 
 ===================================================

@@ -52,10 +52,11 @@ DSO_call(DSO_handle *handle,int func_index,HV* hv) {
 }
 
 
-#if (LOSNAME == hpux)
+#ifdef OS_hpux
 
 void*
 DSO_open(char* file,char** evalstring) {
+  shl_t tt_handle;
   void *d_handle,**plugin_symtab,**plugin_utiltab;
   int  rc,*iptr, (*fptr)(int);
   func_ptr *function_list;
@@ -63,20 +64,20 @@ DSO_open(char* file,char** evalstring) {
   int i;
 
   *evalstring=NULL;
-  if ( (d_handle = (void*)shl_load(file, BIND_DEFERRED,NULL)) == NULL) return NULL;
-  if ( (shl_findsym((shl_t*)d_handle, "evalstr",TYPE_UNDEFINED,(void*)evalstring))) return NULL;
 
-  if ( (shl_findsym((shl_t*)d_handle, "symbol_table",TYPE_UNDEFINED,(void*)&plugin_symtab))) return NULL;
-  if ( (shl_findsym((shl_t*)d_handle, "util_table",TYPE_UNDEFINED,&plugin_utiltab))) return NULL;
+  if ( (tt_handle = shl_load(file, BIND_DEFERRED,0L)) == NULL) return NULL; 
+  if ( (shl_findsym(&tt_handle, "evalstr",TYPE_UNDEFINED,(void*)evalstring))) return NULL;
+  if ( (shl_findsym(&tt_handle, "symbol_table",TYPE_UNDEFINED,(void*)&plugin_symtab))) return NULL;
+  if ( (shl_findsym(&tt_handle, "util_table",TYPE_UNDEFINED,&plugin_utiltab))) return NULL;
 
   (*plugin_symtab)=&symbol_table;
   (*plugin_utiltab)=&UTIL_table;
 
-  if ( (shl_findsym((shl_t*)d_handle, "function_list",TYPE_UNDEFINED,(func_ptr*)&function_list))) return NULL;
+  if ( (shl_findsym(&tt_handle, "function_list",TYPE_UNDEFINED,(func_ptr*)&function_list))) return NULL;
 
   if ( (dso_handle=(DSO_handle*)malloc(sizeof(DSO_handle))) == NULL) return NULL;
 
-  dso_handle->handle=d_handle; /* needed to close again */
+  dso_handle->handle=tt_handle; /* needed to close again */
   dso_handle->function_list=function_list;
   if ( (dso_handle->filename=(char*)malloc(strlen(file))) == NULL) { free(dso_handle); return NULL; }
   strcpy(dso_handle->filename,file);
@@ -87,7 +88,7 @@ DSO_open(char* file,char** evalstring) {
 undef_int
 DSO_close(void *ptr) {
   DSO_handle *handle=(DSO_handle*) ptr;
-  return !shl_unload((shl_t)(handle->handle));
+  return !shl_unload((handle->handle));
 }
 
 

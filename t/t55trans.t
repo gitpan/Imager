@@ -6,7 +6,7 @@ $loaded = 1;
 
 #$Imager::DEBUG=1;
 
-Imager::init(log=>'testout/t55trans.log');
+Imager::init('log'=>'testout/t55trans.log');
 
 $img=Imager->new() || die "unable to create image object\n";
 

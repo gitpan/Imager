@@ -1,9 +1,11 @@
 #include <stdio.h>
 
-#if (LOSNAME == hpux)
+#ifdef OS_hpux
 #include <dl.h>
+typedef shl_t minthandle_t;
 #else 
 #include <dlfcn.h>
+typedef void *minthandle_t; 
 #endif 
 
 #include "EXTERN.h"
@@ -14,7 +16,7 @@
 
 
 typedef struct {
-  void *handle;
+  minthandle_t handle;
   char *filename;
   func_ptr *function_list;
 } DSO_handle;

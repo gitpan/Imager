@@ -109,7 +109,7 @@ $formats{'T1-fonts'}={
 $formats{'TT-fonts'}={
     order=>'31',
     def=>'HAVE_LIBTT',
-    incpath=>'/usr/local/include',
+    incpath=>'/usr/local/include -I/usr/include/freetype',
     inccheck=>'-f freetype.h',
     libpath=>'/usr/local/lib',
     libcheck=>'-f libttf.a || -f libttf.so',
@@ -166,7 +166,7 @@ if ($^O eq 'hpux') { $OSLIBS.=' -ldld '; }
     'NAME'	=> 'Imager',
     'VERSION_FROM' => 'Imager.pm', # finds $VERSION
     'LIBS'	=> '-lm '.$OSLIBS.$F_LIBS,
-    'DEFINE'	=> ''.$F_DEFINE.$EXTDEF." -DLOSNAME=$^O",
+    'DEFINE'	=> ''.$F_DEFINE.$EXTDEF." -DOS_$^O",
     'INC'	=> ''.$F_INC,
     'OBJECT'    => 'Imager.o draw.o image.o io.o log.o gaussian.o conv.o ppm.o raw.o feat.o font.o filters.o dynaload.o stackmach.o datatypes.o '.$F_OBJECT,
 #    'CCFLAGS'   => '-Wall -Wno-unused',

@@ -49,7 +49,8 @@ void i_tt_render_all_glyphs( char*  txt, int  txtlen );
 
 
 
-#endif _FONT_H_
+#endif /* _FONT_H_ */
+
 
 
 
