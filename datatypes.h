@@ -21,43 +21,6 @@ typedef union {
   unsigned int ui;
 } i_color;
 
-/* This thing is shamelessly stolen from the libtiff tiff.h file. */
-
-#ifndef _TIFF_DATA_TYPEDEFS_
-#define _TIFF_DATA_TYPEDEFS_
-
-#ifdef __STDC__
-typedef signed char int8;       /* NB: non-ANSI compilers may not grok */
-#else
-typedef char int8;
-#endif
-typedef unsigned char uint8;
-typedef short int16;
-typedef unsigned short uint16;  /* sizeof (uint16) must == 2 */
-#if defined(__alpha) || (defined(_MIPS_SZLONG) && _MIPS_SZLONG == 64)
-typedef int int32;
-typedef unsigned int uint32;    /* sizeof (uint32) must == 4 */
-#else
-typedef long int32;
-typedef unsigned long uint32;   /* sizeof (uint32) must == 4 */
-#endif
-#endif /* _TIFF_DATA_TYPEDEFS_ */
-
-
-
-typedef struct {
-  char	  *name;
-  int type;
-  union { 
-    int8 i8;
-    int16 i16;
-    int32 i32;
-    uint8 u8;
-    uint16 u16;
-    uint32 u32;
-  } value;
-} taginfo;
- 
 
 struct _i_img {
   int channels;
@@ -86,13 +49,6 @@ typedef unsigned char i_palidx;
   needed: hashes.
 
 */
-
-
-
-
-
-
-
 
 
 

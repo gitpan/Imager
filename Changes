@@ -292,6 +292,14 @@ Revision history for Perl extension Imager.
 	for non antialised truetype fonts.  Fixed an error in the Makefile.PL
 	which caused a makefile to be generated that bombed with sgi's make.
 
+0.37	
+	  - Several documentation fixes.  Pod documentation for almost every
+	function in image.c.  Added sys/types.h include in iolayer which was
+	causing problems on various linux systems.
+
+
+
+
 ~~~~~~~~~~~~~^ ^ ^~~~~~~~~~~~~~
 
 

@@ -14,6 +14,7 @@
 
 #include <stdio.h>
 #include <unistd.h>
+#include <sys/types.h>
 
 #define BBSIZ 1024
 #define IO_FAKE_SEEK 1<<0L

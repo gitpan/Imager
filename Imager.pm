@@ -296,7 +296,7 @@ BEGIN {
   require Exporter;
   require DynaLoader;
 
-  $VERSION = '0.36';
+  $VERSION = '0.37';
   @ISA = qw(Exporter DynaLoader);
   bootstrap Imager $VERSION;
 }
@@ -2044,9 +2044,9 @@ Another way to resize an image size is to crop it.  The parameters
 to crop are the edges of the area that you want in the returned image.
 If a parameter is omited a default is used instead.
 
-  $img->crop(left=>50, right=>100, top=>10, bottom=>100); 
-  $img->crop(left=>50, top=>10, width=>50, height=>90);
-  $img->crop(left=>50, right=>100); # top 
+  $newimg = $img->crop(left=>50, right=>100, top=>10, bottom=>100); 
+  $newimg = $img->crop(left=>50, top=>10, width=>50, height=>90);
+  $newimg = $img->crop(left=>50, right=>100); # top 
 
 
 =head2 Copying images
@@ -2248,7 +2248,7 @@ suitable manipulation).
 =item red(c), green(c), blue(c), rgb(r,g,b)
 
 Separates a colour value into it's red, green and blue colours.  Use
-rgb(r,b,g) to put it back together.
+rgb(r,g,b) to put it back together.
 
 =item int(n)
 

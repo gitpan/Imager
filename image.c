@@ -1,6 +1,36 @@
 #include "image.h"
 #include "io.h"
 
+/*
+=head1 NAME
+
+image.c - implements most of the basic functions of Imager and much of the rest
+
+=head1 SYNOPSIS
+
+  i_img *i;
+  i_color *c;
+  c = i_color_new(red, green, blue, alpha);
+  ICL_DESTROY(c);
+  i = i_img_new();
+  i_img_destroy(i);
+  // and much more
+
+=head1 DESCRIPTION
+
+image.c implements the basic functions to create and destroy image and
+color objects for Imager.
+
+=head1 FUNCTION REFERENCE
+
+Some of these functions are internal.
+
+=over 4
+
+=cut
+
+*/
+
 #define XAXIS 0
 #define YAXIS 1
 
@@ -9,13 +39,18 @@
 /* Hack around an obscure linker bug on solaris - probably due to builtin gcc thingies */
 void fake() { ceil(1); }
 
-/* i_color_set:: Overwrite a color with new values.
+/*
+=item i_color_set(cl, r, g, b, a)
+
+ Overwrite a color with new values.
 
    cl - pointer to color object
    r - red   compnent (range: 0 - 255)
    g - green compnent (range: 0 - 255)
    b - blue  compnent (range: 0 - 255)
    a - alpha compnent (range: 0 - 255)
+
+=cut
 */
 
 i_color *
@@ -32,13 +67,17 @@ i_color_set(i_color *cl,unsigned char r,unsigned char g,unsigned char b,unsigned
   return cl;
 }
 
-/* i_color_new:: Return a color object with values passed to it.
+/* 
+=item i_color_new(r, g, b, a)
 
-   cl - pointer to color object
+Return a new color object with values passed to it.
+
    r - red   compnent (range: 0 - 255)
    g - green compnent (range: 0 - 255)
    b - blue  compnent (range: 0 - 255)
    a - alpha compnent (range: 0 - 255)
+
+=cut
 */
 
 i_color *
@@ -56,11 +95,16 @@ i_color_new(unsigned char r,unsigned char g,unsigned char b,unsigned char a) {
   return cl;
 }
 
-/* i_color_add:: Add src to dst inplace - dst is modified.
+/* 
+=item i_color_add(dst, src, ch)
+
+Add src to dst inplace - dst is modified.
 
    dst - pointer to destination color object
    src - pointer to color object that is added
    ch - number of channels
+
+=cut
 */
 
 void
@@ -72,9 +116,14 @@ i_color_add(i_color *dst,i_color *src,int ch) {
   }
 }
 
-/* i_color_info:: Dump color information to log - strictly for debugging.
+/* 
+=item i_color_info(cl)
+
+Dump color information to log - strictly for debugging.
 
    cl - pointer to color object
+
+=cut
 */
 
 void
@@ -83,9 +132,14 @@ i_color_info(i_color *cl) {
   mm_log((1,"i_color_info: (%d,%d,%d,%d)\n",cl->rgba.r,cl->rgba.g,cl->rgba.b,cl->rgba.a));
 }
 
-/* ICL_DESTROY:: Destroy ancillary data for Color object.
+/* 
+=item ICL_DESTROY
+
+Destroy ancillary data for Color object.
 
    cl - pointer to color object
+
+=cut
 */
 
 void
@@ -94,9 +148,12 @@ ICL_DESTROY(i_color *cl) {
   myfree(cl);
 }
 
-/* ICL_DESTROY:: Destroy ancillary data for Color object.
+/*
+=item IIM_new(x, y, ch)
 
-   cl - pointer to color object
+Creates a new image object I<x> pixels wide, and I<y> pixels high with I<ch> channels.
+
+=cut
 */
 
 
@@ -120,9 +177,13 @@ IIM_DESTROY(i_img *im) {
 
 
 
-/* i_img_new:: Create new image reference - notice that this isn't an object yet and
-   this should be fixed asap.
+/* 
+=item i_img_new()
 
+Create new image reference - notice that this isn't an object yet and
+this should be fixed asap.
+
+=cut
 */
 
 
@@ -149,12 +210,16 @@ i_img_new() {
   return im;
 }
 
-/* i_img_empty:: Re-new image reference (assumes 3 channels)
+/* 
+=item i_img_empty(im, x, y)
+
+Re-new image reference (assumes 3 channels)
 
    im - Image pointer
    x - xsize of destination image
    y - ysize of destination image
 
+=cut
 */
 
 i_img *
@@ -180,13 +245,17 @@ i_img_empty(i_img *im,int x,int y) {
   return im;
 }
 
-/* i_img_empty_ch:: Re-new image reference 
+/* 
+=item i_img_empty_ch(im, x, y, ch)
+
+Re-new image reference 
 
    im - Image pointer
    x - xsize of destination image
    y - ysize of destination image
    ch - number of channels
 
+=cut
 */
 
 i_img *
@@ -212,10 +281,14 @@ i_img_empty_ch(i_img *im,int x,int y,int ch) {
   return im;
 }
 
-/* i_img_exorcise:: Free image data.
+/* 
+=item i_img_exorcise(im)
+
+Free image data.
 
    im - Image pointer
 
+=cut
 */
 
 void
@@ -232,9 +305,14 @@ i_img_exorcise(i_img *im) {
   im->ext_data=NULL;
 }
 
-/* i_img_destroy:: Destroy image and free data via exorcise.
+/* 
+=item i_img_destroy(im)
+
+Destroy image and free data via exorcise.
 
    im - Image pointer
+
+=cut
 */
 
 void
@@ -244,10 +322,22 @@ i_img_destroy(i_img *im) {
   if (im) { myfree(im); }
 }
 
-/* i_img_info:: Return image information
+/* 
+=item i_img_info(im, info)
+
+Return image information
 
    im - Image pointer
    info - pointer to array to return data
+
+info is an array of 4 integers with the following values:
+
+ info[0] - width
+ info[1] - height
+ info[2] - channels
+ info[3] - channel mask
+
+=cut
 */
 
 
@@ -269,21 +359,75 @@ i_img_info(i_img *im,int *info) {
   }
 }
 
+/*
+=item i_img_setmask(im, ch_mask)
+
+Set the image channel mask for I<im> to I<ch_mask>.
+
+=cut
+*/
 void
 i_img_setmask(i_img *im,int ch_mask) { im->ch_mask=ch_mask; }
 
+
+/*
+=item i_img_getmask(im)
+
+Get the image channel mask for I<im>.
+
+=cut
+*/
 int
 i_img_getmask(i_img *im) { return im->ch_mask; }
 
+/*
+=item i_img_getchannels(im)
+
+Get the number of channels in I<im>.
+
+=cut
+*/
 int
 i_img_getchannels(i_img *im) { return im->channels; }
 
+
+/*
+=item i_ppix(im, x, y, col)
+
+Sets the pixel at (I<x>,I<y>) in I<im> to I<col>.
+
+Returns true if the pixel could be set, false if x or y is out of
+range.
+
+=cut
+*/
 int
 i_ppix(i_img *im,int x,int y,i_color *val) { return im->i_f_ppix(im,x,y,val); }
 
+/*
+=item i_gpix(im, x, y, &col)
+
+Get the pixel at (I<x>,I<y>) in I<im> into I<col>.
+
+Returns true if the pixel could be retrieved, false otherwise.
+
+=cut
+*/
 int
 i_gpix(i_img *im,int x,int y,i_color *val) { return im->i_f_gpix(im,x,y,val); }
 
+/*
+=item i_ppix_d(im, x, y, col)
+
+Internal function.
+
+This is the function kept in the i_f_ppix member of an i_img object.
+It does a normal store of a pixel into the image with range checking.
+
+Returns true if the pixel could be set, false otherwise.
+
+=cut
+*/
 int
 i_ppix_d(i_img *im,int x,int y,i_color *val) {
   int ch;
@@ -297,7 +441,18 @@ i_ppix_d(i_img *im,int x,int y,i_color *val) {
   return -1; /* error was clipped */
 }
 
+/*
+=item i_gpix_d(im, x, y, &col)
 
+Internal function.
+
+This is the function kept in the i_f_gpix member of an i_img object.
+It does normal retrieval of a pixel from the image with range checking.
+
+Returns true if the pixel could be set, false otherwise.
+
+=cut
+*/
 int 
 i_gpix_d(i_img *im,int x,int y,i_color *val) {
   int ch;
@@ -309,6 +464,18 @@ i_gpix_d(i_img *im,int x,int y,i_color *val) {
   return -1; /* error was cliped */
 }
 
+/*
+=item i_ppix_pch(im, x, y, ch)
+
+Get the value from the channel I<ch> for pixel (I<x>,I<y>) from I<im>
+scaled to [0,1].
+
+Returns zero if x or y is out of range.
+
+Warning: this ignores the vptr interface for images.
+
+=cut
+*/
 float
 i_gpix_pch(i_img *im,int x,int y,int ch) {
   if (x>-1 && x<im->xsize && y>-1 && y<im->ysize) return ((float)im->data[(x+y*im->xsize)*im->channels+ch]/255);
@@ -317,9 +484,13 @@ i_gpix_pch(i_img *im,int x,int y,int ch) {
 
 
 /*
- (x1,y1) (x2,y2) specifies the region to copy (in the source coordinates)
- (tx,ty) specifies the upper left corner for the target image.
- pass NULL in trans for non transparent i_colors.
+=item i_copyto_trans(im, src, x1, y1, x2, y2, tx, ty, trans)
+
+(x1,y1) (x2,y2) specifies the region to copy (in the source coordinates)
+(tx,ty) specifies the upper left corner for the target image.
+pass NULL in trans for non transparent i_colors.
+
+=cut
 */
 
 void
@@ -351,6 +522,18 @@ i_copyto_trans(i_img *im,i_img *src,int x1,int y1,int x2,int y2,int tx,int ty,i_
     }
 }
 
+/*
+=item i_copyto(dest, src, x1, y1, x2, y2, tx, ty)
+
+Copies image data from the area (x1,y1)-[x2,y2] in the source image to
+a rectangle the same size with it's top-left corner at (tx,ty) in the
+destination image.
+
+If x1 > x2 or y1 > y2 then the corresponding co-ordinates are swapped.
+
+=cut
+*/
+
 void
 i_copyto(i_img *im,i_img *src,int x1,int y1,int x2,int y2,int tx,int ty) {
   i_color pv;
@@ -373,6 +556,14 @@ i_copyto(i_img *im,i_img *src,int x1,int y1,int x2,int y2,int tx,int ty) {
   }
 }
 
+/*
+=item i_copy(im, src)
+
+Copies the contents of the image I<src> over the image I<im>.
+
+=cut
+*/
+
 void
 i_copy(i_img *im,i_img *src) {
   i_color pv;
@@ -391,6 +582,18 @@ i_copy(i_img *im,i_img *src) {
 }
 
 
+/*
+=item i_rubthru(im, src, tx, ty)
+
+Takes the image I<src> and applies it at an original (I<tx>,I<ty>) in I<im>.
+
+The alpha channel of each pixel in I<src> is used to control how much
+the existing colour in I<im> is replaced, if it is 255 then the colour
+is completely replaced, if it is 0 then the original colour is left 
+unmodified.
+
+=cut
+*/
 void
 i_rubthru(i_img *im,i_img *src,int tx,int ty) {
   i_color pv,orig,dest;
@@ -431,6 +634,15 @@ Lanczos(float x) {
   else if (x == 0.0) return (1.0);
   else return(sin(PIx) / PIx * sin(PIx2) / PIx2);
 }
+
+/*
+=item i_scaleaxis(im, value, axis)
+
+Returns a new image object which is I<im> scaled by I<value> along
+wither the x-axis (I<axis> == 0) or the y-axis (I<axis> == 1).
+
+=cut
+*/
 
 i_img*
 i_scaleaxis(i_img *im, float Value, int Axis) {
@@ -534,9 +746,15 @@ i_scaleaxis(i_img *im, float Value, int Axis) {
 }
 
 
-/* Scale by using nearest neighbor 
-   Both axes scaled at the same time since 
-   nothing is gained by doing it in two steps */
+/* 
+=item i_scale_nn(im, scx, scy)
+
+Scale by using nearest neighbor 
+Both axes scaled at the same time since 
+nothing is gained by doing it in two steps 
+
+=cut
+*/
 
 
 i_img*
@@ -564,7 +782,25 @@ i_scale_nn(i_img *im, float scx, float scy) {
 }
 
 
+/*
+=item i_transform(im, opx, opxl, opy, opyl, parm, parmlen)
 
+Spatially transforms I<im> returning a new image.
+
+opx for a length of opxl and opy for a length of opy are arrays of
+operators that modify the x and y positions to retreive the pixel data from.
+
+parm and parmlen define extra parameters that the operators may use.
+
+Note that this function is largely superseded by the more flexible
+L<transform.c/i_transform2>.
+
+Returns the new image.
+
+The operators for this function are defined in L<stackmach.c>.
+
+=cut
+*/
 i_img*
 i_transform(i_img *im, int *opx,int opxl,int *opy,int opyl,double parm[],int parmlen) {
   double rx,ry;
@@ -598,6 +834,18 @@ i_transform(i_img *im, int *opx,int opxl,int *opy,int opyl,double parm[],int par
   return new_img;
 }
 
+/*
+=item i_img_diff(im1, im2)
+
+Calculates the sum of the squares of the differences between
+correspoding channels in two images.
+
+If the images are not the same size then only the common area is 
+compared, hence even if images are different sizes this function 
+can return zero.
+
+=cut
+*/
 float
 i_img_diff(i_img *im1,i_img *im2) {
   int x,y,ch,xb,yb,chb;
@@ -672,9 +920,13 @@ i_haar(i_img *im) {
   return new_img2;
 }
 
-/* returns number of colors or -1 
-   to indicate that it was more than max colors */
+/* 
+=item i_count_colors(im, maxc)
 
+returns number of colors or -1 
+to indicate that it was more than max colors
+=cut
+*/
 int
 i_count_colors(i_img *im,int maxc) {
   struct octt *ct;
@@ -887,3 +1139,15 @@ int free_gen_write_data(i_gen_write_data *info, int flush)
 
   return result;
 }
+
+/*
+
+=back
+
+=head1 SEE ALSO
+
+L<Imager>, L<gif.c>
+
+=cut
+
+*/
