@@ -11,12 +11,59 @@
 
 
 
-/* i_init_fonts: Exported, initializes the both t1lib and freetype engines
-                 if they are avaliable
+
+/*
+=head1 NAME
+
+font.c - implements font handling functions for t1 and truetype fonts
+
+=head1 SYNOPSIS
+
+  i_init_fonts();
+
+  #ifdef HAVE_LIBT1
+  fontnum = i_t1_new(path_to_pfb, path_to_afm);
+  i_t1_bbox(fontnum, points, "foo", 3, int cords[6]);
+  rc = i_t1_destroy(fontnum);
+  #endif
+
+  #ifdef HAVE_LIBTT
+  handle = i_tt_new(path_to_ttf);
+  rc = i_tt_bbox(handle, points, "foo", 3, int cords[6]);
+  i_tt_destroy(handle);
+
+  // and much more
+
+=head1 DESCRIPTION
+
+font.c implements font creation, rendering, bounding box functions and
+more for Imager.
+
+=head1 FUNCTION REFERENCE
+
+Some of these functions are internal.
+
+=over 4
+
+=cut
 
 */
 
 
+
+
+
+
+
+
+
+/* 
+=item i_init_fonts()
+
+Initialize font rendering libraries if they are avaliable.
+
+=cut
+*/
 
 undef_int 
 i_init_fonts() {
@@ -35,20 +82,23 @@ i_init_fonts() {
 
 
 
+
 #ifdef HAVE_LIBT1
 
 
 
+/* 
+=item i_init_t1()
 
+Initializes the t1lib font rendering engine.
 
-/* init_t1: Exported, initializes the t1lib engine
-
+=cut
 */
 
 undef_int
 init_t1() {
   mm_log((1,"init_t1()\n"));
-  if ((T1_InitLib(LOGFILE|IGNORE_CONFIGFILE|IGNORE_FONTDATABASE)==NULL)){
+  if ((T1_InitLib(LOGFILE|IGNORE_CONFIGFILE|IGNORE_FONTDATABASE) == NULL)){
     mm_log((1,"Initialization of t1lib failed\n"));
     return(1);
   }
@@ -58,33 +108,43 @@ init_t1() {
 }
 
 
-/* close_t1: Exported, shutdown and free everything that has to do with t1 lib
+/* 
+=item i_close_t1()
 
+Shuts the t1lib font rendering engine down.
+
+  This it seems that this function is never used.
+
+=cut
 */
 
 void
-close_t1() {
+i_close_t1() {
   T1_CloseLib();
 }
 
 
-/* i_t1_new: Exported, loads the fonts with the given filenames, returns its font id
+/*
+=item i_t1_new(pfb, afm)
 
- pfb:      path to pfb file for font
- afm:      path to afm file for font
+Loads the fonts with the given filenames, returns its font id
+
+ pfb -  path to pfb file for font
+ afm -  path to afm file for font
+
+=cut
 */
 
 int
 i_t1_new(char *pfb,char *afm) {
   int font_id;
   mm_log((1,"i_t1_new(pfb %s,afm %s)\n",pfb,(afm?afm:"NULL")));
-  font_id=T1_AddFont(pfb);
+  font_id = T1_AddFont(pfb);
   if (font_id<0) {
     mm_log((1,"i_t1_new: Failed to load pfb file '%s' - return code %d.\n",pfb,font_id));
     return font_id;
   }
-  mm_log((1,"i_t1_new: Hi there!\n"));
-
+  
   if (afm != NULL) {
     mm_log((1,"i_t1_new: requesting afm file '%s'.\n",afm));
     if (T1_SetAfmFileName(font_id,afm)<0) mm_log((1,"i_t1_new: afm loading of '%s' failed.\n",afm));
@@ -92,9 +152,14 @@ i_t1_new(char *pfb,char *afm) {
   return font_id;
 }
 
-/* i_t1_destroy: Exported, frees resources for a font with given font id
+/*
+=item i_t1_destroy(font_id)
 
- font_id:  number of the font to free
+Frees resources for a t1 font with given font id.
+
+   font_id - number of the font to free
+
+=cut
 */
 
 int
@@ -104,9 +169,14 @@ i_t1_destroy(int font_id) {
 }
 
 
-/* i_t1_set_aa: Internal, sets the antialiasing level of the t1 library 
+/*
+=item i_t1_set_aa(st)
 
- st:       (0 NONE | 1 LOW | 2 HIGH)
+Sets the antialiasing level of the t1 library.
+
+   st - 0 =  NONE, 1 = LOW, 2 =  HIGH.
+
+=cut
 */
 
 void
@@ -136,17 +206,22 @@ i_t1_set_aa(int st) {
 }
 
 
-/* i_t1_cp: Exported interface to text rendering into a single channel in an image
-   
- im:       pointer to image structure
- xb:       x coordinate of start of string
- yb:       y coordinate of start of string ( see align )
- channel:  destination channel
- fontnum:  t1 library font id
- points:   number of points in fontheight
- str:      string to render
- len:      string length
- align:    (0 - top of font glyph | 1 - baseline )
+/* 
+=item i_t1_cp(im, xb, yb, channel, fontnum, points, str, len, align)
+
+Interface to text rendering into a single channel in an image
+
+   im        pointer to image structure
+   xb        x coordinate of start of string
+   yb        y coordinate of start of string ( see align )
+   channel - destination channel
+   fontnum - t1 library font id
+   points  - number of points in fontheight
+   str     - string to render
+   len     - string length
+   align   - (0 - top of font glyph | 1 - baseline )
+
+=cut
 */
 
 undef_int
@@ -186,44 +261,67 @@ i_t1_cp(i_img *im,int xb,int yb,int channel,int fontnum,float points,char* str,i
 }
 
 
-/* i_t1_bbox: Exported function to get texts bounding boxes given the font id
+/*
+=item i_t1_bbox(handle, fontnum, points, str, len, cords)
 
- handle:   pointer to font handle   
- fontnum:  t1 library font id
- points:   number of points in fontheight
- str:      string to measure
- len:      string length
- cords:    the bounding box (modified in place)
+function to get a strings bounding box given the font id and sizes
+
+   handle  - pointer to font handle   
+   fontnum - t1 library font id
+   points  - number of points in fontheight
+   str     - string to measure
+   len     - string length
+   cords   - the bounding box (modified in place)
+
+=cut
 */
 
 void
-i_t1_bbox(int fontnum,float points,char *str,int len,int cords[4]) {
+i_t1_bbox(int fontnum,float points,char *str,int len,int cords[6]) {
   BBox bbox;
+  BBox gbbox;
   
   mm_log((1,"i_t1_bbox(fontnum %d,points %.2f,str '%.*s', len %d)\n",fontnum,points,len,str,len));
-  T1_LoadFont(fontnum);  /* Here a return code is ignored - fix later  - haw haw haw */ 
-  bbox=T1_GetStringBBox(fontnum,str,len,0,T1_KERNING);
+  T1_LoadFont(fontnum);  /* FIXME: Here a return code is ignored - haw haw haw */ 
+  bbox = T1_GetStringBBox(fontnum,str,len,0,T1_KERNING);
+  gbbox = T1_GetFontBBox(fontnum);
   
-  mm_log((1,"bbox: (%d,%d,%d,%d)\n",(int)(bbox.llx*points/1000),(int)(bbox.lly*points/1000),(int)(bbox.urx*points/1000),(int)(bbox.ury*points/1000) ));
-    
+  mm_log((1,"bbox: (%d,%d,%d,%d)\n",
+	  (int)(bbox.llx*points/1000),
+	  (int)(gbbox.lly*points/1000),
+	  (int)(bbox.urx*points/1000),
+	  (int)(gbbox.ury*points/1000),
+	  (int)(bbox.lly*points/1000),
+	  (int)(bbox.ury*points/1000) ));
+
+
   cords[0]=((float)bbox.llx*points)/1000;
-  cords[1]=((float)bbox.lly*points)/1000;
   cords[2]=((float)bbox.urx*points)/1000;
-  cords[3]=((float)bbox.ury*points)/1000;
+
+  cords[1]=((float)gbbox.lly*points)/1000;
+  cords[3]=((float)gbbox.ury*points)/1000;
+
+  cords[4]=((float)bbox.lly*points)/1000;
+  cords[5]=((float)bbox.ury*points)/1000;
 }
 
 
-/* i_t1_text: Exported interface to text rendering in a single color onto an image
+/*
+=item i_t1_text(im, xb, yb, cl, fontnum, points, str, len, align)
 
- im:         pointer to image structure
- xb:         x coordinate of start of string
- yb:         y coordinate of start of string ( see align )
- cl:         color to draw the text in
- fontnum:    t1 library font id
- points:     number of points in fontheight
- str:        char pointer to string to render
- len:        string length
- align:      (0 - top of font glyph | 1 - baseline )
+Interface to text rendering in a single color onto an image
+
+   im      - pointer to image structure
+   xb      - x coordinate of start of string
+   yb      - y coordinate of start of string ( see align )
+   cl      - color to draw the text in
+   fontnum - t1 library font id
+   points  - number of points in fontheight
+   str     - char pointer to string to render
+   len     - string length
+   align   - (0 - top of font glyph | 1 - baseline )
+
+=cut
 */
 
 undef_int
@@ -291,11 +389,11 @@ static void i_tt_clear_raster_map( TT_Raster_Map* bit );
 static void i_tt_blit_or( TT_Raster_Map *dst, TT_Raster_Map *src,int x_off, int y_off );
 static  int i_tt_get_glyph( TT_Fonthandle *handle, int inst, unsigned char j );
 static void i_tt_render_glyph( TT_Glyph glyph, TT_Glyph_Metrics* gmetrics, TT_Raster_Map *bit, TT_Raster_Map *small_bit, int x_off, int y_off, int smooth );
-static void i_tt_render_all_glyphs( TT_Fonthandle *handle, int inst, TT_Raster_Map *bit, TT_Raster_Map *small_bit, int cords[4], char* txt, int len, int smooth );
+static void i_tt_render_all_glyphs( TT_Fonthandle *handle, int inst, TT_Raster_Map *bit, TT_Raster_Map *small_bit, int cords[6], char* txt, int len, int smooth );
 static void i_tt_dump_raster_map2( i_img* im, TT_Raster_Map* bit, int xb, int yb, i_color *cl, int smooth );
 static void i_tt_dump_raster_map_channel( i_img* im, TT_Raster_Map* bit, int xb, int yb, int channel, int smooth );
-static  int i_tt_rasterize( TT_Fonthandle *handle, TT_Raster_Map *bit, int cords[4], float points, char* txt, int len, int smooth );
-static undef_int i_tt_bbox_inst( TT_Fonthandle *handle, int inst ,const char *txt, int len, int cords[4] );
+static  int i_tt_rasterize( TT_Fonthandle *handle, TT_Raster_Map *bit, int cords[6], float points, char* txt, int len, int smooth );
+static undef_int i_tt_bbox_inst( TT_Fonthandle *handle, int inst ,const char *txt, int len, int cords[6] );
 
 
 /* static globals needed */
@@ -310,8 +408,12 @@ static int  LTT_hinted = 1;  /* FIXME: this too */
  */
 
 
-/* init_tt: Exported, initializes the freetype engine
+/*
+=item init_tt()
 
+Initializes the freetype font rendering engine
+
+=cut
 */
 
 undef_int
@@ -327,12 +429,18 @@ init_tt() {
 }
 
 
-/* i_tt_get_instance: Internal, finds a points-smooth instance or if one doesn't exist
-                      allocates room and returns its number
- fontname:   path to the font to load
- handle:     handle to the font.
- points:     points of the requested font
- smooth:     boolean (True: antialias on, False: antialias is off)
+/* 
+=item i_tt_get_instance(handle, points, smooth)
+
+Finds a points+smooth instance or if one doesn't exist in the cache
+allocates room and returns its cache entry
+
+   fontname - path to the font to load
+   handle   - handle to the font.
+   points   - points of the requested font
+   smooth   - boolean (True: antialias on, False: antialias is off)
+
+=cut
 */
 
 static
@@ -399,10 +507,15 @@ i_tt_get_instance( TT_Fonthandle *handle, int points, int smooth ) {
 }
 
 
-/* i_tt_new: Exported, creates a new font handle object, finds a character map and initialise the
-             the font handle's cache
+/*
+=item i_tt_new(fontname)
 
- fontname:   path to the font to load
+Creates a new font handle object, finds a character map and initialise the
+the font handle's cache
+
+   fontname - path to the font to load
+
+=cut
 */
 
 TT_Fonthandle*
@@ -459,13 +572,17 @@ i_tt_new(char *fontname) {
  * raster map management
  */
 
+/* 
+=item i_tt_init_raster_map(bit, width, height, smooth)
 
-/* i_tt_init_raster_map: internal, allocates internal memory for the bitmap as needed by the parameters
+Allocates internal memory for the bitmap as needed by the parameters (internal)
 		 
-   bit:      bitmap to allocate into
-   width:    width of the bitmap
-   height:   height of the bitmap
-   smooth:   boolean (True: antialias on, False: antialias is off)
+   bit    - bitmap to allocate into
+   width  - width of the bitmap
+   height - height of the bitmap
+   smooth - boolean (True: antialias on, False: antialias is off)
+
+=cut
 */
 
 static
@@ -488,27 +605,37 @@ i_tt_init_raster_map( TT_Raster_Map* bit, int width, int height, int smooth ) {
   
   mm_log((1,"i_tt_init_raster_map: bit->width %d, bit->cols %d, bit->rows %d, bit->size %d)\n", bit->width, bit->cols, bit->rows, bit->size ));
 
-  bit->bitmap = (void *) malloc( bit->size );
+  bit->bitmap = (void *) mymalloc( bit->size );
   if ( !bit->bitmap ) m_fatal(0,"Not enough memory to allocate bitmap (%d)!\n",bit->size );
 }
 
 
-/* i_tt_clear_raster_map: internal, free's the bitmap data and sets pointer to NULL
+/*
+=item i_tt_clear_raster_map(bit)
+
+Frees the bitmap data and sets pointer to NULL (internal)
 		 
-   bit:      bitmap to free
+   bit - bitmap to free
+
+=cut
 */
 
 static
 void
 i_tt_done_raster_map( TT_Raster_Map *bit ) {
-  free( bit->bitmap );
+  myfree( bit->bitmap );
   bit->bitmap = NULL;
 }
 
 
-/* i_tt_clear_raster_map: internal, clears the specified bitmap
+/*
+=item i_tt_clear_raster_map(bit)
+
+Clears the specified bitmap (internal)
 		 
-   bit:      bitmap to zero
+   bit - bitmap to zero
+
+=cut
 */
 
 
@@ -519,12 +646,17 @@ i_tt_clear_raster_map( TT_Raster_Map*  bit ) {
 }
 
 
-/* i_tt_blit_or: internal function that blits one raster map into another
+/* 
+=item i_tt_blit_or(dst, src, x_off, y_off)
+
+function that blits one raster map into another (internal)
 		 
-   dst:      destination bitmap
-   src:      source bitmap
-   x_off:    x offset into the destination bitmap
-   y_off:    y offset into the destination bitmap
+   dst   - destination bitmap
+   src   - source bitmap
+   x_off - x offset into the destination bitmap
+   y_off - y offset into the destination bitmap
+
+=cut
 */
 
 static
@@ -556,12 +688,16 @@ i_tt_blit_or( TT_Raster_Map *dst, TT_Raster_Map *src,int x_off, int y_off ) {
 }
 
 
+/* 
+=item i_tt_get_glyph(handle, inst, j) 
 
-/* i_tt_get_glyph: internal function to see if a glyph exists and if so cache it
+Function to see if a glyph exists and if so cache it (internal)
 		 
-   handle:   pointer to font handle
-   inst:     font instance
-   j:        charcode of glyph
+   handle - pointer to font handle
+   inst   - font instance
+   j      - charcode of glyph
+
+=cut
 */
 
 static
@@ -601,10 +737,15 @@ i_tt_get_glyph( TT_Fonthandle *handle, int inst, unsigned char j) { /* FIXME: Ch
 }
 
 
-/* i_tt_destroy: Exported way to clear the data taken by a font including all cached
-                 data such as pixmaps, and glyphs
+/* 
+=item i_tt_destroy(handle)
+
+Clears the data taken by a font including all cached data such as
+pixmaps and glyphs
 		 
-   handle:   pointer to font handle
+   handle - pointer to font handle
+
+=cut
 */
 
 void
@@ -634,15 +775,20 @@ i_tt_destroy( TT_Fonthandle *handle) {
  */
 
 
-/* i_tt_render_glyph: internal, renders a single glyph into the bit rastermap
+/* 
+=item i_tt_render_glyph(handle, gmetrics, bit, smallbit, x_off, y_off, smooth)
 
-   handle:   pointer to font handle
-   gmetrics: the metrics for the glyph to be rendered
-   bit:      large bitmap that is the destination for the text
-   smallbit: small bitmap that is used only if smooth is true
-   x_off:    x offset of glyph
-   y_off:    y offset of glyph
-   smooth:   boolean (True: antialias on, False: antialias is off)
+Renders a single glyph into the bit rastermap (internal)
+
+   handle   - pointer to font handle
+   gmetrics - the metrics for the glyph to be rendered
+   bit      - large bitmap that is the destination for the text
+   smallbit - small bitmap that is used only if smooth is true
+   x_off    - x offset of glyph
+   y_off    - y offset of glyph
+   smooth   - boolean (True: antialias on, False: antialias is off)
+
+=cut
 */
 
 static
@@ -668,21 +814,25 @@ i_tt_render_glyph( TT_Glyph glyph, TT_Glyph_Metrics* gmetrics, TT_Raster_Map *bi
 }
 
 
-/* i_tt_render_all_glyphs: internal, calls i_tt_render_glyph to render each glyph into the 
-                           bit rastermap
+/*
+=item i_tt_render_all_glyphs(handle, inst, bit, small_bit, cords, txt, len, smooth)
 
-   handle:   pointer to font handle
-   inst:     font instance
-   bit:      large bitmap that is the destination for the text
-   smallbit: small bitmap that is used only if smooth is true
-   txt:      string to render
-   len:      length of the string to render
-   smooth:   boolean (True: antialias on, False: antialias is off)
+calls i_tt_render_glyph to render each glyph into the bit rastermap (internal)
+
+   handle   - pointer to font handle
+   inst     - font instance
+   bit      - large bitmap that is the destination for the text
+   smallbit - small bitmap that is used only if smooth is true
+   txt      - string to render
+   len      - length of the string to render
+   smooth   - boolean (True: antialias on, False: antialias is off)
+
+=cut
 */
 
 static
 void
-i_tt_render_all_glyphs( TT_Fonthandle *handle, int inst, TT_Raster_Map *bit, TT_Raster_Map *small_bit, int cords[4], char* txt, int len, int smooth ) {
+i_tt_render_all_glyphs( TT_Fonthandle *handle, int inst, TT_Raster_Map *bit, TT_Raster_Map *small_bit, int cords[6], char* txt, int len, int smooth ) {
   unsigned char j;
   int i;
   TT_F26Dot6 x,y;
@@ -710,14 +860,18 @@ i_tt_render_all_glyphs( TT_Fonthandle *handle, int inst, TT_Raster_Map *bit, TT_
  * Functions to render rasters (single channel images) onto images
  */
 
-/* i_tt_dump_raster_map2: Internal function to dump a raster onto an image in color
-                          used by i_tt_text()
+/* 
+=item i_tt_dump_raster_map2(im, bit, xb, yb, cl, smooth)
 
-   im:       image to dump raster on
-   bit:      bitmap that contains the text to be dumped to im
-   xb, yb:   coordinates, left edge and baseline
-   cl:       color to use for text
-   smooth:   boolean (True: antialias on, False: antialias is off)
+Function to dump a raster onto an image in color used by i_tt_text() (internal).
+
+   im     - image to dump raster on
+   bit    - bitmap that contains the text to be dumped to im
+   xb, yb - coordinates, left edge and baseline
+   cl     - color to use for text
+   smooth - boolean (True: antialias on, False: antialias is off)
+
+=cut
 */
 
 static
@@ -754,13 +908,18 @@ i_tt_dump_raster_map2( i_img* im, TT_Raster_Map* bit, int xb, int yb, i_color *c
 }
 
 
-/* i_tt_dump_raster_map_channel: Internal function to dump a raster onto a single channel image in color
-   
-   im:       image to dump raster on
-   bit:      bitmap that contains the text to be dumped to im
-   xb, yb:   coordinates, left edge and baseline
-   channel:  channel to copy to
-   smooth:   boolean (True: antialias on, False: antialias is off)
+/*
+=item i_tt_dump_raster_map_channel(im, bit, xb, yb, channel, smooth)
+
+Function to dump a raster onto a single channel image in color (internal)
+
+   im      - image to dump raster on
+   bit     - bitmap that contains the text to be dumped to im
+   xb, yb  - coordinates, left edge and baseline
+   channel - channel to copy to
+   smooth  - boolean (True: antialias on, False: antialias is off)
+
+=cut
 */
 
 static
@@ -792,20 +951,25 @@ i_tt_dump_raster_map_channel( i_img* im, TT_Raster_Map*  bit, int xb, int yb, in
 }
 
 
-/* i_tt_rasterize: internal interface for generating single channel raster of text
+/* 
+=item i_tt_rasterize(handle, bit, cords, points, txt, len, smooth) 
 
-   handle: pointer to font handle
-   bit:    the bitmap that is allocated, rendered into and NOT freed
-   cords: the bounding box (modified in place)
-   points: font size to use
-   txt:    string to render
-   len:    length of the string to render
-   smooth: boolean (True: antialias on, False: antialias is off)
+interface for generating single channel raster of text (internal)
+
+   handle - pointer to font handle
+   bit    - the bitmap that is allocated, rendered into and NOT freed
+   cords  - the bounding box (modified in place)
+   points - font size to use
+   txt    - string to render
+   len    - length of the string to render
+   smooth - boolean (True: antialias on, False: antialias is off)
+
+=cut
 */
 
 static
 int
-i_tt_rasterize( TT_Fonthandle *handle, TT_Raster_Map *bit, int cords[4], float points, char* txt, int len, int smooth ) {
+i_tt_rasterize( TT_Fonthandle *handle, TT_Raster_Map *bit, int cords[6], float points, char* txt, int len, int smooth ) {
   int inst;
   int width, height;
   TT_Raster_Map small_bit;
@@ -843,22 +1007,27 @@ i_tt_rasterize( TT_Fonthandle *handle, TT_Raster_Map *bit, int cords[4], float p
  */
 
 
-/* i_tt_cp: Exported interface to text rendering into a single channel in an image
+/*
+=item i_tt_cp(handle, im, xb, yb, channel, points, txt, len, smooth)
 
-   handle:   pointer to font handle
-   im:       image to render text on to
-   xb, yb:   coordinates, left edge and baseline
-   channel:  channel to render into
-   points:   font size to use
-   txt:      string to render
-   len:      length of the string to render
-   smooth:   boolean (True: antialias on, False: antialias is off)
+Interface to text rendering into a single channel in an image
+
+   handle  - pointer to font handle
+   im      - image to render text on to
+   xb, yb  - coordinates, left edge and baseline
+   channel - channel to render into
+   points  - font size to use
+   txt     - string to render
+   len     - length of the string to render
+   smooth  - boolean (True: antialias on, False: antialias is off)
+
+=cut
 */
 
 undef_int
 i_tt_cp( TT_Fonthandle *handle, i_img *im, int xb, int yb, int channel, float points, char* txt, int len, int smooth ) {
 
-  int cords[4];
+  int cords[6];
   int ascent, st_offset;
   TT_Raster_Map bit;
   
@@ -874,21 +1043,26 @@ i_tt_cp( TT_Fonthandle *handle, i_img *im, int xb, int yb, int channel, float po
 }
 
 
-/* i_tt_text: Exported interface to text rendering in a single color onto an image
+/* 
+=item i_tt_text(handle, im, xb, yb, cl, points, txt, len, smooth) 
 
-   handle:   pointer to font handle
-   im:       image to render text on to
-   xb, yb:   coordinates, left edge and baseline
-   cl:       color to use for text
-   points:   font size to use
-   txt:      string to render
-   len:      length of the string to render
-   smooth:   boolean (True: antialias on, False: antialias is off)
+Interface to text rendering in a single color onto an image
+
+   handle  - pointer to font handle
+   im      - image to render text on to
+   xb, yb  - coordinates, left edge and baseline
+   cl      - color to use for text
+   points  - font size to use
+   txt     - string to render
+   len     - length of the string to render
+   smooth  - boolean (True: antialias on, False: antialias is off)
+
+=cut
 */
 
 undef_int
 i_tt_text( TT_Fonthandle *handle, i_img *im, int xb, int yb, i_color *cl, float points, char* txt, int len, int smooth) {
-  int cords[4];
+  int cords[6];
   int ascent, st_offset;
   TT_Raster_Map bit;
   
@@ -904,73 +1078,87 @@ i_tt_text( TT_Fonthandle *handle, i_img *im, int xb, int yb, i_color *cl, float 
 }
 
 
-/* i_tt_bbox_inst: internal function to get texts bounding boxes given the instance of the font
+/*
+=item i_tt_bbox_inst(handle, inst, txt, len, cords) 
 
- handle:   pointer to font handle
- inst:     font instance
- txt:      string to measure
- len:      length of the string to render
- cords:    the bounding box (modified in place)
+Function to get texts bounding boxes given the instance of the font (internal)
+
+   handle - pointer to font handle
+   inst   -  font instance
+   txt    -  string to measure
+   len    -  length of the string to render
+   cords  - the bounding box (modified in place)
+
+=cut
 */
 
 static
 undef_int
-i_tt_bbox_inst( TT_Fonthandle *handle, int inst ,const char *txt, int len, int cords[4] ) {
-  int i, upm, ascent, descent, width, casc, cdesc, first, start;
+i_tt_bbox_inst( TT_Fonthandle *handle, int inst ,const char *txt, int len, int cords[6] ) {
+  int i, upm, ascent, descent, gascent, gdescent, width, casc, cdesc, first, start;
   unsigned int j;
   unsigned char *ustr;
   ustr=(unsigned char*)txt;
   
-  mm_log((1,"i_tt_box(handle 0x%X,inst %d,txt '%.*s', len %d)\n",handle,inst,len,txt,len));
+  mm_log((1,"i_tt_box_inst(handle 0x%X,inst %d,txt '%.*s', len %d)\n",handle,inst,len,txt,len));
 
   upm     = handle->properties.header->Units_Per_EM;
-  ascent  = ( handle->properties.horizontal->Ascender  * handle->instanceh[inst].imetrics.y_ppem ) / upm;
-  descent = ( handle->properties.horizontal->Descender * handle->instanceh[inst].imetrics.y_ppem ) / upm;
+  gascent  = ( handle->properties.horizontal->Ascender  * handle->instanceh[inst].imetrics.y_ppem ) / upm;
+  gdescent = ( handle->properties.horizontal->Descender * handle->instanceh[inst].imetrics.y_ppem ) / upm;
   
   width   = 0;
   start   = 0;
+  
+  mm_log((1, "i_tt_box_inst: glyph='%c' gascent=%d gdescent=%d\n", j, gascent, gdescent));
 
   first=1;
   for ( i = 0; i < len; ++i ) {
     j = ustr[i];
     if ( i_tt_get_glyph(handle,inst,j) ) {
-      if (first) start = handle->instanceh[inst].gmetrics[j].bbox.xMin / 64;
       width += handle->instanceh[inst].gmetrics[j].advance   / 64;
       casc   = handle->instanceh[inst].gmetrics[j].bbox.yMax / 64;
       cdesc  = handle->instanceh[inst].gmetrics[j].bbox.yMin / 64;
-      
-      /* 
-	 printf("width=%d, (%d %d)\n", width, 
-	 handle->instanceh[inst].gmetrics[j].bbox.xMax / 1,
-	 handle->instanceh[inst].gmetrics[j].bbox.xMin / 1
-	 );
-      */
-      
+
+      mm_log((1, "i_tt_box_inst: glyph='%c' casc=%d cdesc=%d\n", j, casc, cdesc));
+
+      if (first) {
+	start    = handle->instanceh[inst].gmetrics[j].bbox.xMin / 64;
+	ascent   = handle->instanceh[inst].gmetrics[j].bbox.yMax / 64;
+	descent  = handle->instanceh[inst].gmetrics[j].bbox.yMin / 64;
+	first = 0;
+      }
+
       ascent  = (ascent  >  casc ?  ascent : casc );
       descent = (descent < cdesc ? descent : cdesc);
     }
   }
   
   cords[0]=start;
-  cords[1]=descent;
+  cords[1]=gdescent;
   cords[2]=width+start;
-  cords[3]=ascent;
-  
+  cords[3]=gascent;
+  cords[4]=descent;
+  cords[5]=ascent;
   return 1;
 }
 
 
-/* i_tt_bbox: Exported interface to get texts bounding boxes
+/*
+=item i_tt_bbox(handle, points, txt, len, cords)
 
-   handle: pointer to font handle
-   points: font size to use
-   txt:    string to render
-   len:    length of the string to render
-   cords: the bounding box (modified in place)
+Interface to get a strings bounding box
+
+   handle - pointer to font handle
+   points - font size to use
+   txt    - string to render
+   len    - length of the string to render
+   cords  - the bounding box (modified in place)
+
+=cut
 */
 
 undef_int
-i_tt_bbox( TT_Fonthandle *handle, float points,char *txt,int len,int cords[4]) {
+i_tt_bbox( TT_Fonthandle *handle, float points,char *txt,int len,int cords[6]) {
   int inst;
   
   mm_log((1,"i_tt_box(handle 0x%X,points %f,txt '%.*s', len %d)\n",handle,points,len,txt,len));

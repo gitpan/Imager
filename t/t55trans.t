@@ -12,24 +12,23 @@ $img=Imager->new() || die "unable to create image object\n";
 
 print "ok 1\n";
 
-$img->open(file=>'testimg/scale.ppm',type=>'ppm');
+$img->open(file=>'testimg/scale.ppm',type=>'pnm');
 
 sub skip { 
-    print $_[0];
-    print "ok 2 # skip\n";
-    print "ok 3 # skip\n";
-    print "ok 4 # skip\n";
-    print "ok 5 # skip\n";
+    print "ok 2 # skip $_[0]\n";
+    print "ok 3 # skip $_[0]\n";
+    print "ok 4 # skip $_[0]\n";
+    print "ok 5 # skip $_[0]\n";
     exit(0);
 }
 
 
-$nimg=$img->transform(xexpr=>'x',yexpr=>'y+10*sin((x+y)/10)') || skip ( "\# warning ".$img->{'ERRSTR'}."\n" );
+$nimg=$img->transform(xexpr=>'x',yexpr=>'y+10*sin((x+y)/10)') || skip ( "\# warning ".$img->{'ERRSTR'} );
 
 #	xopcodes=>[qw( x y Add)],yopcodes=>[qw( x y Sub)],parm=>[]
 
 print "ok 2\n";
-$nimg->write(type=>'ppm',file=>'testout/t55.ppm') || die "error in write()\n";
+$nimg->write(type=>'pnm',file=>'testout/t55.ppm') || die "error in write()\n";
 
 print "ok 3\n";
 
@@ -37,17 +36,16 @@ print "ok 3\n";
 # produces more parameters, which revealed a memory allocation bug
 # (sizeof(double) vs sizeof(int))
 sub skip2 { 
-    print $_[0];
-    print "ok 4 # skip\n";
-    print "ok 5 # skip\n";
+    print "ok 4 # skip $_[0]\n";
+    print "ok 5 # skip $_[0]\n";
     exit(0);
 }
 $nimg=$img->transform(xexpr=>'x+0.1*y+5*sin(y/10.0+1.57)',
 	yexpr=>'y+10*sin((x+y-0.785)/10)') 
-	|| skip2 ( "\# warning ".$img->{'ERRSTR'}."\n" );
+	|| skip2 ( "\# warning ".$img->{'ERRSTR'} );
 
 print "ok 4\n";
-$nimg->write(type=>'ppm',file=>'testout/t55b.ppm') 
+$nimg->write(type=>'pnm',file=>'testout/t55b.ppm') 
 	|| die "error in write()\n";
 
 print "ok 5\n";

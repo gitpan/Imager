@@ -168,6 +168,8 @@ i_color rm_run(struct rm_op codes[], size_t code_count,
 	       i_color c_regs[], size_t c_regs_count,
 	       i_img *images[],  size_t image_count) {
   double dx, dy;
+  struct rm_op *codes_base = codes;
+  size_t count_base = code_count;
   DBG(("rm_run(%p, %d)\n", codes, code_count));
   while (code_count) {
     DBG((" rm_code %d\n", codes->code));
@@ -341,6 +343,42 @@ i_color rm_run(struct rm_op codes[], size_t code_count,
 
     case rbc_ret:
       return ca;
+      break;
+
+    case rbc_jump:
+      /* yes, order is important here */
+      code_count = count_base - codes->ra;
+      codes = codes_base + codes->ra;
+      continue;
+    
+    case rbc_jumpz:
+      if (!na) {	
+	/* yes, order is important here */
+	code_count = count_base - codes->rb;
+	codes = codes_base + codes->rb;
+	continue;
+      }
+      break;
+
+    case rbc_jumpnz:
+      if (na) {
+	/* yes, order is important here */
+	code_count = count_base - codes->rb;
+	codes = codes_base + codes->rb;
+	continue;
+      }
+      break;
+
+    case rbc_set:
+      nout = na;
+      break;
+
+    case rbc_setp:
+      cout = ca;
+      break;
+
+    case rbc_print:
+      printf("r%d is %g\n", codes->ra, na);
       break;
 
     default:

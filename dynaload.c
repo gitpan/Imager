@@ -1,4 +1,5 @@
 #include "dynaload.h"
+#include "XSUB.h" /* so we can compile on threaded perls */
 
 /* These functions are all shared - then comes platform dependant code */
 
@@ -96,7 +97,7 @@ DSO_call(DSO_handle *handle,int func_index,HV* hv) {
 }
 
 
-#ifdef OS_hpux
+#if defined( OS_hpux )
 
 void*
 DSO_open(char* file,char** evalstring) {
@@ -147,6 +148,64 @@ DSO_close(void *ptr) {
   return !shl_unload((handle->handle));
 }
 
+#elif defined(WIN32)
+
+void *
+DSO_open(char *file, char **evalstring) {
+  HMODULE d_handle;
+  func_ptr *function_list;
+  DSO_handle *dso_handle;
+  
+  void (*f)(void *s,void *u); /* these will just have to be void for now */
+
+  mm_log( (1,"DSO_open(file '%s' (0x%08X), evalstring 0x%08X)\n",file,file,evalstring) );
+
+  *evalstring = NULL;
+  if ((d_handle = LoadLibrary(file)) == NULL) {
+    mm_log((1, "DSO_open: LoadLibrary(%s) failed: %lu\n", file, GetLastError()));
+    return NULL;
+  }
+  if ( (*evalstring = (char *)GetProcAddress(d_handle, I_EVALSTR)) == NULL) {
+    mm_log((1,"DSO_open: GetProcAddress didn't fine '%s': %lu\n", I_EVALSTR, GetLastError()));
+    FreeLibrary(d_handle);
+    return NULL;
+  }
+  if ((f = (void (*)(void *, void*))GetProcAddress(d_handle, I_INSTALL_TABLES)) == NULL) {
+    mm_log((1, "DSO_open: GetProcAddress didn't find '%s': %lu\n", I_INSTALL_TABLES, GetLastError()));
+    FreeLibrary(d_handle);
+    return NULL;
+  }
+  mm_log((1, "Calling install tables\n"));
+  f(&symbol_table, &UTIL_table);
+  mm_log((1, "Call ok\n"));
+  
+  if ( (function_list = (func_ptr *)GetProcAddress(d_handle, I_FUNCTION_LIST)) == NULL) {
+    mm_log((1, "DSO_open: GetProcAddress didn't find '%s': %lu\n", I_FUNCTION_LIST, GetLastError()));
+    FreeLibrary(d_handle);
+    return NULL;
+  }
+  if ( (dso_handle = (DSO_handle*)malloc(sizeof(DSO_handle))) == NULL) {
+    mm_log( (1, "DSO_Open: out of memory\n") );
+    FreeLibrary(d_handle);
+    return NULL;
+  }
+  dso_handle->handle=d_handle; /* needed to close again */
+  dso_handle->function_list=function_list;
+  if ( (dso_handle->filename=(char*)malloc(strlen(file))) == NULL) { free(dso_handle); FreeLibrary(d_handle); return NULL; }
+  strcpy(dso_handle->filename,file);
+
+  mm_log( (1,"DSO_open <- 0x%X\n",dso_handle) );
+  return (void*)dso_handle;
+
+}
+
+undef_int
+DSO_close(void *ptr) {
+  DSO_handle *handle = (DSO_handle *)ptr;
+  FreeLibrary(handle->handle);
+  free(handle->filename);
+  free(handle);
+}
 
 #else
 
@@ -239,11 +298,4 @@ DSO_close(void *ptr) {
 }
 
 #endif
-
-
-
-
-
-
-
 

@@ -18,7 +18,10 @@ void null_plug(void *ptr) { }
    note that since we do not have the needed functions to manipulate the data structures *** YET ***
 */
 
-unsigned char saturate(int in) {
+
+unsigned char
+static
+saturate(int in) {
   if (in>255) { return 255; }
   else if (in>0) return in;
   return 0;

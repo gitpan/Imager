@@ -3,9 +3,14 @@
 
 #include "log.h"
 
-#ifdef OS_hpux
+#if defined(OS_hpux)
 #include <dl.h>
 typedef shl_t minthandle_t;
+#elif defined(WIN32)
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+typedef HMODULE minthandle_t;
+#undef WIN32_LEAN_AND_MEAN
 #else 
 #include <dlfcn.h>
 typedef void *minthandle_t; 

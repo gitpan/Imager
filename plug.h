@@ -32,8 +32,7 @@
 #define i_copyto(im,src, x1, y1, x2, y2, tx, ty,trans) (symbol_table->i_copyto(im,src, x1, y1, x2, y2, tx, ty,trans))
 #define i_rubthru(im,src, tx, ty) (symbol_table->i_rubthru(im,src, tx, ty))
 
-
-
-
-
-
+#ifdef WIN32
+extern char __declspec(dllexport) evalstr[];
+extern func_ptr __declspec(dllexport) function_list[];
+#endif

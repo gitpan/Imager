@@ -20,6 +20,6 @@ static char *i_format_list[]={
   "tt",
 #endif
   "raw",
-  "ppm",
+  "pnm",
   NULL};
 

@@ -26,7 +26,7 @@ my %default_constants =
 
 sub new {
   my ($class, $opts) = @_;
-  
+
   # possibly this is a very bad idea
   my ($type) = grep exists $expr_types{$_}, keys %$opts;
   die "Imager::Expr: No known expression type"
@@ -66,15 +66,22 @@ sub cregs {
 
 my $numre = '[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?';
 
+sub numre {
+  $numre;
+}
+
 # optimize the code
 sub optimize {
   my ($self) = @_;
 
   my @ops = @{$self->{ops}};
 
+  # this function cannot current handle code with jumps
+  return 1 if grep $_->[0] =~ /^jump/, @ops;
+
   # optimization - common sub-expression elimination
   # it's possible to fold this into the code generation - but it will wait
-  
+
   my $max_opr = $Imager::Regops::MaxOperands;
   my $attr = \%Imager::Regops::Attr;
   my $foundops = 1;
@@ -125,7 +132,7 @@ sub assemble {
   my @ops = @{$self->{ops}};
   for my $op (@ops) {
     $op->[0] = $attr->{$op->[0]}{opcode};
-		for (@{$op}[1..$max_opr+1]) { s/^[rp]// }
+    for (@{$op}[1..$max_opr+1]) { s/^[rpj]// }
   }
   my $pack = $Imager::Regops::PackCode x (2+$Imager::Regops::MaxOperands);
 
@@ -246,11 +253,12 @@ sub dumpcode {
   my %names = map { $attr->{$_}{opcode}, $_ } keys %Imager::Regops::Attr;
   my @vars = $self->_variables();
   my $result = '';
+  my $index = 0;
   while (my @op = splice(@code, 0, 2+$Imager::Regops::MaxOperands)) {
     my $opcode = shift @op;
     my $name = $names{$opcode};
     if ($name) {
-      $result .= "$name($opcode)";
+      $result .= "j$index: $name($opcode)";
       my @types = split //, $attr->{$name}{types};
       for my $parm (@types) {
 	my $reg = shift @op;
@@ -264,7 +272,7 @@ sub dumpcode {
 	  }
 	}
       }
-      
+
       $result .= " -> $attr->{$name}{result}$op[-1]"
 	if $attr->{$name}{result};
       $result .= "\n";
@@ -272,6 +280,7 @@ sub dumpcode {
     else {
       $result .= "unknown($opcode) @op\n";
     }
+    ++$index;
   }
 
   $result;
@@ -288,9 +297,9 @@ my %op_names = ( '+'=>'add', '-'=>'subtract', '*'=>'mult', '/' => 'div',
 
 sub compile {
   my ($self, $expr, $opts) = @_;
-  
+
   my @st_ops = split ' ', $expr;
-  
+
   for (@st_ops) {
     $_ = $op_names{$_} if exists $op_names{$_};
     $_ = $self->{constants}{$_} if exists $self->{constants}{$_};
@@ -381,7 +390,7 @@ funccall : identifier '(' exprlist ')'
 { $return = [ $item[1], @{$item[3]} ] }
 
 identifier : /[^\W\d]\w*/ { $return = $item[1] }
-       
+
 GRAMMAR
 
 my $parser;
@@ -439,7 +448,7 @@ sub compile {
 
 sub gencode {
   my ($self, $tree) = @_;
-  
+
   if (ref $tree) {
     my ($op, @parms) = @$tree;
 
@@ -451,7 +460,7 @@ sub gencode {
       $subtree = $self->gencode($subtree);
     }
     my $types = join("", map {substr($_,0,1)} @parms);
-    
+
     if (length($types) < length($Attr{$op}{types})) {
       die "Too few parameters in call to $op";
     }

@@ -10,10 +10,10 @@ print "ok 1\n";
 Imager::init('log'=>'testout/t56trans2.log');
 
 my $im1 = Imager->new();
-$im1->open(file=>'testimg/penguin-base.ppm', type=>'ppm')
+$im1->open(file=>'testimg/penguin-base.ppm', type=>'pnm')
 	 || die "Cannot read image";
 my $im2 = Imager->new();
-$im2->open(file=>'testimg/scale.ppm',type=>'ppm')
+$im2->open(file=>'testimg/scale.ppm',type=>'pnm')
 	|| die "Cannot read testimg/scale.ppm";
 
 # error handling
@@ -29,7 +29,7 @@ my $im4 = Imager::transform2({
 print $im4 ? "ok 4\n" : "not ok 4\n";
 
 if ($im4) {
-  $im4->write(type=>'ppm', file=>'testout/t56a.ppm')
+  $im4->write(type=>'pnm', file=>'testout/t56a.ppm')
     || die "Cannot write testout/t56a.ppm";
 }
 
@@ -39,7 +39,7 @@ my $im5 = Imager::transform2({
 }, $im1);
 print $im5 ? "ok 5\n" : "not ok 5\n";
 if ($im5) {
-  $im5->write(type=>'ppm', file=>'testout/t56b.ppm')
+  $im5->write(type=>'pnm', file=>'testout/t56b.ppm')
     || die "Cannot write testout/t56b.ppm";
 }
 
@@ -50,6 +50,6 @@ rpnexpr=>'x h / !rat x w2 % y h2 % getp2 !pat x y getp1 @rat * @pat 1 @rat - * +
 my $im6 = Imager::transform2($opts,$im1,$im2);
 print $im6 ? "ok 6\n" : "not ok 6 # $opts->{error}\n";
 if ($im6) {
-  $im6->write(type=>'ppm', file=>'testout/t56c.ppm')
+  $im6->write(type=>'pnm', file=>'testout/t56c.ppm')
     || die "Cannot write testout/t56c.ppm";
 }

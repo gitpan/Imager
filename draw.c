@@ -256,7 +256,7 @@ i_bezier_multi(i_img *im,int l,double *x,double *y,i_color *val) {
 
   bzcoef=mymalloc(sizeof(double)*l);
   for(k=0;k<l;k++) bzcoef[k]=perm(n,k);
-  i_color_info(val);
+  ICL_info(val);
 
 
   /*  for(k=0;k<l;k++) printf("bzcoef: %d -> %f\n",k,bzcoef[k]); */
@@ -281,7 +281,7 @@ i_bezier_multi(i_img *im,int l,double *x,double *y,i_color *val) {
     lx=(int)(0.5+cx);
     ly=(int)(0.5+cy);
   }
-  i_color_info(val);
+  ICL_info(val);
   myfree(bzcoef);
 }
 

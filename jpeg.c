@@ -1,6 +1,8 @@
 #include <stdio.h>
 #include <sys/stat.h>
+#ifndef _MSC_VER
 #include <unistd.h>
+#endif
 #include <setjmp.h>
 
 #include "iolayer.h"
@@ -21,6 +23,14 @@ typedef struct {
 } scalar_source_mgr;
 
 typedef scalar_source_mgr *scalar_src_ptr;
+
+
+
+
+
+
+
+
 
 static void
 scalar_init_source (j_decompress_ptr cinfo) {

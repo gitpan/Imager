@@ -13,17 +13,24 @@
 
 
 #include <stdio.h>
+#ifndef _MSC_VER
 #include <unistd.h>
+#endif
 #include <sys/types.h>
 
-#define BBSIZ 1024
+/* #define BBSIZ 1096 */
+#define BBSIZ 1096
 #define IO_FAKE_SEEK 1<<0L
 #define IO_TEMP_SEEK 1<<1L
 
 
 typedef union { int i; void *p; } iorp;
 
-typedef enum { FDSEEK, FDNOSEEK, BUFFER, CBSEEK, CBNOSEEK } io_type;
+typedef enum { FDSEEK, FDNOSEEK, BUFFER, CBSEEK, CBNOSEEK, BUFCHAIN } io_type;
+
+#ifdef _MSC_VER
+typedef int ssize_t;
+#endif
 
 struct _io_glue;
 
@@ -47,16 +54,17 @@ typedef ssize_t(*sizel) (int fd);
 extern char *io_type_names[];
 
 
-struct _io_blink {
+typedef struct _io_blink {
   char buf[BBSIZ];
-  size_t len;
+  /* size_t cnt; */
+  size_t len;			/* How large is this buffer = BBZIS for now */
   struct _io_blink *next;
   struct _io_blink *prev;
-};
+} io_blink;
+
 
 /* Structures that describe callback interfaces */
 
-typedef struct _io_blink io_blink;
 typedef struct {
   off_t offset;
   off_t cpos;
@@ -70,6 +78,18 @@ typedef struct {
   io_blink *tail;
   io_blink *cp;
 } io_ex_fseek;
+
+
+typedef struct {
+  off_t offset;			/* Offset of the source - not used */
+  off_t length;			/* Total length of chain in bytes */
+  io_blink *head;		/* Start of chain */
+  io_blink *tail;		/* End of chain */
+  off_t tfill;			/* End of stream in last link */
+  io_blink *cp;			/* Current element of list */
+  off_t cpos;			/* Offset within the current */
+  off_t gpos;			/* Global position in stream */
+} io_ex_bchain;
 
 
 /* Structures to describe data sources */
@@ -121,6 +141,8 @@ void io_glue_gettypes    (io_glue *ig, int reqmeth);
 
 /* XS functions */
 io_glue *io_new_fd(int fd);
+io_glue *io_new_bufchain();
+size_t   io_slurp(io_glue *ig, unsigned char **c);
 void io_glue_DESTROY(io_glue *ig);
 
 #endif /* _IOLAYER_H_ */

@@ -17,19 +17,20 @@ Imager::init('log'=>'testout/t40scale.log');
 print "ok 1\n";
 
 $img=Imager->new();
-$img->open(file=>'testimg/scale.ppm',type=>'ppm') || print "failed: ",$img->{ERRSTR},"\n";
-print "ok 2\n";
 
-$scaleimg=$img->scale(scalefactor=>0.25) || print "failed: ",$scaleimg->{ERRSTR},"\n";
+$img->open(file=>'testimg/scale.ppm',type=>'pnm') or print "failed: ",$scaleimg->{ERRSTR},"\n";	
+print "ok 2\n";	
+
+$scaleimg=$img->scale(scalefactor=>0.25) or print "failed: ",$scaleimg->{ERRSTR},"\n";
 print "ok 3\n";
 
-$scaleimg->write(file=>'testout/t40scale1.ppm',type=>'ppm') || print "failed: ",$scaleimg->{ERRSTR},"\n";
+$scaleimg->write(file=>'testout/t40scale1.ppm',type=>'pnm') or print "failed: ",$scaleimg->{ERRSTR},"\n";
 print "ok 4\n";
 
-$scaleimg=$img->scale(scalefactor=>0.25,qtype=>'preview') || print "failed: ",$scaleimg->{ERRSTR},"\n";
+$scaleimg=$img->scale(scalefactor=>0.25,qtype=>'preview') or print "failed: ",$scaleimg->{ERRSTR},"\n";
 print "ok 5\n";
 
-$scaleimg->write(file=>'testout/t40scale2.ppm',type=>'ppm') || print "failed: ",$scaleimg->{ERRSTR},"\n";
+$scaleimg->write(file=>'testout/t40scale2.ppm',type=>'pnm') or print "failed: ",$scaleimg->{ERRSTR},"\n";
 print "ok 6\n";
 
 

@@ -38,24 +38,24 @@ if (i_has_format("t1") and -f $fontname_pfb) {
     or die $img->{ERRSTR};
 
   print "ok 2\n";
-  
+
   $img->string(font=>$font, text=>"XMCLH", 'x'=>100, 'y'=>100) 
     or die $img->{ERRSTR};
-  
+
   print "ok 3\n";
 
   $img->line(x1=>0, x2=>300, y1=>50, y2=>50, color=>$green);
-  
+
   my $text="LLySja";
   my @bbox=$font->bounding_box(string=>$text, 'x'=>0, 'y'=>50);
-  
+
   print @bbox ? '' : 'not ', "ok 4\n";
 
   $img->box(box=>\@bbox, color=>$green);
 
-  $img->write(file=>"testout/t36oofont1.ppm", type=>'ppm')
+  $img->write(file=>"testout/t36oofont1.ppm", type=>'pnm')
     or die "cannot write to testout/t36oofont1.ppm: $img->{ERRSTR}\n";
-  
+
 } else {
   print "ok 2 # skip\n";
   print "ok 3 # skip\n";
@@ -70,24 +70,24 @@ if (i_has_format("tt") and -f $fontname_tt) {
     or die $img->{ERRSTR};
 
   print "ok 5\n";
-  
+
   $img->string(font=>$font, text=>"XMCLH", 'x'=>100, 'y'=>100) 
     or die $img->{ERRSTR};
-  
+
   print "ok 6\n";
 
   $img->line(x1=>0, x2=>300, y1=>50, y2=>50, color=>$green);
-  
+
   my $text="LLySja";
   my @bbox=$font->bounding_box(string=>$text, 'x'=>0, 'y'=>50);
-  
+
   print @bbox ? '' : 'not ', "ok 7\n";
 
   $img->box(box=>\@bbox, color=>$green);
 
-  $img->write(file=>"testout/t36oofont2.ppm", type=>'ppm')
+  $img->write(file=>"testout/t36oofont2.ppm", type=>'pnm')
     or die "cannot write to testout/t36oofont2.ppm: $img->{ERRSTR}\n";
-  
+
 } else {
   print "ok 5 # skip\n";
   print "ok 6 # skip\n";

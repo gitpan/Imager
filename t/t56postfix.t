@@ -14,10 +14,10 @@ if ($expr) {
   # perform some basic validation on the code
   my $code = $expr->dumpcode();
   my @code = split /\n/, $code;
-  print $code[-1] =~ /^ret/ ? "ok 3\n" : "not ok 3\n";
-  print grep(/^mult.*x/, @code) ? "ok 4\n" : "not ok 4\n";
-  print grep(/^add.*y/, @code) ? "ok 5\n" : "not ok 5\n";
-  print grep(/^getp1/, @code) ? "ok 6\n" : "not ok 6\n";
+  print $code[-1] =~ /:\s+ret/ ? "ok 3\n" : "not ok 3\n";
+  print grep(/:\s+mult.*x/, @code) ? "ok 4\n" : "not ok 4\n";
+  print grep(/:\s+add.*y/, @code) ? "ok 5\n" : "not ok 5\n";
+  print grep(/:\s+getp1/, @code) ? "ok 6\n" : "not ok 6\n";
 }
 else {
   print "not ok 2 ",Imager::Expr::error(),"\n";

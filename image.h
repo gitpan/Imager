@@ -7,7 +7,9 @@
 #include "stackmach.h"
 
 
+#ifndef _MSC_VER
 #include <unistd.h>
+#endif
 #include <string.h>
 #include <stdio.h>
 #include <math.h>
@@ -31,27 +33,27 @@ undef_int i_has_format(char *frmt);
 
 /* constructors and destructors */
 
-i_color *i_color_new(unsigned char r,unsigned char g,unsigned char b,unsigned char a);
-i_color *i_color_set(i_color *cl,unsigned char r,unsigned char g,unsigned char b,unsigned char a);
-void i_color_info(i_color *cl);
-void ICL_DESTROY(i_color *cl);
-
+i_color *ICL_new_internal(            unsigned char r,unsigned char g,unsigned char b,unsigned char a);
+i_color *ICL_set_internal(i_color *cl,unsigned char r,unsigned char g,unsigned char b,unsigned char a);
+void     ICL_info        (i_color *cl);
+void     ICL_DESTROY     (i_color *cl);
+void     ICL_add         (i_color *dst, i_color *src, int ch);
 
 i_img *IIM_new(int x,int y,int ch);
-void IIM_DESTROY(i_img *im);
+void   IIM_DESTROY(i_img *im);
 i_img *i_img_new( void );
 i_img *i_img_empty(i_img *im,int x,int y);
 i_img *i_img_empty_ch(i_img *im,int x,int y,int ch);
-void i_img_exorcise(i_img *im);
-void i_img_destroy(i_img *im);
+void   i_img_exorcise(i_img *im);
+void   i_img_destroy(i_img *im);
 
-void i_img_info(i_img *im,int *info);
+void   i_img_info(i_img *im,int *info);
 
 /* Image feature settings */
 
-void i_img_setmask(i_img *im,int ch_mask);
-int i_img_getmask(i_img *im);
-int i_img_getchannels(i_img *im);
+void   i_img_setmask    (i_img *im,int ch_mask);
+int    i_img_getmask    (i_img *im);
+int    i_img_getchannels(i_img *im);
 
 /* Base functions */
 
@@ -60,32 +62,44 @@ int i_gpix(i_img *im,int x,int y,i_color *val);
 
 int i_ppix_d(i_img *im,int x,int y,i_color *val);
 int i_gpix_d(i_img *im,int x,int y,i_color *val);
+int i_plin_d(i_img *im,int l, int r, int y, i_color *val);
+int i_glin_d(i_img *im,int l, int r, int y, i_color *val);
+
+#define i_plin(im, l, r, y, val) (((im)->i_f_plin)(im, l, r, y, val))
+#define i_glin(im, l, r, y, val) (((im)->i_f_glin)(im, l, r, y, val))
 
 float i_gpix_pch(i_img *im,int x,int y,int ch);
 
 /* functions for drawing primitives */
 
-void i_box(i_img *im,int x1,int y1,int x2,int y2,i_color *val);
-void i_box_filled(i_img *im,int x1,int y1,int x2,int y2,i_color *val);
-void i_draw(i_img *im,int x1,int y1,int x2,int y2,i_color *val);
-void i_line_aa(i_img *im,int x1,int y1,int x2,int y2,i_color *val);
-void i_arc(i_img *im,int x,int y,float rad,float d1,float d2,i_color *val);
-void i_copyto(i_img *im,i_img *src,int x1,int y1,int x2,int y2,int tx,int ty);
+void i_box         (i_img *im,int x1,int y1,int x2,int y2,i_color *val);
+void i_box_filled  (i_img *im,int x1,int y1,int x2,int y2,i_color *val);
+void i_draw        (i_img *im,int x1,int y1,int x2,int y2,i_color *val);
+void i_line_aa     (i_img *im,int x1,int y1,int x2,int y2,i_color *val);
+void i_arc         (i_img *im,int x,int y,float rad,float d1,float d2,i_color *val);
+void i_copyto      (i_img *im,i_img *src,int x1,int y1,int x2,int y2,int tx,int ty);
 void i_copyto_trans(i_img *im,i_img *src,int x1,int y1,int x2,int y2,int tx,int ty,i_color *trans);
-void i_copy(i_img *im,i_img *src);
-void i_rubthru(i_img *im,i_img *src,int tx,int ty);
+void i_copy        (i_img *im,i_img *src);
+void i_rubthru     (i_img *im,i_img *src,int tx,int ty);
+
+undef_int i_flipxy (i_img *im, int direction);
+
+
 
 void i_bezier_multi(i_img *im,int l,double *x,double *y,i_color *val);
-void i_poly_aa(i_img *im,int l,double *x,double *y,i_color *val);
+void i_poly_aa     (i_img *im,int l,double *x,double *y,i_color *val);
 
-void i_flood_fill(i_img *im,int seedx,int seedy,i_color *dcol);
+void i_flood_fill  (i_img *im,int seedx,int seedy,i_color *dcol);
 
 /* image processing functions */
 
-void i_gaussian(i_img *im,float stdev);
-void i_conv(i_img *im,float *coeff,int len);
+void i_gaussian    (i_img *im,float stdev);
+void i_conv        (i_img *im,float *coeff,int len);
 
-float i_img_diff(i_img *im1,i_img *im2);
+/* colour manipulation */
+extern int i_convert(i_img *im, i_img *src, float *coeff, int outchan, int inchan);
+
+float i_img_diff   (i_img *im1,i_img *im2);
 
 /* font routines */
 
@@ -99,7 +113,7 @@ int       i_t1_new( char *pfb, char *afm );
 int       i_t1_destroy( int font_id );
 undef_int i_t1_cp( i_img *im, int xb, int yb, int channel, int fontnum, float points, char* str, int len, int align );
 undef_int i_t1_text( i_img *im, int xb, int yb, i_color *cl, int fontnum, float points, char* str, int len, int align );
-void      i_t1_bbox( int fontnum, float point, char *str, int len, int cords[4] );
+void      i_t1_bbox( int fontnum, float point, char *str, int len, int cords[6] );
 void      i_t1_set_aa( int st );
 void      close_t1( void );
 
@@ -138,7 +152,7 @@ TT_Fonthandle* i_tt_new(char *fontname);
 void i_tt_destroy( TT_Fonthandle *handle );
 undef_int i_tt_cp( TT_Fonthandle *handle,i_img *im,int xb,int yb,int channel,float points,char* txt,int len,int smooth);
 undef_int i_tt_text( TT_Fonthandle *handle, i_img *im, int xb, int yb, i_color *cl, float points, char* txt, int len, int smooth);
-undef_int i_tt_bbox( TT_Fonthandle *handle, float points,char *txt,int len,int cords[4]);
+undef_int i_tt_bbox( TT_Fonthandle *handle, float points,char *txt,int len,int cords[6]);
 
 
 #endif  /* End of freetype headers */
@@ -177,15 +191,15 @@ typedef struct {
   int cpos;
 } i_gen_read_data;
 
-extern int i_gen_reader(i_gen_read_data *info, char *buffer, int need);
-extern i_gen_read_data *i_gen_read_data_new(i_read_callback_t cb, char *userdata);
+extern int  i_gen_reader(i_gen_read_data *info, char *buffer, int need);
+extern      i_gen_read_data *i_gen_read_data_new(i_read_callback_t cb, char *userdata);
 extern void free_gen_read_data(i_gen_read_data *);
 
 /* general writer callback
- userdata - the data the user passed into the writer
- data - the data to write
- data_size - the number of bytes to write
- write the data, return non-zero on success, zero on failure.
+   userdata - the data the user passed into the writer
+   data - the data to write
+   data_size - the number of bytes to write
+   write the data, return non-zero on success, zero on failure.
 */
 typedef int (*i_write_callback_t)(char *userdata, char const *data, int size);
 
@@ -249,6 +263,7 @@ typedef enum i_ord_dith_tag
   od_vline,
   od_slashline, /* / line dither */
   od_backline, /* \ line dither */
+  od_tiny, /* small checkerbox */
   od_custom /* custom 8x8 map */
 } i_ord_dith;
 
@@ -347,6 +362,7 @@ undef_int i_writejpeg(i_img *im,int fd,int qfactor);
 #ifdef HAVE_LIBTIFF
 i_img* i_readtiff_wiol(io_glue *ig, int length);
 undef_int i_writetiff_wiol(i_img *im, io_glue *ig);
+undef_int i_writetiff_wiol_faxable(i_img *im, io_glue *ig, int fine);
 
 #endif /* HAVE_LIBTIFF */
 
@@ -373,7 +389,7 @@ void i_qdist(i_img *im);
 i_img *i_readraw(int fd,int x,int y,int datachannels,int storechannels,int intrl);
 undef_int i_writeraw(i_img* im,int fd);
 
-i_img *i_readppm(int fd);
+i_img *i_readpnm_wiol(io_glue *ig, int length);
 undef_int i_writeppm(i_img *im,int fd);
 
 
@@ -402,6 +418,8 @@ void i_watermark(i_img *im,i_img *wmark,int tx,int ty,int pixdiff);
 void i_autolevels(i_img *im,float lsat,float usat,float skew);
 void i_radnoise(i_img *im,int xo,int yo,float rscale,float ascale);
 void i_turbnoise(i_img *im,float xo,float yo,float scale);
+void i_gradgen(i_img *im, int num, int *xo, int *yo, i_color *ival, int dmeasure);
+void i_nearest_color(i_img *im, int num, int *xo, int *yo, i_color *ival, int dmeasure);
 
 /* Debug only functions */
 
@@ -411,8 +429,8 @@ void malloc_state( void );
 
 typedef struct {
   undef_int (*i_has_format)(char *frmt);
-  i_color*(*i_color_set)(i_color *cl,unsigned char r,unsigned char g,unsigned char b,unsigned char a);
-  void (*i_color_info)(i_color *cl);
+  i_color*(*ICL_set)(i_color *cl,unsigned char r,unsigned char g,unsigned char b,unsigned char a);
+  void (*ICL_info)(i_color *cl);
 
   i_img*(*i_img_new)( void );
   i_img*(*i_img_empty)(i_img *im,int x,int y);
@@ -422,10 +440,10 @@ typedef struct {
   void(*i_img_info)(i_img *im,int *info);
   
   void(*i_img_setmask)(i_img *im,int ch_mask);
-  int(*i_img_getmask)(i_img *im);
+  int (*i_img_getmask)(i_img *im);
   
-  int(*i_ppix)(i_img *im,int x,int y,i_color *val);
-  int(*i_gpix)(i_img *im,int x,int y,i_color *val);
+  int (*i_ppix)(i_img *im,int x,int y,i_color *val);
+  int (*i_gpix)(i_img *im,int x,int y,i_color *val);
 
   void(*i_box)(i_img *im,int x1,int y1,int x2,int y2,i_color *val);
   void(*i_draw)(i_img *im,int x1,int y1,int x2,int y2,i_color *val);
@@ -436,6 +454,28 @@ typedef struct {
 
 } symbol_table_t;
 
+/* error handling 
+   see error.c for documentation
+   the error information is currently global
+*/
+typedef struct {
+  char *msg;
+  int code;
+} i_errmsg;
+
+typedef void (*i_error_cb)(int code, char const *msg);
+typedef void (*i_failed_cb)(i_errmsg *msgs);
+extern i_error_cb i_set_error_cb(i_error_cb);
+extern i_failed_cb i_set_failed_cb(i_failed_cb);
+extern void i_set_argv0(char const *);
+extern int i_set_errors_fatal(int new_fatal);
+extern i_errmsg *i_errors();
+
+extern void i_push_error(int code, char const *msg);
+extern void i_push_errorf(int code, char const *fmt, ...);
+extern void i_push_errorvf(int code, char const *fmt, va_list);
+extern void i_clear_error();
+extern int i_failed(int code, char const *msg);
 
 
 #endif

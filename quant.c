@@ -6,6 +6,17 @@
 
 static void makemap_addi(i_quantize *, i_img **imgs, int count);
 
+static
+void
+setcol(i_color *cl,unsigned char r,unsigned char g,unsigned char b,unsigned char a) {
+  cl->rgba.r=r;
+  cl->rgba.g=g;
+  cl->rgba.b=b;
+  cl->rgba.a=a;
+}
+
+
+
 /* make a colour map overwrites mc_existing/mc_count in quant Note
    that i_makemap will be called once for each image if mc_perimage is
    set and the format support multiple colour maps per image.
@@ -13,6 +24,7 @@ static void makemap_addi(i_quantize *, i_img **imgs, int count);
    This means we don't need any special processing at this level to
    handle multiple colour maps.
 */
+
 void
 quant_makemap(i_quantize *quant, i_img **imgs, int count) {
 #ifdef HAVE_LIBGIF
@@ -30,8 +42,8 @@ quant_makemap(i_quantize *quant, i_img **imgs, int count) {
       int i = 0;
       for (r = 0; r < 256; r+=0x33)
 	for (g = 0; g < 256; g+=0x33)
-	  for (b = 0; b < 256; b += 0x33) 
-	    i_color_set(quant->mc_colors+i++, r, g, b, 0);
+	  for (b = 0; b < 256; b += 0x33)
+	    setcol(quant->mc_colors+i++, r, g, b, 0);
       quant->mc_count = i;
     }
     break;
@@ -55,7 +67,10 @@ static void translate_addi(i_quantize *, i_img *, i_palidx *);
    The giflib quantizer ignores the palette.
 */
 i_palidx *quant_translate(i_quantize *quant, i_img *img) {
-  i_palidx *result = mymalloc(img->xsize * img->ysize);
+  i_palidx *result;
+	mm_log((1, "quant_translate(quant %p, img %p)\n", quant, img));
+
+	result = mymalloc(img->xsize * img->ysize);
 
   switch (quant->translate) {
 #ifdef HAVE_LIBGIF
@@ -103,7 +118,7 @@ static void translate_giflib(i_quantize *quant, i_img *img, i_palidx *out) {
   
   i_color col;
 
-  /*mm_log((1,"i_writegif(0x%x, fd %d, colors %dbpp)\n",im,fd,colors));*/
+	mm_log((1,"i_writegif(quant %p, img %p, out %p)\n", quant, img, out));
   
   /*if (!(im->channels==1 || im->channels==3)) { fprintf(stderr,"Unable to write gif, improper colorspace.\n"); exit(3); }*/
   
@@ -139,14 +154,14 @@ static void translate_giflib(i_quantize *quant, i_img *img, i_palidx *out) {
       }
       if ((GreenBuffer = (GifByteType *) mymalloc((unsigned int) Size)) == NULL) {
         m_fatal(0,"Failed to allocate memory required, aborted.");
-        free(RedBuffer);
+        myfree(RedBuffer);
         return;
       }
     
       if ((BlueBuffer  = (GifByteType *) mymalloc((unsigned int) Size)) == NULL) {
         m_fatal(0,"Failed to allocate memory required, aborted.");
-        free(RedBuffer);
-        free(GreenBuffer);
+        myfree(RedBuffer);
+        myfree(GreenBuffer);
         return;
       }
     
@@ -182,8 +197,8 @@ static void translate_giflib(i_quantize *quant, i_img *img, i_palidx *out) {
     }
   }
 
-  free(RedBuffer);
-  if (img->channels == 3) { free(GreenBuffer); free(BlueBuffer); }
+  myfree(RedBuffer);
+  if (img->channels == 3) { myfree(GreenBuffer); myfree(BlueBuffer); }
 
   /* copy over the color map */
   for (i = 0; i < ColorMapSize; ++i) {
@@ -246,7 +261,8 @@ typedef int (*cmpfunc)(const void*, const void*);
 
 typedef struct {
   unsigned char r,g,b;
-  char state;
+  char fixed;
+  char used;
   int dr,dg,db;
   int cdist;
   int mcount;
@@ -267,18 +283,41 @@ typedef struct {
 static void prescan(i_img **im,int count, int cnum, cvec *clr);
 static void reorder(pbox prescan[512]);
 static int pboxcmp(const pbox *a,const pbox *b);
-static int pixbox(i_color *ic);
 static void boxcenter(int box,cvec *cv);
 static float frandn(void);
-static float frand(void);
-static unsigned char g_sat(int in);
 static void boxrand(int box,cvec *cv);
 static void bbox(int box,int *r0,int *r1,int *g0,int *g1,int *b0,int *b1);
-static int eucl_d(cvec* cv,i_color *cl);
-static int ceucl_d(i_color* cv,i_color *cl);
 static void cr_hashindex(cvec clr[256],int cnum,hashbox hb[512]);
 static int mindist(int boxnum,cvec *cv);
 static int maxdist(int boxnum,cvec *cv);
+
+/* Some of the simpler functions are kept here to aid the compiler -
+   maybe some of them will be inlined. */
+
+static int
+pixbox(i_color *ic) { return ((ic->channel[0] & 224)<<1)+ ((ic->channel[1]&224)>>2) + ((ic->channel[2] &224) >> 5); }
+
+static unsigned char
+g_sat(int in) {
+  if (in>255) { return 255; }
+  else if (in>0) return in;
+  return 0;
+}
+
+static
+float
+frand(void) {
+  return rand()/(RAND_MAX+1.0);
+}
+
+static
+int
+eucl_d(cvec* cv,i_color *cl) { return PWR2(cv->r-cl->channel[0])+PWR2(cv->g-cl->channel[1])+PWR2(cv->b-cl->channel[2]); }
+
+static
+int
+ceucl_d(i_color *c1, i_color *c2) { return PWR2(c1->channel[0]-c2->channel[0])+PWR2(c1->channel[1]-c2->channel[1])+PWR2(c1->channel[2]-c2->channel[2]); }
+
 /* 
 
 This quantization algorithm and implementation routines are by Arnar
@@ -334,7 +373,7 @@ for each side of the cube, but this will require even more memory.
 static void
 makemap_addi(i_quantize *quant, i_img **imgs, int count) {
   cvec *clr;
-  int cnum, i, x, y, bst_idx=0, ld, cd, iter, currhb;
+  int cnum, i, x, y, bst_idx=0, ld, cd, iter, currhb, img_num;
   i_color val;
   float dlt, accerr;
   hashbox hb[512];
@@ -344,11 +383,13 @@ makemap_addi(i_quantize *quant, i_img **imgs, int count) {
     clr[i].r = quant->mc_colors[i].rgb.r;
     clr[i].g = quant->mc_colors[i].rgb.g;
     clr[i].b = quant->mc_colors[i].rgb.b;
-    clr[i].state = 1;
+    clr[i].fixed = 1;
+    clr[i].mcount = 0;
   }
   /* mymalloc doesn't clear memory, so I think we need this */
   for (; i < quant->mc_size; ++i) {
-    clr[i].state = 0;
+    clr[i].fixed = 0;
+    clr[i].mcount = 0;
   }
   cnum = quant->mc_size;
   dlt = 1;
@@ -359,8 +400,8 @@ makemap_addi(i_quantize *quant, i_img **imgs, int count) {
   for(iter=0;iter<3;iter++) {
     accerr=0.0;
     
-    for (i = 0; i < count; ++i) {
-      i_img *im = imgs[i];
+    for (img_num = 0; img_num < count; ++img_num) {
+      i_img *im = imgs[img_num];
       for(y=0;y<im->ysize;y++) for(x=0;x<im->xsize;x++) {
 	ld=196608;
 	i_gpix(im,x,y,&val);
@@ -391,14 +432,16 @@ makemap_addi(i_quantize *quant, i_img **imgs, int count) {
     /*    printf("total error: %.2f\n",sqrt(accerr)); */
 
     for(i=0;i<cnum;i++) {
-      if (clr[i].state) continue; /* skip reserved colors */
+      if (clr[i].fixed) continue; /* skip reserved colors */
 
       if (clr[i].mcount) {
+	clr[i].used = 1;
 	clr[i].r=clr[i].r*(1-dlt)+dlt*clr[i].dr;
 	clr[i].g=clr[i].g*(1-dlt)+dlt*clr[i].dg;
 	clr[i].b=clr[i].b*(1-dlt)+dlt*clr[i].db;
       } else {
-	/* I don't know why - TC */
+	/* let's try something else */
+	clr[i].used = 0;
 	clr[i].r=rand();
 	clr[i].g=rand();
 	clr[i].b=rand();
@@ -423,6 +466,22 @@ makemap_addi(i_quantize *quant, i_img **imgs, int count) {
   }
 #endif
 
+  /* if defined, we only include colours with an mcount or that were
+     supplied in the fixed palette, giving us a smaller output palette */
+#define ONLY_USE_USED
+#ifdef ONLY_USE_USED
+  /* transfer the colors back */
+  quant->mc_count = 0;
+  for (i = 0; i < cnum; ++i) {
+    if (clr[i].fixed || clr[i].used) {
+      /*printf("Adding %d (%d,%d,%d)\n", i, clr[i].r, clr[i].g, clr[i].b);*/
+      quant->mc_colors[quant->mc_count].rgb.r = clr[i].r;
+      quant->mc_colors[quant->mc_count].rgb.g = clr[i].g;
+      quant->mc_colors[quant->mc_count].rgb.b = clr[i].b;
+      ++quant->mc_count;
+    }
+  }
+#else
   /* transfer the colors back */
   for (i = 0; i < cnum; ++i) {
     quant->mc_colors[i].rgb.r = clr[i].r;
@@ -430,61 +489,429 @@ makemap_addi(i_quantize *quant, i_img **imgs, int count) {
     quant->mc_colors[i].rgb.b = clr[i].b;
   }
   quant->mc_count = cnum;
+#endif
 
   /* don't want to keep this */
   myfree(clr);
 }
 
-static void translate_addi(i_quantize *quant, i_img *img, i_palidx *out) {
-  int x, y, i, k, currhb, bst_idx;
-  i_color val;
-  long ld, cd;
-  int pixdev = quant->perturb;
-  hashbox hb[512];
+#define pboxjump 32
 
-  for (i = 0; i < (int)(sizeof(hb)/sizeof(*hb)); ++i)
-    hb[i].cnt = 0;
-  for (i = 0; i < quant->mc_count; ++i) {
-    currhb = pixbox(quant->mc_colors+i);
-    hb[currhb].vec[hb[currhb].cnt++] = i;
+/* Define one of the following 4 symbols to choose a colour search method
+   The idea is to try these out, including benchmarking, to see which
+   is fastest in a good spread of circumstances.
+   I'd expect IM_CFLINSEARCH to be fastest for very small palettes, and
+   IM_CFHASHBOX for large images with large palettes.
+
+   Some other possibilities include:
+    - search over entries sorted by luminance
+
+   Initially I was planning on testing using the macros and then
+   integrating the code directly into each function, but this means if
+   we find a bug at a late stage we will need to update N copies of
+   the same code.  Also, keeping the code in the macros means that the
+   code in the translation functions is much more to the point,
+   there's no distracting colour search code to remove attention from
+   what makes _this_ translation function different.  It may be
+   advisable to move the setup code into functions at some point, but
+   it should be possible to do this fairly transparently.
+
+   If IM_CF_COPTS is defined then CFLAGS must have an appropriate 
+   definition.
+
+   Each option needs to define 4 macros:
+    CF_VARS - variables to define in the function
+    CF_SETUP - code to setup for the colour search, eg. allocating and
+      initializing lookup tables
+    CF_FIND - code that looks for the color in val and puts the best 
+      matching index in bst_idx
+    CF_CLEANUP - code to clean up, eg. releasing memory
+*/
+#ifndef IM_CF_COPTS
+/*#define IM_CFLINSEARCH*/
+#define IM_CFHASHBOX
+/*#define IM_CFSORTCHAN*/
+/*#define IM_CFRAND2DIST*/
+#endif
+
+#ifdef IM_CFHASHBOX
+
+/* The original version I wrote for this used the sort.
+   If this is defined then we use a sort to extract the indices for 
+   the hashbox */
+#define HB_SORT
+
+/* assume i is available */
+#define CF_VARS hashbox hb[512]; \
+               int currhb;  \
+               long ld, cd
+
+#ifdef HB_SORT
+
+static long *gdists; /* qsort is annoying */
+/* int might be smaller than long, so we need to do a real compare 
+   rather than a subtraction*/
+static int distcomp(void const *a, void const *b) {
+  long ra = gdists[*(int const *)a];
+  long rb = gdists[*(int const *)b];
+  if (ra < rb)
+    return -1;
+  else if (ra > rb)
+    return 1;
+  else
+    return 0;
+}
+
+#endif
+
+/* for each hashbox build a list of colours that are in the hb or is closer
+   than other colours
+   This is pretty involved.  The original gifquant generated the hashbox
+   as part of it's normal processing, but since the map generation is now 
+   separated from the translation we need to do this on the spot.
+   Any optimizations, even if they don't produce perfect results would be
+   welcome.
+ */
+static void hbsetup(i_quantize *quant, hashbox *hb) {
+  long *dists, mind, maxd, cd;
+  int cr, cb, cg, hbnum, i;
+  i_color cenc;
+#ifdef HB_SORT
+  int *indices = mymalloc(quant->mc_count * sizeof(int)); 
+#endif
+
+  dists = mymalloc(quant->mc_count * sizeof(long)); 
+  for (cr = 0; cr < 8; ++cr) { 
+    for (cg = 0; cg < 8; ++cg) { 
+      for (cb = 0; cb < 8; ++cb) { 
+        /* centre of the hashbox */ 
+        cenc.channel[0] = cr*pboxjump+pboxjump/2; 
+        cenc.channel[1] = cg*pboxjump+pboxjump/2; 
+        cenc.channel[2] = cb*pboxjump+pboxjump/2; 
+        hbnum = pixbox(&cenc); 
+        hb[hbnum].cnt = 0; 
+        /* order indices in the order of distance from the hashbox */ 
+        for (i = 0; i < quant->mc_count; ++i) { 
+#ifdef HB_SORT
+          indices[i] = i; 
+#endif
+          dists[i] = ceucl_d(&cenc, quant->mc_colors+i); 
+        } 
+#ifdef HB_SORT
+	/* it should be possible to do this without a sort 
+	   but so far I'm too lazy */
+        gdists = dists; 
+        qsort(indices, quant->mc_count, sizeof(int), distcomp); 
+        /* any colors that can match are within mind+diagonal size of 
+	   a hashbox */ 
+        mind = dists[indices[0]]; 
+        i = 0; 
+	maxd = (sqrt(mind)+pboxjump)*(sqrt(mind)+pboxjump);
+        while (i < quant->mc_count && dists[indices[i]] < maxd) { 
+          hb[hbnum].vec[hb[hbnum].cnt++] = indices[i++]; 
+        } 
+#else
+	/* work out the minimum */
+	mind = 256*256*3;
+	for (i = 0; i < quant->mc_count; ++i) {
+	  if (dists[i] < mind) mind = dists[i];
+	}
+	/* transfer any colours that might be closest to a colour in 
+	   this hashbox */
+	maxd = (sqrt(mind)+pboxjump)*(sqrt(mind)+pboxjump);
+	for (i = 0; i < quant->mc_count; ++i) {
+	  if (dists[i] < maxd)
+	    hb[hbnum].vec[hb[hbnum].cnt++] = i;
+	}
+#endif
+      } 
+    } 
   }
+#ifdef HB_SORT
+  myfree(indices); 
+#endif
+  myfree(dists) ;
+}
+#define CF_SETUP hbsetup(quant, hb)
+
+#define CF_FIND \
+  currhb = pixbox(&val); \
+  ld = 196608; \
+  for (i = 0; i < hb[currhb].cnt; ++i) { \
+    cd = ceucl_d(quant->mc_colors+hb[currhb].vec[i], &val); \
+    if (cd < ld) { ld = cd; bst_idx = hb[currhb].vec[i]; } \
+  }
+
+#define CF_CLEANUP
+  
+#endif
+
+#ifdef IM_CFLINSEARCH
+/* as simple as it gets */
+#define CF_VARS long ld, cd
+#define CF_SETUP /* none needed */
+#define CF_FIND \
+   ld = 196608; \
+   for (i = 0; i < quant->mc_count; ++i) { \
+     cd = ceucl_d(quant->mc_colors+i, &val); \
+     if (cd < ld) { ld = cd; bst_idx = i; } \
+   }
+#define CF_CLEANUP
+#endif
+
+#ifdef IM_CFSORTCHAN
+static int gsortchan;
+static i_quantize *gquant;
+static int chansort(void const *a, void const *b) {
+  return gquant->mc_colors[*(int const *)a].channel[gsortchan] -
+    gquant->mc_colors[*(int const *)b].channel[gsortchan];
+}
+#define CF_VARS int *indices, sortchan, diff; \
+                long ld, cd; \
+                int vindex[256] /* where to find value i of chan */
+
+static void chansetup(i_img *img, i_quantize *quant, int *csortchan, 
+		      int *vindex, int **cindices) {
+  int *indices, sortchan, chan, i, chval;
+  int chanmins[MAXCHANNELS], chanmaxs[MAXCHANNELS], maxrange;
+
+  /* find the channel with the maximum range */ 
+  /* the maximum stddev would probably be better */
+  for (chan = 0; chan < img->channels; ++chan) { 
+    chanmins[chan] = 256; chanmaxs[chan] = 0; 
+    for (i = 0; i < quant->mc_count; ++i) { 
+      if (quant->mc_colors[i].channel[chan] < chanmins[chan]) 
+	chanmins[chan] = quant->mc_colors[i].channel[chan]; 
+      if (quant->mc_colors[i].channel[chan] > chanmaxs[chan]) 
+	chanmaxs[chan] = quant->mc_colors[i].channel[chan]; 
+    } 
+  } 
+  maxrange = -1; 
+  for (chan = 0; chan < img->channels; ++chan) { 
+    if (chanmaxs[chan]-chanmins[chan] > maxrange) { 
+      maxrange = chanmaxs[chan]-chanmins[chan]; 
+      sortchan = chan; 
+    } 
+  } 
+  indices = mymalloc(quant->mc_count * sizeof(int)) ;
+  for (i = 0; i < quant->mc_count; ++i) { 
+    indices[i] = i; 
+  } 
+  gsortchan = sortchan; 
+  gquant = quant; 
+  qsort(indices, quant->mc_count, sizeof(int), chansort) ;
+  /* now a lookup table to find entries faster */ 
+  for (chval=0, i=0; i < quant->mc_count; ++i) { 
+    while (chval < 256 && 
+	   chval < quant->mc_colors[indices[i]].channel[sortchan]) { 
+      vindex[chval++] = i; 
+    } 
+  } 
+  while (chval < 256) { 
+    vindex[chval++] = quant->mc_count-1; 
+  }
+  *csortchan = sortchan;
+  *cindices = indices;
+}
+
+#define CF_SETUP \
+  chansetup(img, quant, &sortchan, vindex, &indices)
+
+int chanfind(i_color val, i_quantize *quant, int *indices, int *vindex, 
+	     int sortchan) {
+  int i, bst_idx, diff, maxdiff;
+  long ld, cd;
+
+  i = vindex[val.channel[sortchan]];
+  bst_idx = indices[i];
+  ld = 196608;
+  diff = 0;
+  maxdiff = quant->mc_count;
+  while (diff < maxdiff) {
+    if (i+diff < quant->mc_count) {
+      cd = ceucl_d(&val, quant->mc_colors+indices[i+diff]); 
+      if (cd < ld) {
+	bst_idx = indices[i+diff];
+	ld = cd;
+	maxdiff = sqrt(ld);
+      }
+    }
+    if (i-diff >= 0) {
+      cd = ceucl_d(&val, quant->mc_colors+indices[i-diff]); 
+      if (cd < ld) {
+	bst_idx = indices[i-diff];
+	ld = cd;
+	maxdiff = sqrt(ld);
+      }
+    }
+    ++diff;
+  }
+
+  return bst_idx;
+}
+
+#define CF_FIND \
+  bst_idx = chanfind(val, quant, indices, vindex, sortchan)
+  
+
+#define CF_CLEANUP myfree(indices)
+
+#endif
+
+#ifdef IM_CFRAND2DIST
+
+/* This is based on a method described by Addi in the #imager channel 
+   on the 28/2/2001.  I was about 1am Sydney time at the time, so I 
+   wasn't at my most cogent.  Well, that's my excuse :)
+
+<TonyC> what I have at the moment is: hashboxes, with optimum hash box
+filling; simple linear search; and a lookup in the widest channel
+(currently the channel with the maximum range)
+<Addi> There is one more way that might be simple to implement.
+<Addi> You want to hear?
+<TonyC> what's that?
+<purl> somebody said that was not true
+<Addi> For each of the colors in the palette start by creating a
+sorted list of the form:
+<Addi> [distance, color]
+<Addi> Where they are sorted by distance.
+<TonyC> distance to where?
+<Addi> Where the elements in the lists are the distances and colors of
+the other colors in the palette
+<TonyC> ok
+<Addi> So if you are at color 0
+<Addi> ok - now to search for the closest color when you are creating
+the final image is done like this:
+<Addi> a) pick a random color from the palette
+<Addi> b) calculate the distance to it
+<Addi> c) only check the vectors that are within double the distance
+in the list of the color you picked from the palette.
+<Addi> Does that seem logical?
+<Addi> Lets imagine that we only have grayscale to make an example:
+<Addi> Our palette has 1 4 10 20 as colors.
+<Addi> And we want to quantize the color 11
+<Addi> lets say we picked 10 randomly
+<Addi> the double distance is 2
+<Addi> since abs(10-11)*2 is 2
+<Addi> And the list at vector 10 is this:
+<Addi> [0, 10], [6 4], [9, 1], [10, 20]
+<Addi> so we look at the first one (but not the second one since 6 is
+at a greater distance than 2.
+<Addi> Any of that make sense?
+<TonyC> yes, though are you suggesting another random jump to one of
+the colours with the possible choices? or an exhaustive search?
+<Addi> TonyC: It's possible to come up with a recursive/iterative 
+enhancement but this is the 'basic' version.
+<Addi> Which would do an iterative search.
+<Addi> You can come up with conditions where it pays to switch to a new one.
+<Addi> And the 'random' start can be switched over to a small tree.
+<Addi> So you would have a little index at the start.
+<Addi> to get you into the general direction
+<Addi> Perhaps just an 8 split.
+<Addi> that is - split each dimension in half.
+<TonyC> yep
+<TonyC> I get the idea
+<Addi> But this would seem to be a good approach in our case since we 
+usually have few codevectors.
+<Addi> So we only need 256*256 entries in a table.
+<Addi> We could even only index some of them that were deemed as good 
+candidates.
+<TonyC> I was considering adding paletted output support for PNG and 
+TIFF at some point, which support 16-bit palettes
+<Addi> ohh.
+<Addi> 'darn' ;)
+
+
+*/
+
+
+typedef struct i_dists {
+  int index;
+  long dist;
+} i_dists;
+
+#define CF_VARS \
+    i_dists *dists;
+
+static int dists_sort(void const *a, void const *b) {
+  return ((i_dists *)a)->dist - ((i_dists *)b)->dist;
+}
+
+static void rand2dist_setup(i_quantize *quant, i_dists **cdists) {
+  i_dists *dists = 
+    mymalloc(sizeof(i_dists)*quant->mc_count*quant->mc_count);
+  int i, j;
+  long cd;
+  for (i = 0; i < quant->mc_count; ++i) {
+    i_dists *ldists = dists + quant->mc_count * i;
+    i_color val = quant->mc_colors[i];
+    for (j = 0; j < quant->mc_count; ++j) {
+      ldists[j].index = j;
+      ldists[j].dist = ceucl_d(&val, quant->mc_colors+j);
+    }
+    qsort(ldists, quant->mc_count, sizeof(i_dists), dists_sort);
+  }
+  *cdists = dists;
+}
+
+#define CF_SETUP \
+		bst_idx = rand() % quant->mc_count; \
+		rand2dist_setup(quant, &dists)
+
+static int rand2dist_find(i_color val, i_quantize *quant, i_dists *dists, int index) {
+  i_dists *cdists;
+  long cd, ld;
+  long maxld;
+  int i;
+  int bst_idx;
+
+  cdists = dists + index * quant->mc_count;
+  ld = 3 * 256 * 256;
+  maxld = 8 * ceucl_d(&val, quant->mc_colors+index);
+  for (i = 0; i < quant->mc_count && cdists[i].dist <= maxld; ++i) {
+    cd = ceucl_d(&val, quant->mc_colors+cdists[i].index);
+    if (cd < ld) {
+      bst_idx = cdists[i].index;
+      ld = cd;
+    }
+  }
+  return bst_idx;
+}
+
+#define CF_FIND bst_idx = rand2dist_find(val, quant, dists, bst_idx)
+
+#define CF_CLEANUP myfree(dists)
+
+
+#endif
+
+static void translate_addi(i_quantize *quant, i_img *img, i_palidx *out) {
+  int x, y, i, k, bst_idx;
+  i_color val;
+  int pixdev = quant->perturb;
+  CF_VARS;
+
+  CF_SETUP;
 
   if (pixdev) {
     k=0;
     for(y=0;y<img->ysize;y++) for(x=0;x<img->xsize;x++) {
-      ld=196608;
       i_gpix(img,x,y,&val);
       val.channel[0]=g_sat(val.channel[0]+(int)(pixdev*frandn()));
       val.channel[1]=g_sat(val.channel[1]+(int)(pixdev*frandn()));
       val.channel[2]=g_sat(val.channel[2]+(int)(pixdev*frandn()));
-      currhb=pixbox(&val);
-      for(i=0;i<hb[currhb].cnt;i++) { 
-	cd=ceucl_d(quant->mc_colors+hb[currhb].vec[i],&val);
-	if (cd<ld) {
-	  ld=cd;
-	  bst_idx=hb[currhb].vec[i];
-	}
-      }
+      CF_FIND;
       out[k++]=bst_idx;
     }
   } else {
     k=0;
     for(y=0;y<img->ysize;y++) for(x=0;x<img->xsize;x++) {
-      ld=196608;
       i_gpix(img,x,y,&val);
-      
-      currhb=pixbox(&val);
-      for(i=0;i<hb[currhb].cnt;i++) { 
-	cd=ceucl_d(quant->mc_colors+hb[currhb].vec[i],&val);
-	if (cd<ld) {
-	  ld=cd;
-	  bst_idx=hb[currhb].vec[i];
-	}
-      }
-      
+      CF_FIND;
       out[k++]=bst_idx;
     }
   }
+  CF_CLEANUP;
 }
 
 static int floyd_map[] =
@@ -523,22 +950,21 @@ typedef struct errdiff_tag {
   int r, g, b;
 } errdiff_t;
 
-#define pboxjump 32
-
 /* perform an error diffusion dither */
 static
 void
 translate_errdiff(i_quantize *quant, i_img *img, i_palidx *out) {
   int *map;
   int mapw, maph, mapo;
-  hashbox hb[512];
-  int i, currhb;
+  int i;
   errdiff_t *err;
   int errw;
   int difftotal;
   int x, y, dx, dy;
   int minr, maxr, ming, maxg, minb, maxb, cr, cg, cb;
   i_color find;
+  int bst_idx;
+  CF_VARS;
 
   if ((quant->errdiff & ed_mask) == ed_custom) {
     map = quant->ed_map;
@@ -555,13 +981,6 @@ translate_errdiff(i_quantize *quant, i_img *img, i_palidx *out) {
     mapo = maps[index].orig;
   }
   
-  for (i = 0; i < (int)(sizeof(hb)/sizeof(*hb)); ++i)
-    hb[i].cnt = 0;
-  for (i = 0; i < quant->mc_count; ++i) {
-    currhb = pixbox(quant->mc_colors+i);
-    hb[currhb].vec[hb[currhb].cnt++] = i;
-  }
-
   errw = img->xsize+mapw;
   err = mymalloc(sizeof(*err) * maph * errw);
   /*errp = err+mapo;*/
@@ -578,11 +997,12 @@ translate_errdiff(i_quantize *quant, i_img *img, i_palidx *out) {
    putchar('\n');
    }*/
 
+  CF_SETUP;
+
   for (y = 0; y < img->ysize; ++y) {
     for (x = 0; x < img->xsize; ++x) {
       i_color val;
       long ld, cd;
-      int bst_idx;
       errdiff_t perr;
       i_gpix(img, x, y, &val);
       perr = err[x+mapo];
@@ -593,41 +1013,7 @@ translate_errdiff(i_quantize *quant, i_img *img, i_palidx *out) {
       val.channel[0] = g_sat(val.channel[0]-perr.r);
       val.channel[1] = g_sat(val.channel[1]-perr.g);
       val.channel[2] = g_sat(val.channel[2]-perr.b);
-      /*printf("          want(%3d, %3d, %3d)\n", val.channel[0], val.channel[1], val.channel[2]);*/
-      ld = 196608;
-      minr = maxr = val.channel[0];
-      ming = maxg = val.channel[1];
-      minb = maxb = val.channel[2];
-      if (minr >= pboxjump)
-	minr -= pboxjump;
-      if (maxr <= 255-pboxjump)
-	maxr += pboxjump;
-      if (ming >= pboxjump)
-	ming -= pboxjump;
-      if (maxg <= 255-pboxjump)
-	maxg += pboxjump;
-      if (minb >= pboxjump)
-	minb -= pboxjump;
-      if (maxb <= 255-pboxjump)
-	maxb += pboxjump;
-      for (cr = minr ; cr <= maxr; cr += pboxjump) {
-	find.rgb.r = cr;
-	for (cg = ming ; cg <= maxg; cg += pboxjump) {
-	  find.rgb.g = cg;
-	  for (cb = minb ; cb <= maxb; cb += pboxjump) {
-	    find.rgb.b = cb;
-
-	    currhb = pixbox(&find);
-	    for (i = 0; i<hb[currhb].cnt; ++i) {
-	      cd = ceucl_d(quant->mc_colors+hb[currhb].vec[i], &val);
-	      if (cd < ld) {
-		ld = cd;
-		bst_idx = hb[currhb].vec[i];
-	      }
-	    }
-	  }
-	}
-      }
+      CF_FIND;
       /* save error */
       perr.r = quant->mc_colors[bst_idx].channel[0] - val.channel[0];
       perr.g = quant->mc_colors[bst_idx].channel[1] - val.channel[1];
@@ -648,6 +1034,7 @@ translate_errdiff(i_quantize *quant, i_img *img, i_palidx *out) {
     }
     memset(err+(maph-1)*errw, 0, sizeof(*err)*errw);
   }
+  CF_CLEANUP;
 }
 /* Prescan finds the boxes in the image that have the highest number of colors 
    and that result is used as the initial value for the vectores */
@@ -690,7 +1077,7 @@ static void prescan(i_img **imgs,int count, int cnum, cvec *clr) {
   i=0;
   while(i<cnum) {
     /*    printf("prebox[%d].cand=%d\n",k,prebox[k].cand); */
-    if (clr[i].state) { i++; continue; } /* reserved go to next */
+    if (clr[i].fixed) { i++; continue; } /* reserved go to next */
     if (j>=prebox[k].cand) { k++; j=1; } else {
       if (prebox[k].cand == 2) boxcenter(prebox[k].boxnum,&(clr[i]));
       else boxrand(prebox[k].boxnum,&(clr[i]));
@@ -712,15 +1099,12 @@ static void reorder(pbox prescan[512]) {
   c.cand++;
   c.pdc=c.pixcnt/(c.cand*c.cand); 
   /*  c.pdc=c.pixcnt/c.cand; */
-  while(c.pdc < prescan[nidx+1].pdc) {
+  while(c.pdc < prescan[nidx+1].pdc && nidx < 511) {
     prescan[nidx]=prescan[nidx+1];
     nidx++;
   }
   prescan[nidx]=c;
 }
-
-static int
-pixbox(i_color *ic) { return ((ic->channel[0] & 224)<<1)+ ((ic->channel[1]&224)>>2) + ((ic->channel[2] &224) >> 5); }
 
 static int
 pboxcmp(const pbox *a,const pbox *b) {
@@ -753,13 +1137,6 @@ boxrand(int box,cvec *cv) {
   cv->b=6+(rand()%25)+((box&7)<<5);
 }
 
-static unsigned char
-g_sat(int in) {
-  if (in>255) { return 255; }
-  else if (in>0) return in;
-  return 0;
-}
-
 static float
 frandn(void) {
 
@@ -776,20 +1153,6 @@ frandn(void) {
   w = sqrt((-2*log(w))/w);
   return u1*w;
 }
-
-static
-float
-frand(void) {
-  return rand()/(RAND_MAX+1.0);
-}
-
-static
-int
-eucl_d(cvec* cv,i_color *cl) { return PWR2(cv->r-cl->channel[0])+PWR2(cv->g-cl->channel[1])+PWR2(cv->b-cl->channel[2]); }
-
-static
-int
-ceucl_d(i_color *c1, i_color *c2) { return PWR2(c1->channel[0]-c2->channel[0])+PWR2(c1->channel[1]-c2->channel[1])+PWR2(c1->channel[2]-c2->channel[2]); }
 
 /* Create hash index */
 static
@@ -1054,6 +1417,20 @@ unsigned char orddith_maps[][64] =
     208, 192, 152,  88,  84,  20,  64, 104,
     232, 224, 196, 140, 108,  68,  24,  76,
     248, 244, 212, 188, 160, 124,  80,   4,
+  },
+  {
+    /* tiny
+       good for display, bad for print
+       hand generated
+    */
+      0, 128,  32, 192,   8, 136,  40, 200,
+    224,  64, 160, 112, 232,  72, 168, 120,
+     48, 144,  16, 208,  56, 152,  24, 216,
+    176,  96, 240,  80, 184, 104, 248,  88,
+     12, 140,  44, 204,   4, 132,  36, 196,
+    236,  76, 172, 124, 228,  68, 164, 116,
+     60, 156,  28, 220,  52, 148,  20, 212,
+    188, 108, 252,  92, 180, 100, 244,  84,
   },
 };
 

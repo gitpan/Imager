@@ -48,6 +48,12 @@ enum rm_byte_codes {
   rbc_not, /* !ra -> r */
   rbc_abs, /* abs(ra) -> r */
   rbc_ret, /* returns pa */
+  rbc_jump, /* jump to ja */
+  rbc_jumpz, /* jump if ra == 0 to jb */
+  rbc_jumpnz, /* jump if ra != 0 to jb */
+  rbc_set, /* ra -> r */
+  rbc_setp, /* pa -> p*/
+  rbc_print, /* prints ra */
   rbc_op_count
 };
 

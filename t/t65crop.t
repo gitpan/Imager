@@ -12,7 +12,7 @@ $img=Imager->new() || die "unable to create image object\n";
 
 print "ok 1\n";
 
-$img->open(file=>'testimg/scale.ppm',type=>'ppm');
+$img->open(file=>'testimg/scale.ppm',type=>'pnm');
 
 sub skip { 
     print $_[0];
@@ -28,6 +28,6 @@ $nimg=$img->crop(top=>10, left=>10, bottom=>25, right=>25)
 #	xopcodes=>[qw( x y Add)],yopcodes=>[qw( x y Sub)],parm=>[]
 
 print "ok 2\n";
-$nimg->write(type=>'ppm',file=>'testout/t65.ppm') || die "error in write()\n";
+$nimg->write(type=>'pnm',file=>'testout/t65.ppm') || die "error in write()\n";
 
 print "ok 3\n";

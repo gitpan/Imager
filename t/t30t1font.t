@@ -9,6 +9,8 @@
 BEGIN { $| = 1; print "1..4\n"; }
 END {print "not ok 1\n" unless $loaded;}
 use Imager qw(:all);
+use Imager::Color;
+
 $loaded = 1;
 print "ok 1\n";
 
@@ -43,7 +45,7 @@ if (!(i_has_format("t1")) ) {
   $fnum=Imager::i_t1_new($fontname_pfb,$fontname_afm); # this will load the pfb font
   if ($fnum<0) { die "Couldn't load font $fontname_pfb"; }
  
-  $bgcolor=i_color_new(255,0,0,0);
+  $bgcolor=Imager::Color->new(255,0,0,0);
   $overlay=Imager::ImgRaw::new(200,70,3);
   
   i_t1_cp($overlay,5,50,1,$fnum,50.0,'XMCLH',5,1);
@@ -59,7 +61,7 @@ if (!(i_has_format("t1")) ) {
 
   print "ok 2\n";
   
-  $bgcolor=i_color_set($bgcolor,200,200,200,0);
+  $bgcolor=Imager::Color::set($bgcolor,200,200,200,0);
   $backgr=Imager::ImgRaw::new(280,150,3);
 
   i_t1_set_aa(2);

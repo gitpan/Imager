@@ -4,7 +4,7 @@ $Verbose = 1;
 
 $lddl=$Config{"lddlflags"};
 
-@plugins= qw(dyntest dt2);
+@plugins= qw(dyntest dt2 mandelbrot flines);
 
 $libstr=join(' ',map { $_.'.$(SO)' } @plugins);
 
@@ -21,7 +21,6 @@ WriteMakefile(
 
 
 
-
 sub lddl_magic {
   my $t;
   $t=$lddl;
@@ -34,6 +33,7 @@ sub lddl_magic {
 
 
 sub MY::top_targets {
+    use Config;
 if ($^O eq 'aix') {
         '
 all :: dynamic
@@ -42,6 +42,26 @@ dynamic ::       '.$libstr.(join("\n",map { qq{
 
 $_.\$(SO): $_\$(OBJ_EXT)
 	LD_RUN_PATH="\$(LD_RUN_PATH)" \$(LD) -o \$\@ }.lddl_magic($_).qq{ \$(OTHERLDFLAGS) $_\$(OBJ_EXT)
+
+} } @plugins)).'
+
+
+pure_all :: 
+	\$(NOOP)
+
+';
+
+}
+elsif ($^O =~ /win32/i && $Config{cc} =~ /cl/) {
+    my @libpth = grep /\S/, split /("[^"]*"|\S+)/,$Config{libpth};
+    
+        '
+all :: dynamic
+
+dynamic ::       '.$libstr.(join("\n",map { qq{
+
+$_.\$(SO): $_\$(OBJ_EXT)
+    \$(LD) /OUT:\$\@ }.lddl_magic($_).qq{ \$(OTHERLDFLAGS) $_\$(OBJ_EXT) $Config{libs} }.join(' ', map "/libpath:$_", @libpth).qq{
 
 } } @plugins)).'
 
