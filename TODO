@@ -2,15 +2,6 @@
    'far' that idea should be taken - since all sorts of wierd shit like circular
    references can happen.
 
--- Most of the read and write routines leak memory at an alarming rate
-   like, esp. the gif ones.
-
-   there are two solutions to this:
-	 a) make everything go through a debug malloc()
-	    version that checks start and offset into a table, so we can check for memory leaks.
-	 b) Have Malloc errors fatal... there probably isn't much harm in having it this way.
-	    but it would be nicer if it would not die on the spot.
-
 -- Unify file IO... probably it would be best to do something similar to streams, or just switch 
    to streams.
 

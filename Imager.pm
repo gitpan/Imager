@@ -104,7 +104,7 @@ BEGIN {
     require Exporter;
     require DynaLoader;
 
-    $VERSION = '0.27';
+    $VERSION = '0.28';
 
     @ISA = qw(Exporter DynaLoader);
     bootstrap Imager $VERSION;
@@ -890,7 +890,6 @@ and 500 pixels tall.
 
   $img->scale(scalefactor=>0.25); 175x125 $img->scale(); # 350x250
 
-
 if you want to create low quality previews of images you can pass
 qtype=>'preview' to scale and it will use nearest neighbor sampling
 instead of filtering. It is much faster but also generates worse
@@ -995,7 +994,6 @@ the XS part of the module.
             i_readraw($imref,$fd,$xsize,$ysize,$datachannels,
   		    $storechannels,$interleave);
             i_writeraw($imref,$fd);
-  
   
   
   

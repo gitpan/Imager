@@ -1,5 +1,5 @@
 ===============================================================
-Copyright (c) 1999 Arnar M. Hrafnkelsson. All rights reserved.
+Copyright (c) 1999, 2000 Arnar M. Hrafnkelsson. All rights reserved.
 This program is free software; you can redistribute it and/or
 modify it under the same terms as Perl itself.
 ===============================================================
@@ -28,6 +28,9 @@ from the binaries you can do so by setting the env IMAGER_NOLOG
 to something. If you want to enable malloc debugging to check for leaks
 then set IMAGER_DEBUG_MALLOC to something.  Needless to say it is
 pretty pointless to have malloc debug enabled with no logging.
+If you enable the truetype part and want it to be tested you must set
+the environment variable TTFONTTEST to a complete path to a truetype
+font.
 
 =================
 

@@ -148,7 +148,7 @@ Revision history for Perl extension Imager.
 	transformations need to be specified in rpn (postfix) notation. It
 	also can use the Affix::Infix2Postfix class to do the conversion for it.
 
-0.27    Tue Nov 23 03:57:00 EST 1999
+0.27    Tue Dec 28 03:57:00 EST 1999
 	  - This is a bugfix version mostly, thanks to claes for pointing
 	out the problems - fixed palette saving wasn't working correctly after
 	version 0.24 - rather surprised this didn't crash everything.
@@ -157,6 +157,10 @@ Revision history for Perl extension Imager.
 	or a mistake in it's documentation.  Another lingering bug since 0.24
 	what that $img->box() wasn't creating it's default color properly.
 	Added i_tt_text() method and more debuging to the truetype routines.      	
+	truetype testcase fixed and old debug rubish removed.
 
+0.28    Tue Jan  4 05:25:58 EST 2000
+	  - Only fixes to truetype test and transformation tests.
+	Thanks to schinder of cpan testers for testing and reporting.
 
 ===================================================
