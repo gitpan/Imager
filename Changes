@@ -640,14 +640,102 @@ Revision history for Perl extension Imager.
           it used fork() which caused problems on systems that didn't have
           a real fork().
 
-0.41?
+0.41
         - skip() in testtools should be skipn() and it should use the 
           loop variable for the test number
+
+0.42
+        - quote the 'min' parameter to scale in Imager::Transformations
+          and at least mention it in the docs beyond the examples
+        - document the values for the read() and write() method type 
+          parameter
+        - support UTF8 text with Freetype 1.x 
+        - second parameter to SvPV() must be of type STRLEN
+        - Doc pathces from cogent.
+        - Fixed out of bounds access on bitmap for flood fills.
+        - some char * vs unsigned char * casts missing on OSF1 v4.0
+        - some enums had , on the last item in datatypes.h, which OSF1
+          didn't like
+        - Compaq C 6.4 (OSF1) claims to be C99 but doesn't provide 
+          stdint.h, don't try to use it under OSF
+        - fix missing initialization in tags.c
+        - Change i_draw to i_line and have it use Bresenham's line
+          drawing algorithm.
+        - support has_chars() method for Freetype 1.x
+        - fixed log message for i_ft2_has_chars()
+        - fixed some broken checking for UTF8 in FT2 code
+        - handle UTF8 strings passed to T1 low-level functions
+        - handle flags for underline, strikethrough and overline for T1
+          low-level output functions
+        - OO interfaces to UTF8 and flags, for now leaving the flags as
+          specific to Imager::Font::Type1
+        - mc_web_map was storing colors with an alpha of 0
+        - update the URLs for libpng and zlib
+        - Fixed empty string handling for tt font driver.
+        - Fixed tiff handling of images all contained in a 
+          single strip (rowsperstrip = -1) and added a hack
+          for images missing the rowsperstrip tag.
+        - Fixed default parameters for crop()
+        - Added Preliminary specialized scaling code.
+        - Added image type detection.
+        - added smoke test for win32 font bounding_box() method, and
+          fixed the problem reported in ticket #1748.
+        - update t37w32font.t to use i_line() instead of i_draw()
+        - replaced non-portable call to rint() with (int)(dy+0.5) (so we
+          can build on Win32)
+        - the default tifflib warning handler was crashing on Win32
+          under ActivePerl, when an unrecognized tag was read from the 
+          file.  For now we'll just drop the warnings in the bit bucket.
+          (Ticket #1513)
+        - the code to read multiple tiffs didn't handle files with more
+          than five images correctly, causing a memory overrun.
+        - fix some minor test code hiccups
+        - implemented i_t1_has_chars(), tests for same
+        - added ExistenceTest.{pfb,afm,ttf} for testing $font->has_chars
+        - tests for Imager::Font::Type1::has_chars();
+        - tests for Imager::Font::Truetype::has_chars();
+        - internal and external bounding box calculations now use
+          the same hint flags as text output for Freetype 2.x
+        - made the i_foo_bbox() interface more expandable by using
+          symbolic constants for the sizes and array offsets
+        - added a / character to the ExistenceTest.foo fonts that 
+          overlaps the right side of the character cell, to test the 
+          advance width reporting.
+        - added advance width to the i_foo_bbox() interface, and 
+          implemented it for FT2, FT1 and Type 1
+        - Imager::Font::bounding_box() now returns an Imager::Font::BBox
+          object in scalar context.
+        - implemented $font->align() text output method, for simple output
+          of aligned text
+        - created Imager::Font::Wrap::wrap_text to perform simple text 
+          wrapping
+        - FT1, FT2 and T1 fonts now support the face_name method
+        - FT1, FT2 and T1 now support the glyph_names() method
+        - Debian woody supplied FT2.0.9, which didn't support 
+          FT_Has_PS_Names(), so we use the FT_HAS_GLYPH_NAMES() macro 
+          instead.
+        - some older FT1 don't define TT_MS_LANGID_ENGLISH_GENERAL,
+          which we use, define it if freetype doesn't.
+        - Added extra options to rubthrough() so only a subpart of
+          source image is used.
+        - the image fills didn't handle filling with source images of
+          less than four channels correctly
+        - added comment support the postfix transform2() expression
+          parser
+        - transform2() can now produce images with other than 3 channels.
+        - added a correct T_AVREF input mapping to the typemap to 
+          simplify parameter lists
+	- shut off one of the align subtests in the ft2 test.  The triggering
+	  is likely an ft2 bug.
+        - removed some half written scaling optimization code.
+	- added /sw/lib and /sw/include to the Makefile.PL code for osX.
+	- removed all references to the www.eecs.umich.edu page and changed
+	  them to imager.perl.org ones.
 
 =================================================================
 
         For latest versions check the Imager-devel pages:
-        http://www.eecs.umich.edu/~addi/perl/Imager/devel/
+        http://imager.perl.org/~addi/perl/Imager/
 
 =================================================================
 

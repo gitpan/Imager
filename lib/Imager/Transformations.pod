@@ -10,7 +10,7 @@ Imager::Transformations - Simple transformations of one image into another.
 
   $newimg = $img->scale(xpixels=>400);
   $newimg = $img->scale(xpixels=>400, ypixels=>400);
-  $newimg = $img->scale(xpixels=>400, ypixels=>400, type=>min);
+  $newimg = $img->scale(xpixels=>400, ypixels=>400, type=>'min');
   $newimg = $img->scale(scalefactor=>0.25);
 
   $newimg = $img->crop(left=>50, right=>100, top=>10, bottom=>100); 
@@ -18,7 +18,10 @@ Imager::Transformations - Simple transformations of one image into another.
 
   $dest->paste(left=>40,top=>20,img=>$logo);
 
-  $img->rubthrough(src=>$srcimage,tx=>30,ty=>50);
+  $img->rubthrough(src=>$srcimage,tx=>30, ty=>50);
+  $img->rubthrough(src=>$srcimage,tx=>30, ty=>50,
+                   src_minx=>20, src_miny=>30,
+                   src_maxx=>20, src_maxy=>30);
 
 
   $img->flip(dir=>"h");       # horizontal flip
@@ -76,14 +79,15 @@ if you want to keep an original after doing something that changes the image.
 To scale an image so porportions are maintained use the
 C<$img-E<gt>scale()> method.  if you give either a xpixels or ypixels
 parameter they will determine the width or height respectively.  If
-both are given the one resulting in a larger image is used.  example:
-C<$img> is 700 pixels wide and 500 pixels tall.
+both are given the one resulting in a larger image is used, unless you
+set the C<type> parameter to C<'min'>.  example: C<$img> is 700 pixels
+wide and 500 pixels tall.
 
   $newimg = $img->scale(xpixels=>400); # 400x285
   $newimg = $img->scale(ypixels=>400); # 560x400
 
   $newimg = $img->scale(xpixels=>400,ypixels=>400); # 560x400
-  $newimg = $img->scale(xpixels=>400,ypixels=>400,type=>min); # 400x285
+  $newimg = $img->scale(xpixels=>400,ypixels=>400,type=>'min'); # 400x285
 
   $newimg = $img->scale(scalefactor=>0.25); 175x125 
   $newimg = $img->scale(); # 350x250
@@ -166,12 +170,17 @@ A more complicated way of blending images is where one image is
 put 'over' the other with a certain amount of opaqueness.  The
 method that does this is rubthrough.
 
-  $img->rubthrough(src=>$srcimage,tx=>30,ty=>50);
+  $img->rubthrough(src=>$overlay,
+                   tx=>30,       ty=>50,
+                   src_minx=>20, src_miny=>30,
+                   src_maxx=>20, src_maxy=>30);
 
-That will take the image C<$srcimage> and overlay it with the upper
-left corner at (30,50).  You can rub 2 or 4 channel images onto a 3
-channel image, or a 2 channel image onto a 1 channel image.  The last
-channel is used as an alpha channel.
+That will take the sub image defined by I<$overlay> and
+I<[src_minx,src_maxx)[src_miny,src_maxy)> and overlay it on top of
+I<$img> with the upper left corner at (30,50).  You can rub 2 or 4
+channel images onto a 3 channel image, or a 2 channel image onto a 1
+channel image.  The last channel is used as an alpha channel.  To add
+an alpha channel to an image see I<convert()>.
 
 
 =item flip

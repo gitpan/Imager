@@ -649,9 +649,10 @@ i_copy(i_img *im, i_img *src) {
 
 
 /*
-=item i_rubthru(im, src, tx, ty)
+=item i_rubthru(im, src, tx, ty, src_minx, src_miny, src_maxx, src_maxy )
 
-Takes the image I<src> and applies it at an original (I<tx>,I<ty>) in I<im>.
+Takes the sub image I<src[src_minx, src_maxx)[src_miny, src_maxy)> and
+overlays it at (I<tx>,I<ty>) on the image object.
 
 The alpha channel of each pixel in I<src> is used to control how much
 the existing colour in I<im> is replaced, if it is 255 then the colour
@@ -662,14 +663,17 @@ unmodified.
 */
 
 int
-i_rubthru(i_img *im,i_img *src,int tx,int ty) {
+i_rubthru(i_img *im, i_img *src, int tx, int ty, int src_minx, int src_miny,
+	  int src_maxx, int src_maxy) {
   int x, y, ttx, tty;
   int chancount;
   int chans[3];
   int alphachan;
   int ch;
 
-  mm_log((1,"i_rubthru(im %p, src %p, tx %d, ty %d)\n", im, src, tx, ty));
+  mm_log((1,"i_rubthru(im %p, src %p, tx %d, ty %d, src_minx %d, "
+	  "src_miny %d, src_maxx %d, src_maxy %d)\n",
+	  im, src, tx, ty, src_minx, src_miny, src_maxx, src_maxy));
   i_clear_error();
 
   if (im->channels == 3 && src->channels == 4) {
@@ -697,11 +701,10 @@ i_rubthru(i_img *im,i_img *src,int tx,int ty) {
        changed in a similar fashion - TC */
     int alpha;
     i_color pv, orig, dest;
-    ttx = tx;
-    for(x=0; x<src->xsize; x++) {
-      tty=ty;
-      for(y=0;y<src->ysize;y++) {
-        /* fprintf(stderr,"reading (%d,%d) writing (%d,%d).\n",x,y,ttx,tty); */
+    tty = ty;
+    for(y = src_miny; y < src_maxy; y++) {
+      ttx = tx;
+      for(x = src_minx; x < src_maxx; x++) {
         i_gpix(src, x,   y,   &pv);
         i_gpix(im,  ttx, tty, &orig);
         alpha = pv.channel[alphachan];
@@ -710,31 +713,30 @@ i_rubthru(i_img *im,i_img *src,int tx,int ty) {
                               + (255 - alpha) * orig.channel[ch])/255;
         }
         i_ppix(im, ttx, tty, &dest);
-        tty++;
+	ttx++;
       }
-      ttx++;
+      tty++;
     }
   }
   else {
     double alpha;
     i_fcolor pv, orig, dest;
 
-    ttx = tx;
-    for(x=0; x<src->xsize; x++) {
-      tty=ty;
-      for(y=0;y<src->ysize;y++) {
-        /* fprintf(stderr,"reading (%d,%d) writing (%d,%d).\n",x,y,ttx,tty); */
+    tty = ty;
+    for(y = src_miny; y < src_maxy; y++) {
+      ttx = tx;
+      for(x = src_minx; x < src_maxx; x++) {
         i_gpixf(src, x,   y,   &pv);
         i_gpixf(im,  ttx, tty, &orig);
         alpha = pv.channel[alphachan];
         for (ch = 0; ch < chancount; ++ch) {
           dest.channel[ch] = alpha * pv.channel[chans[ch]]
-                              + (1 - alpha) * orig.channel[ch];
+	    + (1 - alpha) * orig.channel[ch];
         }
         i_ppixf(im, ttx, tty, &dest);
-        tty++;
+        ttx++;
       }
-      ttx++;
+      tty++;
     }
   }
 
@@ -867,6 +869,7 @@ Lanczos(float x) {
   else return(sin(PIx) / PIx * sin(PIx2) / PIx2);
 }
 
+
 /*
 =item i_scaleaxis(im, value, axis)
 
@@ -889,6 +892,7 @@ i_scaleaxis(i_img *im, float Value, int Axis) {
   i_img *new_img;
 
   mm_log((1,"i_scaleaxis(im %p,Value %.2f,Axis %d)\n",im,Value,Axis));
+
 
   if (Axis == XAXIS) {
     hsize = (int)(0.5 + im->xsize * Value);
@@ -2032,6 +2036,87 @@ int i_free_gen_write_data(i_gen_write_data *info, int flush)
 
   return result;
 }
+
+
+
+/*
+=item i_test_format_probe(io_glue *data, int length)
+
+Cleans up the write buffer.
+
+Will flush any left-over data if I<flush> is non-zero.
+
+Returns non-zero if flush is zero or if info->cb() returns non-zero.
+
+Return zero only if flush is non-zero and info->cb() returns zero.
+ie. if it fails.
+
+=cut
+*/
+
+
+char *
+i_test_format_probe(io_glue *data, int length) {
+
+  static struct {
+    char *magic;
+    char *name;
+  } formats[] = {
+    {"\xFF\xD8", "jpeg"},
+    {"GIF87a", "gif"},
+    {"GIF89a", "gif"},
+    {"MM\0*", "tiff"},
+    {"II*\0", "tiff"},
+    {"BM", "bmp"},
+    {"\x89PNG\x0d\x0a\x1a\x0a", "png"},
+    {"P1", "pnm"},
+    {"P2", "pnm"},
+    {"P3", "pnm"},
+    {"P4", "pnm"},
+    {"P5", "pnm"},
+    {"P6", "pnm"},
+  };
+  unsigned int i;
+  char head[18];
+  char *match = NULL;
+  ssize_t rc;
+
+  io_glue_commit_types(data);
+  rc = data->readcb(data, head, 18);
+  if (rc == -1) return NULL;
+  data->seekcb(data, -rc, SEEK_CUR);
+
+  for(i=0; i<sizeof(formats)/sizeof(formats[0]); i++) { 
+    int c;
+    ssize_t len = strlen(formats[i].magic);
+    if (rc<len) continue;
+    c = !strncmp(formats[i].magic, head, len);
+    if (c) {
+      match = formats[i].name;
+      break;
+    }
+  }
+
+  /*
+    if (match && !strcmp(match, "jpeg")) {
+    unsigned int x0, x1;
+    rc = data->readcb(data, head, 18);
+    if (rc == -1) return NULL;
+    x0 = (unsigned char)head[0];
+    x1 = (unsigned char)head[1];
+    data->seekcb(data, -rc, SEEK_CUR);
+    printf("Jpeg reread: %x %x\n", x0, x1);
+    }
+  */
+
+  if (!match && 
+      (rc == 18) &&
+      tga_header_verify(head)) return "tga";
+  return match;
+}
+
+
+
 
 /*
 =back

@@ -11,11 +11,20 @@ float			T_FLOAT
 float*			T_ARRAY
 undef_int		T_IV_U
 HASH			T_HVREF
+utf8_str		T_UTF8_STR
 #############################################################################
 INPUT
 T_PTR_NULL
 	if (SvOK($arg)) $var = INT2PTR($type,SvIV($arg));
 	else $var = NULL
+
+# the pre-5.8.0 T_AVREF input map was fixed in 5.8.0
+T_AVREF
+        if (SvROK($arg) && SvTYPE(SvRV($arg))==SVt_PVAV)
+            $var = (AV*)SvRV($arg);
+        else
+            Perl_croak(aTHX_ \"$var is not an array reference\")
+
 #############################################################################
 OUTPUT
 T_IV_U

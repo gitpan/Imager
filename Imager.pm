@@ -35,7 +35,7 @@ use Imager::Font;
 		i_img_setmask
 		i_img_getmask
 
-		i_draw
+		i_line
 		i_line_aa
 		i_box
 		i_box_filled
@@ -147,7 +147,7 @@ BEGIN {
   require Exporter;
   require DynaLoader;
 
-  $VERSION = '0.41';
+  $VERSION = '0.42';
   @ISA = qw(Exporter DynaLoader);
   bootstrap Imager $VERSION;
 }
@@ -568,7 +568,7 @@ sub paste {
 sub crop {
   my $self=shift;
   unless ($self->{IMG}) { $self->{ERRSTR}='empty input image'; return undef; }
-  my %hsh=(left=>0,right=>0,top=>0,bottom=>0,@_);
+  my %hsh=(left=>0,right=>$self->getwidth(),top=>0,bottom=>$self->getheight(),@_);
 
   my ($w,$h,$l,$r,$b,$t)=($self->getwidth(),$self->getheight(),
 				@hsh{qw(left right bottom top)});
@@ -890,14 +890,14 @@ sub settag {
   }
 }
 
-my @needseekcb = qw/tiff/;
-my %needseekcb = map { $_, $_ } @needseekcb;
-
 
 sub _get_reader_io {
-  my ($self, $input, $type) = @_;
+  my ($self, $input) = @_;
 
-  if ($input->{fd}) {
+	if ($input->{io}) {
+		return $input->{io}, undef;
+	}
+  elsif ($input->{fd}) {
     return io_new_fd($input->{fd});
   }
   elsif ($input->{fh}) {
@@ -921,8 +921,8 @@ sub _get_reader_io {
     return io_new_buffer($input->{data});
   }
   elsif ($input->{callback} || $input->{readcb}) {
-    if ($needseekcb{$type} && !$input->{seekcb}) {
-      $self->_set_error("Format $type needs a seekcb parameter");
+    if (!$input->{seekcb}) {
+      $self->_set_error("Need a seekcb parameter");
     }
     if ($input->{maxbuffer}) {
       return io_new_cb($input->{writecb},
@@ -1011,201 +1011,132 @@ sub read {
   # has been there for half a year dude.
   # Look, i just work here, ok?
 
-  if (!$input{'type'} and $input{file}) {
-    $input{'type'}=$FORMATGUESS->($input{file});
-  }
+  my ($IO, $fh) = $self->_get_reader_io(\%input) or return;
+
   unless ($input{'type'}) {
-    $self->_set_error('type parameter missing and not possible to guess from extension'); 
+		$input{'type'} = i_test_format_probe($IO, -1);
+	}
+
+  unless ($input{'type'}) {
+	  $self->_set_error('type parameter missing and not possible to guess from extension'); 
     return undef;
   }
-  if (!$formats{$input{'type'}}) {
-    $self->{ERRSTR}='format not supported'; return undef;
+
+  # Setup data source
+  if ( $input{'type'} eq 'jpeg' ) {
+    ($self->{IMG},$self->{IPTCRAW}) = i_readjpeg_wiol( $IO );
+    if ( !defined($self->{IMG}) ) {
+      $self->{ERRSTR}='unable to read jpeg image'; return undef;
+    }
+    $self->{DEBUG} && print "loading a jpeg file\n";
+    return $self;
   }
 
-  my %iolready=(jpeg=>1, png=>1, tiff=>1, pnm=>1, raw=>1, bmp=>1, tga=>1, rgb=>1, gif=>1);
-
-  if ($iolready{$input{'type'}}) {
-    # Setup data source
-    my ($IO, $fh) = $self->_get_reader_io(\%input, $input{'type'})
-      or return;
-
-    if ( $input{'type'} eq 'jpeg' ) {
-      ($self->{IMG},$self->{IPTCRAW})=i_readjpeg_wiol( $IO );
-      if ( !defined($self->{IMG}) ) {
-	$self->{ERRSTR}='unable to read jpeg image'; return undef;
-      }
-      $self->{DEBUG} && print "loading a jpeg file\n";
-      return $self;
+  if ( $input{'type'} eq 'tiff' ) {
+    $self->{IMG}=i_readtiff_wiol( $IO, -1 ); # Fixme, check if that length parameter is ever needed
+    if ( !defined($self->{IMG}) ) {
+      $self->{ERRSTR}=$self->_error_as_msg(); return undef;
     }
+    $self->{DEBUG} && print "loading a tiff file\n";
+    return $self;
+  }
 
-    if ( $input{'type'} eq 'tiff' ) {
-      $self->{IMG}=i_readtiff_wiol( $IO, -1 ); # Fixme, check if that length parameter is ever needed
-      if ( !defined($self->{IMG}) ) {
-	$self->{ERRSTR}=$self->_error_as_msg(); return undef;
-      }
-      $self->{DEBUG} && print "loading a tiff file\n";
-      return $self;
+  if ( $input{'type'} eq 'pnm' ) {
+    $self->{IMG}=i_readpnm_wiol( $IO, -1 ); # Fixme, check if that length parameter is ever needed
+    if ( !defined($self->{IMG}) ) {
+      $self->{ERRSTR}='unable to read pnm image: '._error_as_msg(); return undef;
     }
+    $self->{DEBUG} && print "loading a pnm file\n";
+    return $self;
+  }
 
-    if ( $input{'type'} eq 'pnm' ) {
-      $self->{IMG}=i_readpnm_wiol( $IO, -1 ); # Fixme, check if that length parameter is ever needed
-      if ( !defined($self->{IMG}) ) {
-	$self->{ERRSTR}='unable to read pnm image: '._error_as_msg(); return undef;
-      }
-      $self->{DEBUG} && print "loading a pnm file\n";
-      return $self;
+  if ( $input{'type'} eq 'png' ) {
+    $self->{IMG}=i_readpng_wiol( $IO, -1 ); # Fixme, check if that length parameter is ever needed
+    if ( !defined($self->{IMG}) ) {
+      $self->{ERRSTR}='unable to read png image';
+      return undef;
     }
+    $self->{DEBUG} && print "loading a png file\n";
+  }
 
-    if ( $input{'type'} eq 'png' ) {
-      $self->{IMG}=i_readpng_wiol( $IO, -1 ); # Fixme, check if that length parameter is ever needed
-      if ( !defined($self->{IMG}) ) {
-	$self->{ERRSTR}='unable to read png image';
-	return undef;
-      }
-      $self->{DEBUG} && print "loading a png file\n";
+  if ( $input{'type'} eq 'bmp' ) {
+    $self->{IMG}=i_readbmp_wiol( $IO );
+    if ( !defined($self->{IMG}) ) {
+      $self->{ERRSTR}=$self->_error_as_msg();
+      return undef;
     }
+    $self->{DEBUG} && print "loading a bmp file\n";
+  }
 
-    if ( $input{'type'} eq 'bmp' ) {
-      $self->{IMG}=i_readbmp_wiol( $IO );
-      if ( !defined($self->{IMG}) ) {
-	$self->{ERRSTR}=$self->_error_as_msg();
-	return undef;
-      }
-      $self->{DEBUG} && print "loading a bmp file\n";
+  if ( $input{'type'} eq 'gif' ) {
+    if ($input{colors} && !ref($input{colors})) {
+      # must be a reference to a scalar that accepts the colour map
+      $self->{ERRSTR} = "option 'colors' must be a scalar reference";
+      return undef;
     }
-
-    if ( $input{'type'} eq 'gif' ) {
-      if ($input{colors} && !ref($input{colors})) {
-	# must be a reference to a scalar that accepts the colour map
-	$self->{ERRSTR} = "option 'colors' must be a scalar reference";
-	return undef;
+    if ($input{colors}) {
+      my $colors;
+      ($self->{IMG}, $colors) =i_readgif_wiol( $IO );
+      if ($colors) {
+	${ $input{colors} } = [ map { NC(@$_) } @$colors ];
       }
-      if ($input{colors}) {
-        my $colors;
-        ($self->{IMG}, $colors) =i_readgif_wiol( $IO );
-        if ($colors) {
-          ${ $input{colors} } = [ map { NC(@$_) } @$colors ];
-        }
-      }
-      else {
-        $self->{IMG} =i_readgif_wiol( $IO );
-      }
-      if ( !defined($self->{IMG}) ) {
-	$self->{ERRSTR}=$self->_error_as_msg();
-	return undef;
-      }
-      $self->{DEBUG} && print "loading a gif file\n";
     }
-
-    if ( $input{'type'} eq 'tga' ) {
-      $self->{IMG}=i_readtga_wiol( $IO, -1 ); # Fixme, check if that length parameter is ever needed
-      if ( !defined($self->{IMG}) ) {
-	$self->{ERRSTR}=$self->_error_as_msg();
-	return undef;
-      }
-      $self->{DEBUG} && print "loading a tga file\n";
+    else {
+      $self->{IMG} =i_readgif_wiol( $IO );
     }
-
-    if ( $input{'type'} eq 'rgb' ) {
-      $self->{IMG}=i_readrgb_wiol( $IO, -1 ); # Fixme, check if that length parameter is ever needed
-      if ( !defined($self->{IMG}) ) {
-	$self->{ERRSTR}=$self->_error_as_msg();
-	return undef;
-      }
-      $self->{DEBUG} && print "loading a tga file\n";
+    if ( !defined($self->{IMG}) ) {
+      $self->{ERRSTR}=$self->_error_as_msg();
+      return undef;
     }
+    $self->{DEBUG} && print "loading a gif file\n";
+  }
 
-
-    if ( $input{'type'} eq 'raw' ) {
-      my %params=(datachannels=>3,storechannels=>3,interleave=>1,%input);
-
-      if ( !($params{xsize} && $params{ysize}) ) {
-	$self->{ERRSTR}='missing xsize or ysize parameter for raw';
-	return undef;
-      }
-
-      $self->{IMG} = i_readraw_wiol( $IO,
-				     $params{xsize},
-				     $params{ysize},
-				     $params{datachannels},
-				     $params{storechannels},
-				     $params{interleave});
-      if ( !defined($self->{IMG}) ) {
-	$self->{ERRSTR}='unable to read raw image';
-	return undef;
-      }
-      $self->{DEBUG} && print "loading a raw file\n";
+  if ( $input{'type'} eq 'tga' ) {
+    $self->{IMG}=i_readtga_wiol( $IO, -1 ); # Fixme, check if that length parameter is ever needed
+    if ( !defined($self->{IMG}) ) {
+      $self->{ERRSTR}=$self->_error_as_msg();
+      return undef;
     }
+    $self->{DEBUG} && print "loading a tga file\n";
+  }
 
-  } else {
-
-    # Old code for reference while changing the new stuff
-
-    if (!$input{'type'} and $input{file}) {
-      $input{'type'}=$FORMATGUESS->($input{file});
+  if ( $input{'type'} eq 'rgb' ) {
+    $self->{IMG}=i_readrgb_wiol( $IO, -1 ); # Fixme, check if that length parameter is ever needed
+    if ( !defined($self->{IMG}) ) {
+      $self->{ERRSTR}=$self->_error_as_msg();
+      return undef;
     }
+    $self->{DEBUG} && print "loading a tga file\n";
+  }
 
-    if (!$input{'type'}) {
-      $self->{ERRSTR}='type parameter missing and not possible to guess from extension'; return undef;
-    }
 
-    if (!$formats{$input{'type'}}) {
-      $self->{ERRSTR}='format not supported';
+  if ( $input{'type'} eq 'raw' ) {
+    my %params=(datachannels=>3,storechannels=>3,interleave=>1,%input);
+
+    if ( !($params{xsize} && $params{ysize}) ) {
+      $self->{ERRSTR}='missing xsize or ysize parameter for raw';
       return undef;
     }
 
-    my ($fh, $fd);
-    if ($input{file}) {
-      $fh = new IO::File($input{file},"r");
-      if (!defined $fh) {
-	$self->{ERRSTR}='Could not open file';
-	return undef;
-      }
-      binmode($fh);
-      $fd = $fh->fileno();
+    $self->{IMG} = i_readraw_wiol( $IO,
+				   $params{xsize},
+				   $params{ysize},
+				   $params{datachannels},
+				   $params{storechannels},
+				   $params{interleave});
+    if ( !defined($self->{IMG}) ) {
+      $self->{ERRSTR}='unable to read raw image';
+      return undef;
     }
-
-    if ($input{fd}) {
-      $fd=$input{fd};
-    }
-
-    if ( $input{'type'} eq 'gif' ) {
-      my $colors;
-      if ($input{colors} && !ref($input{colors})) {
-	# must be a reference to a scalar that accepts the colour map
-	$self->{ERRSTR} = "option 'colors' must be a scalar reference";
-	return undef;
-      }
-      if (exists $input{data}) {
-	if ($input{colors}) {
-	  ($self->{IMG}, $colors) = i_readgif_scalar($input{data});
-	} else {
-	  $self->{IMG}=i_readgif_scalar($input{data});
-	}
-      } else {
-	if ($input{colors}) {
-	  ($self->{IMG}, $colors) = i_readgif( $fd );
-	} else {
-	  $self->{IMG} = i_readgif( $fd )
-	}
-      }
-      if ($colors) {
-	# we may or may not change i_readgif to return blessed objects...
-	${ $input{colors} } = [ map { NC(@$_) } @$colors ];
-      }
-      if ( !defined($self->{IMG}) ) {
-	$self->{ERRSTR}= 'reading GIF:'._error_as_msg();
-	return undef;
-      }
-      $self->{DEBUG} && print "loading a gif file\n";
-    }
+    $self->{DEBUG} && print "loading a raw file\n";
   }
+
   return $self;
 }
 
 sub _fix_gif_positions {
   my ($opts, $opt, $msg, @imgs) = @_;
-  
+
   my $positions = $opts->{'gif_positions'};
   my $index = 0;
   for my $pos (@$positions) {
@@ -1294,9 +1225,9 @@ sub _set_opts {
 # Write an image to file
 sub write {
   my $self = shift;
-  my %input=(jpegquality=>75, 
-	     gifquant=>'mc', 
-	     lmdither=>6.0, 
+  my %input=(jpegquality=>75,
+	     gifquant=>'mc',
+	     lmdither=>6.0,
 	     lmfixed=>[],
 	     idstring=>"",
 	     compress=>1,
@@ -1306,9 +1237,6 @@ sub write {
 
   $self->_set_opts(\%input, "i_", $self)
     or return undef;
-
-  my %iolready=( tiff=>1, raw=>1, png=>1, pnm=>1, bmp=>1, jpeg=>1, tga=>1, 
-                 gif=>1 ); # this will be SO MUCH BETTER once they are all in there
 
   unless ($self->{IMG}) { $self->{ERRSTR}='empty input image'; return undef; }
 
@@ -1325,105 +1253,99 @@ sub write {
   my ($IO, $fh) = $self->_get_writer_io(\%input, $input{'type'})
     or return undef;
 
-  # this conditional is probably obsolete
-  if ($iolready{$input{'type'}}) {
+  if ($input{'type'} eq 'tiff') {
+    $self->_set_opts(\%input, "tiff_", $self)
+      or return undef;
+    $self->_set_opts(\%input, "exif_", $self)
+      or return undef;
 
-    if ($input{'type'} eq 'tiff') {
-      $self->_set_opts(\%input, "tiff_", $self)
-        or return undef;
-      $self->_set_opts(\%input, "exif_", $self)
-        or return undef;
-
-      if (defined $input{class} && $input{class} eq 'fax') {
-	if (!i_writetiff_wiol_faxable($self->{IMG}, $IO, $input{fax_fine})) {
-	  $self->{ERRSTR}='Could not write to buffer';
-	  return undef;
-	}
-      } else {
-	if (!i_writetiff_wiol($self->{IMG}, $IO)) {
-	  $self->{ERRSTR}='Could not write to buffer';
-	  return undef;
-	}
-      }
-    } elsif ( $input{'type'} eq 'pnm' ) {
-      $self->_set_opts(\%input, "pnm_", $self)
-        or return undef;
-      if ( ! i_writeppm_wiol($self->{IMG},$IO) ) {
-	$self->{ERRSTR}='unable to write pnm image';
+    if (defined $input{class} && $input{class} eq 'fax') {
+      if (!i_writetiff_wiol_faxable($self->{IMG}, $IO, $input{fax_fine})) {
+	$self->{ERRSTR}='Could not write to buffer';
 	return undef;
       }
-      $self->{DEBUG} && print "writing a pnm file\n";
-    } elsif ( $input{'type'} eq 'raw' ) {
-      $self->_set_opts(\%input, "raw_", $self)
-        or return undef;
-      if ( !i_writeraw_wiol($self->{IMG},$IO) ) {
-	$self->{ERRSTR}='unable to write raw image';
+    } else {
+      if (!i_writetiff_wiol($self->{IMG}, $IO)) {
+	$self->{ERRSTR}='Could not write to buffer';
 	return undef;
       }
-      $self->{DEBUG} && print "writing a raw file\n";
-    } elsif ( $input{'type'} eq 'png' ) {
-      $self->_set_opts(\%input, "png_", $self)
-        or return undef;
-      if ( !i_writepng_wiol($self->{IMG}, $IO) ) {
-	$self->{ERRSTR}='unable to write png image';
-	return undef;
-      }
-      $self->{DEBUG} && print "writing a png file\n";
-    } elsif ( $input{'type'} eq 'jpeg' ) {
-      $self->_set_opts(\%input, "jpeg_", $self)
-        or return undef;
-      $self->_set_opts(\%input, "exif_", $self)
-        or return undef;
-      if ( !i_writejpeg_wiol($self->{IMG}, $IO, $input{jpegquality})) {
-        $self->{ERRSTR} = $self->_error_as_msg();
-	return undef;
-      }
-      $self->{DEBUG} && print "writing a jpeg file\n";
-    } elsif ( $input{'type'} eq 'bmp' ) {
-      $self->_set_opts(\%input, "bmp_", $self)
-        or return undef;
-      if ( !i_writebmp_wiol($self->{IMG}, $IO) ) {
-	$self->{ERRSTR}='unable to write bmp image';
-	return undef;
-      }
-      $self->{DEBUG} && print "writing a bmp file\n";
-    } elsif ( $input{'type'} eq 'tga' ) {
-      $self->_set_opts(\%input, "tga_", $self)
-        or return undef;
-
-      if ( !i_writetga_wiol($self->{IMG}, $IO, $input{wierdpack}, $input{compress}, $input{idstring}) ) {
-	$self->{ERRSTR}=$self->_error_as_msg();
-	return undef;
-      }
-      $self->{DEBUG} && print "writing a tga file\n";
-    } elsif ( $input{'type'} eq 'gif' ) {
-      $self->_set_opts(\%input, "gif_", $self)
-        or return undef;
-      # compatibility with the old interfaces
-      if ($input{gifquant} eq 'lm') {
-        $input{make_colors} = 'addi';
-        $input{translate} = 'perturb';
-        $input{perturb} = $input{lmdither};
-      } elsif ($input{gifquant} eq 'gen') {
-        # just pass options through
-      } else {
-        $input{make_colors} = 'webmap'; # ignored
-        $input{translate} = 'giflib';
-      }
-      $rc = i_writegif_wiol($IO, \%input, $self->{IMG});
     }
-
-    if (exists $input{'data'}) {
-      my $data = io_slurp($IO);
-      if (!$data) {
-	$self->{ERRSTR}='Could not slurp from buffer';
-	return undef;
-      }
-      ${$input{data}} = $data;
+  } elsif ( $input{'type'} eq 'pnm' ) {
+    $self->_set_opts(\%input, "pnm_", $self)
+      or return undef;
+    if ( ! i_writeppm_wiol($self->{IMG},$IO) ) {
+      $self->{ERRSTR}='unable to write pnm image';
+      return undef;
     }
-    return $self;
+    $self->{DEBUG} && print "writing a pnm file\n";
+  } elsif ( $input{'type'} eq 'raw' ) {
+    $self->_set_opts(\%input, "raw_", $self)
+      or return undef;
+    if ( !i_writeraw_wiol($self->{IMG},$IO) ) {
+      $self->{ERRSTR}='unable to write raw image';
+      return undef;
+    }
+    $self->{DEBUG} && print "writing a raw file\n";
+  } elsif ( $input{'type'} eq 'png' ) {
+    $self->_set_opts(\%input, "png_", $self)
+      or return undef;
+    if ( !i_writepng_wiol($self->{IMG}, $IO) ) {
+      $self->{ERRSTR}='unable to write png image';
+      return undef;
+    }
+    $self->{DEBUG} && print "writing a png file\n";
+  } elsif ( $input{'type'} eq 'jpeg' ) {
+    $self->_set_opts(\%input, "jpeg_", $self)
+      or return undef;
+    $self->_set_opts(\%input, "exif_", $self)
+      or return undef;
+    if ( !i_writejpeg_wiol($self->{IMG}, $IO, $input{jpegquality})) {
+      $self->{ERRSTR} = $self->_error_as_msg();
+      return undef;
+    }
+    $self->{DEBUG} && print "writing a jpeg file\n";
+  } elsif ( $input{'type'} eq 'bmp' ) {
+    $self->_set_opts(\%input, "bmp_", $self)
+      or return undef;
+    if ( !i_writebmp_wiol($self->{IMG}, $IO) ) {
+      $self->{ERRSTR}='unable to write bmp image';
+      return undef;
+    }
+    $self->{DEBUG} && print "writing a bmp file\n";
+  } elsif ( $input{'type'} eq 'tga' ) {
+    $self->_set_opts(\%input, "tga_", $self)
+      or return undef;
+
+    if ( !i_writetga_wiol($self->{IMG}, $IO, $input{wierdpack}, $input{compress}, $input{idstring}) ) {
+      $self->{ERRSTR}=$self->_error_as_msg();
+      return undef;
+    }
+    $self->{DEBUG} && print "writing a tga file\n";
+  } elsif ( $input{'type'} eq 'gif' ) {
+    $self->_set_opts(\%input, "gif_", $self)
+      or return undef;
+    # compatibility with the old interfaces
+    if ($input{gifquant} eq 'lm') {
+      $input{make_colors} = 'addi';
+      $input{translate} = 'perturb';
+      $input{perturb} = $input{lmdither};
+    } elsif ($input{gifquant} eq 'gen') {
+      # just pass options through
+    } else {
+      $input{make_colors} = 'webmap'; # ignored
+      $input{translate} = 'giflib';
+    }
+    $rc = i_writegif_wiol($IO, \%input, $self->{IMG});
   }
 
+  if (exists $input{'data'}) {
+    my $data = io_slurp($IO);
+    if (!$data) {
+      $self->{ERRSTR}='Could not slurp from buffer';
+      return undef;
+    }
+    ${$input{data}} = $data;
+  }
   return $self;
 }
 
@@ -1800,9 +1722,14 @@ sub transform2 {
     $Imager::ERRSTR = Imager::Expr::error();
     return;
   }
+  my $channels = $opts->{channels} || 3;
+  unless ($channels >= 1 && $channels <= 4) {
+    return Imager->_set_error("channels must be an integer between 1 and 4");
+  }
 
   my $img = Imager->new();
-  $img->{IMG} = i_transform2($opts->{width}, $opts->{height}, $code->code(),
+  $img->{IMG} = i_transform2($opts->{width}, $opts->{height}, 
+			     $channels, $code->code(),
                              $code->nregs(), $code->cregs(),
                              [ map { $_->{IMG} } @imgs ]);
   if (!defined $img->{IMG}) {
@@ -1815,12 +1742,19 @@ sub transform2 {
 
 sub rubthrough {
   my $self=shift;
-  my %opts=(tx=>0,ty=>0,@_);
+  my %opts=(tx => 0,ty => 0, @_);
 
   unless ($self->{IMG}) { $self->{ERRSTR}='empty input image'; return undef; }
   unless ($opts{src} && $opts{src}->{IMG}) { $self->{ERRSTR}='empty input image for source'; return undef; }
 
-  unless (i_rubthru($self->{IMG}, $opts{src}->{IMG}, $opts{tx},$opts{ty})) {
+  %opts = (src_minx => 0,
+	   src_miny => 0,
+	   src_maxx => $opts{src}->getwidth(),
+	   src_maxy => $opts{src}->getheight(),
+	   %opts);
+
+  unless (i_rubthru($self->{IMG}, $opts{src}->{IMG}, $opts{tx}, $opts{ty},
+	  $opts{src_minx}, $opts{src_miny}, $opts{src_maxx}, $opts{src_maxy})) {
     $self->{ERRSTR} = $self->_error_as_msg();
     return undef;
   }
@@ -2015,29 +1949,34 @@ sub arc {
   return $self;
 }
 
-# Draws a line from one point to (but not including) the destination point
+# Draws a line from one point to the other
+# the endpoint is set if the endp parameter is set which it is by default.
+# to turn of the endpoint being set use endp=>0 when calling line.
 
 sub line {
   my $self=shift;
   my $dflcl=i_color_new(0,0,0,0);
-  my %opts=(color=>$dflcl,@_);
+  my %opts=(color=>$dflcl,
+	    endp => 1,
+	    @_);
   unless ($self->{IMG}) { $self->{ERRSTR}='empty input image'; return undef; }
 
   unless (exists $opts{x1} and exists $opts{y1}) { $self->{ERRSTR}='missing begining coord'; return undef; }
   unless (exists $opts{x2} and exists $opts{y2}) { $self->{ERRSTR}='missing ending coord'; return undef; }
 
   my $color = _color($opts{'color'});
-  unless ($color) { 
-    $self->{ERRSTR} = $Imager::ERRSTR; 
-    return; 
+  unless ($color) {
+    $self->{ERRSTR} = $Imager::ERRSTR;
+    return;
   }
+
   $opts{antialias} = $opts{aa} if defined $opts{aa};
   if ($opts{antialias}) {
-    i_line_aa($self->{IMG},$opts{x1}, $opts{y1}, $opts{x2}, $opts{y2}, 
-              $color);
+    i_line_aa($self->{IMG},$opts{x1}, $opts{y1}, $opts{x2}, $opts{y2},
+              $color, $opts{endp});
   } else {
-    i_draw($self->{IMG},$opts{x1}, $opts{y1}, $opts{x2}, $opts{y2}, 
-           $color);
+    i_line($self->{IMG},$opts{x1}, $opts{y1}, $opts{x2}, $opts{y2},
+           $color, $opts{endp});
   }
   return $self;
 }
@@ -2069,14 +2008,14 @@ sub polyline {
   if ($opts{antialias}) {
     for $pt(@points) {
       if (defined($ls)) { 
-        i_line_aa($self->{IMG},$ls->[0],$ls->[1],$pt->[0],$pt->[1],$color);
+        i_line_aa($self->{IMG},$ls->[0],$ls->[1],$pt->[0],$pt->[1],$color, 1);
       }
       $ls=$pt;
     }
   } else {
     for $pt(@points) {
       if (defined($ls)) { 
-        i_draw($self->{IMG},$ls->[0],$ls->[1],$pt->[0],$pt->[1],$color);
+        i_line($self->{IMG},$ls->[0],$ls->[1],$pt->[0],$pt->[1],$color,1);
       }
       $ls=$pt;
     }
@@ -2161,6 +2100,7 @@ sub polybezier {
 sub flood_fill {
   my $self = shift;
   my %opts = ( color=>Imager::Color->new(255, 255, 255), @_ );
+  my $rc;
 
   unless (exists $opts{'x'} && exists $opts{'y'}) {
     $self->{ERRSTR} = "missing seed x and y parameters";
@@ -2176,18 +2116,17 @@ sub flood_fill {
         return;
       }
     }
-    i_flood_cfill($self->{IMG}, $opts{'x'}, $opts{'y'}, $opts{fill}{fill});
+    $rc = i_flood_cfill($self->{IMG}, $opts{'x'}, $opts{'y'}, $opts{fill}{fill});
   }
   else {
     my $color = _color($opts{'color'});
-    unless ($color) { 
-      $self->{ERRSTR} = $Imager::ERRSTR; 
-      return; 
+    unless ($color) {
+      $self->{ERRSTR} = $Imager::ERRSTR;
+      return;
     }
-    i_flood_fill($self->{IMG}, $opts{'x'}, $opts{'y'}, $color);
+    $rc = i_flood_fill($self->{IMG}, $opts{'x'}, $opts{'y'}, $color);
   }
-
-  $self;
+  if ($rc) { $self; } else { $self->{ERRSTR} = $self->_error_as_msg(); return (); }
 }
 
 sub setpixel {
@@ -2701,9 +2640,10 @@ This document - Synopsis Example, Table of Contents and Overview.
 
 =item Imager::ImageTypes
 
+Basics of constructing image objects with C<new()>:
 Direct type/virtual images, RGB(A)/paletted images, 8/16/double
 bits/channel, color maps, channel masks, image tags, color
-quantization.
+quantization.  Also discusses basic image information methods.
 
 =item Imager::Files
 
@@ -2780,6 +2720,9 @@ In cases where no image object is associated with an operation
 C<$Imager::ERRSTR> is used to report errors not directly associated
 with an image object.
 
+The C<Imager-E<gt>new> method is described in detail in the 
+Imager::ImageTypes manpage.
+
 =head1 SUPPORT
 
 You can ask for help, report bugs or express your undying love for
@@ -2817,7 +2760,7 @@ Imager::Transformations(3), Imager::Engines(3), Imager::Filters(3),
 Imager::Expr(3), Imager::Matrix2d(3), Imager::Fountain(3)
 
 Affix::Infix2Postfix(3), Parse::RecDescent(3)
-http://www.eecs.umich.edu/~addi/perl/Imager/
+http://imager.perl.org/~addi/perl/Imager/
 
 =cut
 

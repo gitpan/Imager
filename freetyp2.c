@@ -12,7 +12,7 @@ freetyp2.c - font support via the FreeType library version 2.
   if (!i_ft2_getdpi(font, &xdpi, &ydpi)) { error }
   double matrix[6];
   if (!i_ft2_settransform(font, matrix)) { error }
-  int bbox[6];
+  int bbox[BOUNDING_BOX_COUNT];
   if (!i_ft2_bbox(font, cheight, cwidth, text, length, bbox, utf8)) { error }
   i_img *im = ...;
   i_color cl;
@@ -40,7 +40,6 @@ Truetype, Type1 and Windows FNT.
 #include FT_FREETYPE_H
 
 static void ft2_push_message(int code);
-static unsigned long utf8_advance(char **p, int *len);
 
 static FT_Library library;
 
@@ -286,7 +285,7 @@ Returns non-zero on success.
 */
 int
 i_ft2_bbox(FT2_Fonthandle *handle, double cheight, double cwidth, 
-           char *text, int len, int *bbox, int utf8) {
+           char const *text, int len, int *bbox, int utf8) {
   FT_Error error;
   int width;
   int index;
@@ -295,6 +294,8 @@ i_ft2_bbox(FT2_Fonthandle *handle, double cheight, double cwidth,
   int glyph_ascent, glyph_descent;
   FT_Glyph_Metrics *gm;
   int start = 0;
+  int loadFlags = FT_LOAD_DEFAULT;
+  int rightb;
 
   mm_log((1, "i_ft2_bbox(handle %p, cheight %f, cwidth %f, text %p, len %d, bbox %p)\n",
 	  handle, cheight, cwidth, text, len, bbox));
@@ -306,12 +307,15 @@ i_ft2_bbox(FT2_Fonthandle *handle, double cheight, double cwidth,
     i_push_error(0, "setting size");
   }
 
+  if (!handle->hint)
+    loadFlags |= FT_LOAD_NO_HINTING;
+
   first = 1;
   width = 0;
   while (len) {
     unsigned long c;
     if (utf8) {
-      c = utf8_advance(&text, &len);
+      c = i_utf8_advance(&text, &len);
       if (c == ~0UL) {
         i_push_error(0, "invalid UTF8 character");
         return 0;
@@ -323,7 +327,7 @@ i_ft2_bbox(FT2_Fonthandle *handle, double cheight, double cwidth,
     }
 
     index = FT_Get_Char_Index(handle->face, c);
-    error = FT_Load_Glyph(handle->face, index, FT_LOAD_DEFAULT);
+    error = FT_Load_Glyph(handle->face, index, loadFlags);
     if (error) {
       ft2_push_message(error);
       i_push_errorf(0, "loading glyph for character \\x%02x (glyph 0x%04X)", 
@@ -352,20 +356,21 @@ i_ft2_bbox(FT2_Fonthandle *handle, double cheight, double cwidth,
       /* last character 
        handle the case where the right the of the character overlaps the 
        right*/
-      int rightb = gm->horiAdvance - gm->horiBearingX - gm->width;
-      if (rightb < 0)
-        width -= rightb / 64;
+      rightb = gm->horiAdvance - gm->horiBearingX - gm->width;
+      if (rightb > 0)
+        rightb = 0;
     }
   }
 
-  bbox[0] = start;
-  bbox[1] = handle->face->size->metrics.descender / 64;
-  bbox[2] = width;
-  bbox[3] = handle->face->size->metrics.ascender / 64;
-  bbox[4] = descent;
-  bbox[5] = ascent;
+  bbox[BBOX_NEG_WIDTH] = start;
+  bbox[BBOX_GLOBAL_DESCENT] = handle->face->size->metrics.descender / 64;
+  bbox[BBOX_POS_WIDTH] = width - rightb;
+  bbox[BBOX_GLOBAL_ASCENT] = handle->face->size->metrics.ascender / 64;
+  bbox[BBOX_DESCENT] = descent;
+  bbox[BBOX_ASCENT] = ascent;
+  bbox[BBOX_ADVANCE_WIDTH] = width;
 
-  return 1;
+  return BBOX_ADVANCE_WIDTH + 1;
 }
 
 /*
@@ -443,7 +448,7 @@ Returns non-zero on success.
 */
 int
 i_ft2_bbox_r(FT2_Fonthandle *handle, double cheight, double cwidth, 
-           char *text, int len, int vlayout, int utf8, int *bbox) {
+           char const *text, int len, int vlayout, int utf8, int *bbox) {
   FT_Error error;
   int width;
   int index;
@@ -462,6 +467,8 @@ i_ft2_bbox_r(FT2_Fonthandle *handle, double cheight, double cwidth,
 
   if (vlayout)
     loadFlags |= FT_LOAD_VERTICAL_LAYOUT;
+  if (!handle->hint)
+    loadFlags |= FT_LOAD_NO_HINTING;
 
   error = FT_Set_Char_Size(handle->face, cwidth*64, cheight*64, 
                            handle->xdpi, handle->ydpi);
@@ -475,7 +482,7 @@ i_ft2_bbox_r(FT2_Fonthandle *handle, double cheight, double cwidth,
   while (len) {
     unsigned long c;
     if (utf8) {
-      c = utf8_advance(&text, &len);
+      c = i_utf8_advance(&text, &len);
       if (c == ~0UL) {
         i_push_error(0, "invalid UTF8 character");
         return 0;
@@ -535,7 +542,7 @@ i_ft2_bbox_r(FT2_Fonthandle *handle, double cheight, double cwidth,
     }
     x += slot->advance.x / 64;
     y += slot->advance.y / 64;
-    
+
     if (glyph_ascent > ascent)
       ascent = glyph_ascent;
     if (glyph_descent > descent)
@@ -568,8 +575,6 @@ i_ft2_bbox_r(FT2_Fonthandle *handle, double cheight, double cwidth,
   return 1;
 }
 
-
-
 static int
 make_bmp_map(FT_Bitmap *bitmap, unsigned char *map);
 
@@ -592,12 +597,12 @@ Returns non-zero on success.
 */
 int
 i_ft2_text(FT2_Fonthandle *handle, i_img *im, int tx, int ty, i_color *cl,
-           double cheight, double cwidth, char *text, int len, int align,
+           double cheight, double cwidth, char const *text, int len, int align,
            int aa, int vlayout, int utf8) {
   FT_Error error;
   int index;
   FT_Glyph_Metrics *gm;
-  int bbox[6];
+  int bbox[BOUNDING_BOX_COUNT];
   FT_GlyphSlot slot;
   int x, y;
   unsigned char *bmp;
@@ -633,7 +638,7 @@ i_ft2_text(FT2_Fonthandle *handle, i_img *im, int tx, int ty, i_color *cl,
   while (len) {
     unsigned long c;
     if (utf8) {
-      c = utf8_advance(&text, &len);
+      c = i_utf8_advance(&text, &len);
       if (c == ~0UL) {
         i_push_error(0, "invalid UTF8 character");
         return 0;
@@ -733,7 +738,7 @@ Returns non-zero on success.
 */
 
 i_ft2_cp(FT2_Fonthandle *handle, i_img *im, int tx, int ty, int channel,
-         double cheight, double cwidth, char *text, int len, int align,
+         double cheight, double cwidth, char const *text, int len, int align,
          int aa, int vlayout, int utf8) {
   int bbox[8];
   i_img *work;
@@ -785,17 +790,17 @@ Returns the number of characters that were checked.
 
 =cut
 */
-int i_ft2_has_chars(FT2_Fonthandle *handle, char *text, int len, int utf8, 
-                       char *out) {
+int i_ft2_has_chars(FT2_Fonthandle *handle, char const *text, int len, 
+                    int utf8, char *out) {
   int count = 0;
-  mm_log((1, "i_ft2_check_chars(handle %p, text %p, len %d, utf8 %d)\n", 
+  mm_log((1, "i_ft2_has_chars(handle %p, text %p, len %d, utf8 %d)\n", 
 	  handle, text, len, utf8));
 
   while (len) {
     unsigned long c;
     int index;
     if (utf8) {
-      c = utf8_advance(&text, &len);
+      c = i_utf8_advance(&text, &len);
       if (c == ~0UL) {
         i_push_error(0, "invalid UTF8 character");
         return 0;
@@ -879,81 +884,92 @@ make_bmp_map(FT_Bitmap *bitmap, unsigned char *map) {
   return 1;
 }
 
-struct utf8_size {
-  int mask, expect;
-  int size;
-};
+int
+i_ft2_face_name(FT2_Fonthandle *handle, char *name_buf, size_t name_buf_size) {
+  char const *name = FT_Get_Postscript_Name(handle->face);
 
-struct utf8_size utf8_sizes[] =
-{
-  { 0x80, 0x00, 1 },
-  { 0xE0, 0xC0, 2 },
-  { 0xF0, 0xE0, 3 },
-  { 0xF8, 0xF0, 4 },
-};
+  i_clear_error();
 
-/*
-=item utf8_advance(char **p, int *len)
+  if (name) {
+    strncpy(name_buf, name, name_buf_size);
+    name_buf[name_buf_size-1] = '\0';
 
-Retreive a UTF8 character from the stream.
-
-Modifies *p and *len to indicate the consumed characters.
-
-This doesn't support the extended UTF8 encoding used by later versions
-of Perl.
-
-=cut
-*/
-
-unsigned long utf8_advance(char **p, int *len) {
-  unsigned char c;
-  int i, ci, clen = 0;
-  unsigned char codes[3];
-  if (*len == 0)
-    return ~0UL;
-  c = *(*p)++; --*len;
-
-  for (i = 0; i < sizeof(utf8_sizes)/sizeof(*utf8_sizes); ++i) {
-    if ((c & utf8_sizes[i].mask) == utf8_sizes[i].expect) {
-      clen = utf8_sizes[i].size;
-    }
+    return strlen(name) + 1;
   }
-  if (clen == 0 || *len < clen-1) {
-    --*p; ++*len;
-    return ~0UL;
-  }
+  else {
+    i_push_error(0, "no face name available");
+    *name_buf = '\0';
 
-  /* check that each character is well formed */
-  i = 1;
-  ci = 0;
-  while (i < clen) {
-    if (((*p)[ci] & 0xC0) != 0x80) {
-      --*p; ++*len;
-      return ~0UL;
-    }
-    codes[ci] = (*p)[ci];
-    ++ci; ++i;
+    return 0;
   }
-  *p += clen-1; *len -= clen-1;
-  if (c & 0x80) {
-    if ((c & 0xE0) == 0xC0) {
-      return ((c & 0x1F) << 6) + (codes[0] & 0x3F);
-    }
-    else if ((c & 0xF0) == 0xE0) {
-      return ((c & 0x0F) << 12) | ((codes[0] & 0x3F) << 6) | (codes[1] & 0x3f);
-    }
-    else if ((c & 0xF8) == 0xF0) {
-      return ((c & 0x07) << 18) | ((codes[0] & 0x3F) << 12) 
-              | ((codes[1] & 0x3F) << 6) | (codes[2] & 0x3F);
+}
+
+/* FT_Has_PS_Glyph_Names() was introduced in FT2.1.1 */
+/* well, I assume FREETYPE_MAJOR is 2, since we're here */
+#if FREETYPE_MINOR < 1 || (FREETYPE_MINOR == 1 && FREETYPE_PATCH < 1)
+#define FT_Has_PS_Glyph_Names(face) (FT_HAS_GLYPH_NAMES(face))
+#endif
+
+int
+i_ft2_glyph_name(FT2_Fonthandle *handle, unsigned char ch, char *name_buf, 
+                 size_t name_buf_size) {
+#ifdef FT_CONFIG_OPTION_NO_GLYPH_NAMES
+  i_clear_error();
+  *name_buf = '\0';
+  i_push_error(0, "FT2 configured without glyph name support");
+
+  return 0;
+#else
+  i_clear_error();
+
+  if (FT_Has_PS_Glyph_Names(handle->face)) {
+    FT_UInt index = FT_Get_Char_Index(handle->face, ch);
+
+    if (index) {
+      FT_Error error = FT_Get_Glyph_Name(handle->face, index, name_buf, 
+                                         name_buf_size);
+      if (error) {
+        ft2_push_message(error);
+        *name_buf = '\0';
+        return;
+      }
+      if (*name_buf) {
+        return strlen(name_buf) + 1;
+      }
+      else {
+        return 0;
+      }
     }
     else {
-      *p -= clen; *len += clen;
-      return ~0UL;
+      i_push_error(0, "no glyph for that character");
+      *name_buf = 0;
+      return 0;
     }
   }
   else {
-    return c;
+    i_push_error(0, "no glyph names in font");
+    *name_buf = '\0';
+    return 0;
   }
+#endif
+}
+
+int
+i_ft2_can_do_glyph_names(void) {
+#ifdef FT_CONFIG_OPTION_NO_GLYPH_NAMES
+  return 0;
+#else
+  return 1;
+#endif
+}
+
+int 
+i_ft2_face_has_glyph_names(FT2_Fonthandle *handle) {
+#ifdef FT_CONFIG_OPTION_NO_GLYPH_NAMES
+  return 0;
+#else
+  return FT_Has_PS_Glyph_Names(handle->face);
+#endif
 }
 
 /*

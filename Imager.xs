@@ -1142,7 +1142,7 @@ io_slurp(ig)
  	      data    = NULL;
               tlength = io_slurp(ig, &data);
               EXTEND(SP,1);
-              PUSHs(sv_2mortal(newSVpv(data,tlength)));
+              PUSHs(sv_2mortal(newSVpv((char *)data,tlength)));
               myfree(data);
 
 
@@ -1244,27 +1244,30 @@ i_img_getdata(im)
     Imager::ImgRaw     im
              PPCODE:
 	       EXTEND(SP, 1);
-               PUSHs(im->idata ? sv_2mortal(newSVpv(im->idata, im->bytes)) 
+               PUSHs(im->idata ? 
+	             sv_2mortal(newSVpv((char *)im->idata, im->bytes)) 
 		     : &PL_sv_undef);
 
 
 void
-i_draw(im,x1,y1,x2,y2,val)
+i_line(im,x1,y1,x2,y2,val,endp)
     Imager::ImgRaw     im
 	       int     x1
 	       int     y1
 	       int     x2
 	       int     y2
      Imager::Color     val
+	       int     endp
 
 void
-i_line_aa(im,x1,y1,x2,y2,val)
+i_line_aa(im,x1,y1,x2,y2,val,endp)
     Imager::ImgRaw     im
 	       int     x1
 	       int     y1
 	       int     x2
 	       int     y2
      Imager::Color     val
+	       int     endp
 
 void
 i_box(im,x1,y1,x2,y2,val)
@@ -1429,14 +1432,14 @@ i_poly_aa_cfill(im,xc,yc,fill)
 
 
 
-void
+undef_int
 i_flood_fill(im,seedx,seedy,dcol)
     Imager::ImgRaw     im
 	       int     seedx
 	       int     seedy
      Imager::Color     dcol
 
-void
+undef_int
 i_flood_cfill(im,seedx,seedy,fill)
     Imager::ImgRaw     im
 	       int     seedx
@@ -1475,11 +1478,16 @@ i_copy(im,src)
 
 
 undef_int
-i_rubthru(im,src,tx,ty)
+i_rubthru(im,src,tx,ty,src_minx,src_miny,src_maxx,src_maxy)
     Imager::ImgRaw     im
     Imager::ImgRaw     src
 	       int     tx
 	       int     ty
+	       int     src_minx
+	       int     src_miny
+	       int     src_maxx
+	       int     src_maxy
+
 
 undef_int
 i_flipxy(im, direction)
@@ -1676,48 +1684,169 @@ i_t1_destroy(font_id)
 
 
 undef_int
-i_t1_cp(im,xb,yb,channel,fontnum,points,str,len,align)
+i_t1_cp(im,xb,yb,channel,fontnum,points,str_sv,len_ignored,align,utf8=0,flags="")
     Imager::ImgRaw     im
 	       int     xb
 	       int     yb
 	       int     channel
 	       int     fontnum
              float     points
-	      char*    str
-	       int     len
+	        SV*    str_sv
 	       int     align
+               int     utf8
+              char*    flags
+             PREINIT:
+               char *str;
+               STRLEN len;
+             CODE:
+#ifdef SvUTF8
+               if (SvUTF8(str_sv))
+                 utf8 = 1;
+#endif
+               str = SvPV(str_sv, len);
+               RETVAL = i_t1_cp(im, xb,yb,channel,fontnum,points,str,len,align,
+                                  utf8,flags);
+           OUTPUT:
+             RETVAL
+
 
 void
-i_t1_bbox(fontnum,point,str,len)
+i_t1_bbox(fontnum,point,str_sv,len_ignored,utf8=0,flags="")
                int     fontnum
 	     float     point
-	      char*    str
-	       int     len
+	        SV*    str_sv
+               int     utf8
+              char*    flags
 	     PREINIT:
-	       int     cords[6];
+               char *str;
+               STRLEN len;
+	       int     cords[BOUNDING_BOX_COUNT];
+               int i;
+               int rc;
 	     PPCODE:
-   	       i_t1_bbox(fontnum,point,str,len,cords);
-               EXTEND(SP, 4);
-               PUSHs(sv_2mortal(newSViv(cords[0])));
-               PUSHs(sv_2mortal(newSViv(cords[1])));
-               PUSHs(sv_2mortal(newSViv(cords[2])));
-               PUSHs(sv_2mortal(newSViv(cords[3])));
-               PUSHs(sv_2mortal(newSViv(cords[4])));
-               PUSHs(sv_2mortal(newSViv(cords[5])));
+#ifdef SvUTF8
+               if (SvUTF8(str_sv))
+                 utf8 = 1;
+#endif
+               str = SvPV(str_sv, len);
+               rc = i_t1_bbox(fontnum,point,str,len,cords,utf8,flags);
+               if (rc > 0) {
+                 EXTEND(SP, rc);
+                 for (i = 0; i < rc; ++i)
+                   PUSHs(sv_2mortal(newSViv(cords[i])));
+               }
 
 
 
 undef_int
-i_t1_text(im,xb,yb,cl,fontnum,points,str,len,align)
+i_t1_text(im,xb,yb,cl,fontnum,points,str_sv,len_ignored,align,utf8=0,flags="")
     Imager::ImgRaw     im
 	       int     xb
 	       int     yb
      Imager::Color    cl
 	       int     fontnum
              float     points
-	      char*    str
-	       int     len
+	        SV*    str_sv
 	       int     align
+               int     utf8
+              char*    flags
+             PREINIT:
+               char *str;
+               STRLEN len;
+             CODE:
+#ifdef SvUTF8
+               if (SvUTF8(str_sv))
+                 utf8 = 1;
+#endif
+               str = SvPV(str_sv, len);
+               RETVAL = i_t1_text(im, xb,yb,cl,fontnum,points,str,len,align,
+                                  utf8,flags);
+           OUTPUT:
+             RETVAL
+
+void
+i_t1_has_chars(handle, text_sv, utf8 = 0)
+        int handle
+        SV  *text_sv
+        int utf8
+      PREINIT:
+        char const *text;
+        STRLEN len;
+        char *work;
+        int count;
+        int i;
+      PPCODE:
+#ifdef SvUTF8
+        if (SvUTF8(text_sv))
+          utf8 = 1;
+#endif
+        text = SvPV(text_sv, len);
+        work = mymalloc(len);
+        count = i_t1_has_chars(handle, text, len, utf8, work);
+        if (GIMME_V == G_ARRAY) {
+          EXTEND(SP, count);
+          for (i = 0; i < count; ++i) {
+            PUSHs(sv_2mortal(newSViv(work[i])));
+          }
+        }
+        else {
+          EXTEND(SP, 1);
+          PUSHs(sv_2mortal(newSVpv(work, count)));
+        }
+        myfree(work);
+
+void
+i_t1_face_name(handle)
+        int handle
+      PREINIT:
+        char name[255];
+        int len;
+      PPCODE:
+        len = i_t1_face_name(handle, name, sizeof(name));
+        if (len) {
+          EXTEND(SP, 1);
+          PUSHs(sv_2mortal(newSVpv(name, strlen(name))));
+        }
+
+void
+i_t1_glyph_name(handle, text_sv, utf8 = 0)
+        int handle
+        SV *text_sv
+        int utf8
+      PREINIT:
+        char const *text;
+        STRLEN work_len;
+        int len;
+        int outsize;
+        char name[255];
+      PPCODE:
+#ifdef SvUTF8
+        if (SvUTF8(text_sv))
+          utf8 = 1;
+#endif
+        text = SvPV(text_sv, work_len);
+        len = work_len;
+        while (len) {
+          unsigned char ch;
+          if (utf8) {
+            ch = i_utf8_advance(&text, &len);
+            if (ch == ~0UL) {
+              i_push_error(0, "invalid UTF8 character");
+              break;
+            }
+          }
+          else {
+            ch = *text++;
+            --len;
+          }
+          EXTEND(SP, 1);
+          if (outsize = i_t1_glyph_name(handle, ch, name, sizeof(name))) {
+            PUSHs(sv_2mortal(newSVpv(name, 0)));
+          }
+          else {
+            PUSHs(&PL_sv_undef);
+          } 
+        }
 
 #endif 
 
@@ -1742,55 +1871,173 @@ MODULE = Imager         PACKAGE = Imager
 
 
 undef_int
-i_tt_text(handle,im,xb,yb,cl,points,str,len,smooth)
+i_tt_text(handle,im,xb,yb,cl,points,str_sv,len_ignored,smooth,utf8)
   Imager::Font::TT     handle
     Imager::ImgRaw     im
 	       int     xb
 	       int     yb
      Imager::Color     cl
              float     points
-	      char*    str
-	       int     len
+	      SV *     str_sv
+	       int     len_ignored
 	       int     smooth
+               int     utf8
+             PREINIT:
+               char *str;
+               STRLEN len;
+             CODE:
+#ifdef SvUTF8
+               if (SvUTF8(str_sv))
+                 utf8 = 1;
+#endif
+               str = SvPV(str_sv, len);
+               RETVAL = i_tt_text(handle, im, xb, yb, cl, points, str, 
+                                  len, smooth, utf8);
+             OUTPUT:
+               RETVAL                
 
 
 undef_int
-i_tt_cp(handle,im,xb,yb,channel,points,str,len,smooth)
+i_tt_cp(handle,im,xb,yb,channel,points,str_sv,len_ignored,smooth,utf8)
   Imager::Font::TT     handle
     Imager::ImgRaw     im
 	       int     xb
 	       int     yb
 	       int     channel
              float     points
-	      char*    str
-	       int     len
+	      SV *     str_sv
+	       int     len_ignored
 	       int     smooth
-
+               int     utf8
+             PREINIT:
+               char *str;
+               STRLEN len;
+             CODE:
+#ifdef SvUTF8
+               if (SvUTF8(str_sv))
+                 utf8 = 1;
+#endif
+               str = SvPV(str_sv, len);
+               RETVAL = i_tt_cp(handle, im, xb, yb, channel, points, str, len,
+                                smooth, utf8);
+             OUTPUT:
+                RETVAL
 
 
 undef_int
-i_tt_bbox(handle,point,str,len)
+i_tt_bbox(handle,point,str_sv,len_ignored, utf8)
   Imager::Font::TT     handle
 	     float     point
-	      char*    str
-	       int     len
+	       SV*    str_sv
+	       int     len_ignored
+               int     utf8
 	     PREINIT:
-	       int     cords[6],rc;
+	       int     cords[BOUNDING_BOX_COUNT],rc;
+               char *  str;
+               STRLEN len;
+               int i;
 	     PPCODE:
-  	       if ((rc=i_tt_bbox(handle,point,str,len,cords))) {
-                 EXTEND(SP, 4);
-                 PUSHs(sv_2mortal(newSViv(cords[0])));
-                 PUSHs(sv_2mortal(newSViv(cords[1])));
-                 PUSHs(sv_2mortal(newSViv(cords[2])));
-                 PUSHs(sv_2mortal(newSViv(cords[3])));
-                 PUSHs(sv_2mortal(newSViv(cords[4])));
-                 PUSHs(sv_2mortal(newSViv(cords[5])));
+#ifdef SvUTF8
+               if (SvUTF8(ST(2)))
+                 utf8 = 1;
+#endif
+               str = SvPV(str_sv, len);
+  	       if ((rc=i_tt_bbox(handle,point,str,len,cords, utf8))) {
+                 EXTEND(SP, rc);
+                 for (i = 0; i < rc; ++i) {
+                   PUSHs(sv_2mortal(newSViv(cords[i])));
+                 }
                }
 
+void
+i_tt_has_chars(handle, text_sv, utf8)
+        Imager::Font::TT handle
+        SV  *text_sv
+        int utf8
+      PREINIT:
+        char const *text;
+        STRLEN len;
+        char *work;
+        int count;
+        int i;
+      PPCODE:
+#ifdef SvUTF8
+        if (SvUTF8(text_sv))
+          utf8 = 1;
+#endif
+        text = SvPV(text_sv, len);
+        work = mymalloc(len);
+        count = i_tt_has_chars(handle, text, len, utf8, work);
+        if (GIMME_V == G_ARRAY) {
+          EXTEND(SP, count);
+          for (i = 0; i < count; ++i) {
+            PUSHs(sv_2mortal(newSViv(work[i])));
+          }
+        }
+        else {
+          EXTEND(SP, 1);
+          PUSHs(sv_2mortal(newSVpv(work, count)));
+        }
+        myfree(work);
+
+void
+i_tt_dump_names(handle)
+        Imager::Font::TT handle
+
+void
+i_tt_face_name(handle)
+        Imager::Font::TT handle
+      PREINIT:
+        char name[255];
+        int len;
+      PPCODE:
+        len = i_tt_face_name(handle, name, sizeof(name));
+        if (len) {
+          EXTEND(SP, 1);
+          PUSHs(sv_2mortal(newSVpv(name, strlen(name))));
+        }
+
+void
+i_tt_glyph_name(handle, text_sv, utf8 = 0)
+        Imager::Font::TT handle
+        SV *text_sv
+        int utf8
+      PREINIT:
+        char const *text;
+        STRLEN work_len;
+        int len;
+        int outsize;
+        char name[255];
+      PPCODE:
+#ifdef SvUTF8
+        if (SvUTF8(text_sv))
+          utf8 = 1;
+#endif
+        text = SvPV(text_sv, work_len);
+        len = work_len;
+        while (len) {
+          unsigned char ch;
+          if (utf8) {
+            ch = i_utf8_advance(&text, &len);
+            if (ch == ~0UL) {
+              i_push_error(0, "invalid UTF8 character");
+              break;
+            }
+          }
+          else {
+            ch = *text++;
+            --len;
+          }
+          EXTEND(SP, 1);
+          if (outsize = i_tt_glyph_name(handle, ch, name, sizeof(name))) {
+            PUSHs(sv_2mortal(newSVpv(name, 0)));
+          }
+          else {
+            PUSHs(&PL_sv_undef);
+          } 
+        }
 
 #endif 
-
-
 
 
 #ifdef HAVE_LIBJPEG
@@ -1829,6 +2076,11 @@ i_readjpeg_wiol(ig)
 
 #endif
 
+
+char *
+i_test_format_probe(ig, length)
+        Imager::IO     ig
+	       int     length
 
 
 
@@ -2282,7 +2534,7 @@ i_readgif_scalar(...)
           PROTOTYPE: $
             PREINIT:
                char*    data;
-       unsigned int     length;
+             STRLEN     length;
 	        int*    colour_table;
 	        int     colours, q, w;
 	      i_img*    rimg;
@@ -2402,7 +2654,7 @@ i_readgif_multi_scalar(data)
         i_img **imgs;
         int count;
         char *data;
-        unsigned int length;
+        STRLEN length;
         int i;
       PPCODE:
         data = (char *)SvPV(ST(0), length);
@@ -2618,7 +2870,14 @@ i_transform(im,opx,opy,parm)
              else sv_setref_pv(ST(0), "Imager::ImgRaw", (void*)RETVAL);
 
 Imager::ImgRaw
-i_transform2(width,height,ops,n_regs,c_regs,in_imgs)
+i_transform2(sv_width,sv_height,channels,sv_ops,av_n_regs,av_c_regs,av_in_imgs)
+	SV *sv_width
+	SV *sv_height
+	SV *sv_ops
+	AV *av_n_regs
+	AV *av_c_regs
+	AV *av_in_imgs
+	int channels
 	     PREINIT:
              int width;
              int height;
@@ -2637,32 +2896,18 @@ i_transform2(width,height,ops,n_regs,c_regs,in_imgs)
              IV tmp;
 	     int i;
              CODE:
-	     if (!SvROK(ST(3))) croak("Imager: Parameter 4 must be a reference to an array\n");
-	     if (!SvROK(ST(4))) croak("Imager: Parameter 5 must be a reference to an array\n");
-	     if (!SvROK(ST(5))) croak("Imager: Parameter 6 must be a reference to an array of images\n");
-	     if (SvTYPE(SvRV(ST(3))) != SVt_PVAV) croak("Imager: Parameter 4 must be a reference to an array\n");
-	     if (SvTYPE(SvRV(ST(4))) != SVt_PVAV) croak("Imager: Parameter 5 must be a reference to an array\n");
 
-	/*if (SvTYPE(SvRV(ST(5))) != SVt_PVAV) croak("Imager: Parameter 6 must be a reference to an array\n");*/
-
-             if (SvTYPE(SvRV(ST(5))) == SVt_PVAV) {
-	       av = (AV*)SvRV(ST(5));
-               in_imgs_count = av_len(av)+1;
-	       for (i = 0; i < in_imgs_count; ++i) {
-		 sv1 = *av_fetch(av, i, 0);
-		 if (!sv_derived_from(sv1, "Imager::ImgRaw")) {
-		   croak("Parameter 5 must contain only images");
-		 }
+             in_imgs_count = av_len(av_in_imgs)+1;
+	     for (i = 0; i < in_imgs_count; ++i) {
+	       sv1 = *av_fetch(av_in_imgs, i, 0);
+	       if (!sv_derived_from(sv1, "Imager::ImgRaw")) {
+		 croak("sv_in_img must contain only images");
 	       }
 	     }
-	     else {
-	       in_imgs_count = 0;
-             }
              if (in_imgs_count > 0) {
-               av = (AV*)SvRV(ST(5));
                in_imgs = mymalloc(in_imgs_count*sizeof(i_img*));
                for (i = 0; i < in_imgs_count; ++i) {              
-	         sv1 = *av_fetch(av,i,0);
+	         sv1 = *av_fetch(av_in_imgs,i,0);
 	         if (!sv_derived_from(sv1, "Imager::ImgRaw")) {
 		   croak("Parameter 5 must contain only images");
 	         }
@@ -2675,38 +2920,37 @@ i_transform2(width,height,ops,n_regs,c_regs,in_imgs)
 	       in_imgs = NULL;
              }
              /* default the output size from the first input if possible */
-             if (SvOK(ST(0)))
-	       width = SvIV(ST(0));
+             if (SvOK(sv_width))
+	       width = SvIV(sv_width);
              else if (in_imgs_count)
 	       width = in_imgs[0]->xsize;
              else
 	       croak("No output image width supplied");
 
-             if (SvOK(ST(1)))
-	       height = SvIV(ST(1));
+             if (SvOK(sv_height))
+	       height = SvIV(sv_height);
              else if (in_imgs_count)
 	       height = in_imgs[0]->ysize;
              else
 	       croak("No output image height supplied");
 
-	     ops = (struct rm_op *)SvPV(ST(2), ops_len);
+	     ops = (struct rm_op *)SvPV(sv_ops, ops_len);
              if (ops_len % sizeof(struct rm_op))
 	         croak("Imager: Parameter 3 must be a bitmap of regops\n");
 	     ops_count = ops_len / sizeof(struct rm_op);
-	     av = (AV*)SvRV(ST(3));
-	     n_regs_count = av_len(av)+1;
+
+	     n_regs_count = av_len(av_n_regs)+1;
              n_regs = mymalloc(n_regs_count * sizeof(double));
 	     for (i = 0; i < n_regs_count; ++i) {
-	       sv1 = *av_fetch(av,i,0);
+	       sv1 = *av_fetch(av_n_regs,i,0);
 	       if (SvOK(sv1))
 	         n_regs[i] = SvNV(sv1);
 	     }
-             av = (AV*)SvRV(ST(4));
-             c_regs_count = av_len(av)+1;
+             c_regs_count = av_len(av_c_regs)+1;
              c_regs = mymalloc(c_regs_count * sizeof(i_color));
              /* I don't bother initializing the colou?r registers */
 
-	     RETVAL=i_transform2(width, height, 3, ops, ops_count, 
+	     RETVAL=i_transform2(width, height, channels, ops, ops_count, 
 				 n_regs, n_regs_count, 
 				 c_regs, c_regs_count, in_imgs, in_imgs_count);
 	     if (in_imgs)
@@ -3138,7 +3382,7 @@ i_gpal(im, l, r, y)
           }
           else {
             EXTEND(SP, 1);
-            PUSHs(sv_2mortal(newSVpv(work, count * sizeof(i_palidx))));
+            PUSHs(sv_2mortal(newSVpv((char *)work, count * sizeof(i_palidx))));
           }
           myfree(work);
         }
@@ -3343,7 +3587,7 @@ i_gsamp(im, l, r, y, ...)
           }
           else {
             EXTEND(SP, 1);
-            PUSHs(sv_2mortal(newSVpv(data, count * sizeof(i_sample_t))));
+            PUSHs(sv_2mortal(newSVpv((char *)data, count * sizeof(i_sample_t))));
           }
 	  myfree(data);
         }
@@ -3706,17 +3950,14 @@ i_wf_bbox(face, size, text)
 	char *face
 	int size
 	char *text
+        int rc, i;
       PREINIT:
-	int cords[6];
+	int cords[BOUNDING_BOX_COUNT];
       PPCODE:
-        if (i_wf_bbox(face, size, text, strlen(text), cords)) {
-          EXTEND(SP, 6);  
-          PUSHs(sv_2mortal(newSViv(cords[0])));
-          PUSHs(sv_2mortal(newSViv(cords[1])));
-          PUSHs(sv_2mortal(newSViv(cords[2])));
-          PUSHs(sv_2mortal(newSViv(cords[3])));
-          PUSHs(sv_2mortal(newSViv(cords[4])));
-          PUSHs(sv_2mortal(newSViv(cords[5])));
+        if (rc = i_wf_bbox(face, size, text, strlen(text), cords)) {
+          EXTEND(SP, rc);  
+          for (i = 0; i < rc; ++i) 
+            PUSHs(sv_2mortal(newSViv(cords[i])));
         }
 
 undef_int
@@ -3823,23 +4064,28 @@ i_ft2_settransform(font, matrix)
         RETVAL
 
 void
-i_ft2_bbox(font, cheight, cwidth, text, utf8)
+i_ft2_bbox(font, cheight, cwidth, text_sv, utf8)
         Imager::Font::FT2 font
         double cheight
         double cwidth
-        char *text
+        SV *text_sv
 	int utf8
       PREINIT:
-        int bbox[6];
+        int bbox[BOUNDING_BOX_COUNT];
         int i;
+        char *text;
+        STRLEN text_len;
+        int rc;
       PPCODE:
+        text = SvPV(text_sv, text_len);
 #ifdef SvUTF8
-        if (SvUTF8(ST(3)))
+        if (SvUTF8(text_sv))
           utf8 = 1;
 #endif
-        if (i_ft2_bbox(font, cheight, cwidth, text, strlen(text), bbox, utf8)) {
-          EXTEND(SP, 6);
-          for (i = 0; i < 6; ++i)
+        rc = i_ft2_bbox(font, cheight, cwidth, text, text_len, bbox, utf8);
+        if (rc) {
+          EXTEND(SP, rc);
+          for (i = 0; i < rc; ++i)
             PUSHs(sv_2mortal(newSViv(bbox[i])));
         }
 
@@ -3937,8 +4183,9 @@ ft2_transform_box(font, x0, x1, x2, x3)
           PUSHs(sv_2mortal(newSViv(box[3])));
 
 void
-i_ft2_has_chars(handle, text, utf8)
+i_ft2_has_chars(handle, text_sv, utf8)
         Imager::Font::FT2 handle
+        SV  *text_sv
         int utf8
       PREINIT:
         char *text;
@@ -3948,10 +4195,10 @@ i_ft2_has_chars(handle, text, utf8)
         int i;
       PPCODE:
 #ifdef SvUTF8
-        if (SvUTF8(ST(7)))
+        if (SvUTF8(text_sv))
           utf8 = 1;
 #endif
-        text = SvPV(ST(1), len);
+        text = SvPV(text_sv, len);
         work = mymalloc(len);
         count = i_ft2_has_chars(handle, text, len, utf8, work);
         if (GIMME_V == G_ARRAY) {
@@ -3965,6 +4212,66 @@ i_ft2_has_chars(handle, text, utf8)
           PUSHs(sv_2mortal(newSVpv(work, count)));
         }
         myfree(work);
+
+void
+i_ft2_face_name(handle)
+        Imager::Font::FT2 handle
+      PREINIT:
+        char name[255];
+        int len;
+      PPCODE:
+        len = i_ft2_face_name(handle, name, sizeof(name));
+        if (len) {
+          EXTEND(SP, 1);
+          PUSHs(sv_2mortal(newSVpv(name, 0)));
+        }
+
+void
+i_ft2_glyph_name(handle, text_sv, utf8 = 0)
+        Imager::Font::FT2 handle
+        SV *text_sv
+        int utf8
+      PREINIT:
+        char const *text;
+        STRLEN work_len;
+        int len;
+        int outsize;
+        char name[255];
+      PPCODE:
+#ifdef SvUTF8
+        if (SvUTF8(text_sv))
+          utf8 = 1;
+#endif
+        text = SvPV(text_sv, work_len);
+        len = work_len;
+        while (len) {
+          unsigned char ch;
+          if (utf8) {
+            ch = i_utf8_advance(&text, &len);
+            if (ch == ~0UL) {
+              i_push_error(0, "invalid UTF8 character");
+              break;
+            }
+          }
+          else {
+            ch = *text++;
+            --len;
+          }
+          EXTEND(SP, 1);
+          if (outsize = i_ft2_glyph_name(handle, ch, name, sizeof(name))) {
+            PUSHs(sv_2mortal(newSVpv(name, 0)));
+          }
+          else {
+            PUSHs(&PL_sv_undef);
+          } 
+        }
+
+int
+i_ft2_can_do_glyph_names()
+
+int
+i_ft2_face_has_glyph_names(handle)
+        Imager::Font::FT2 handle
 
 #endif
 
@@ -3999,7 +4306,7 @@ i_new_fill_hatch(fg, bg, combine, hatch, cust_hatch, dx, dy)
         STRLEN len;
       CODE:
         if (SvOK(ST(4))) {
-          cust_hatch = SvPV(ST(4), len);
+          cust_hatch = (unsigned char *)SvPV(ST(4), len);
         }
         else
           cust_hatch = NULL;
@@ -4020,7 +4327,7 @@ i_new_fill_hatchf(fg, bg, combine, hatch, cust_hatch, dx, dy)
         STRLEN len;
       CODE:
         if (SvOK(ST(4))) {
-          cust_hatch = SvPV(ST(4), len);
+          cust_hatch = (unsigned char *)SvPV(ST(4), len);
         }
         else
           cust_hatch = NULL;

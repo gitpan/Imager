@@ -1,5 +1,8 @@
 # this doesn't need a new namespace - I hope
 use Imager qw(:all);
+use vars qw($TESTNUM);
+
+$TESTNUM = 1;
 
 sub test_img {
   my $green=i_color_new(0,255,0,255);
@@ -22,6 +25,50 @@ sub skipn {
   $why = '' unless defined $why;
 
   print "ok $_ # skip $why\n" for $testnum ... $testnum+$count-1;
+}
+
+sub skipx {
+  my ($count, $why) = @_;
+
+  skipn($TESTNUM, $count, $why);
+  $TESTNUM += $count;
+}
+
+sub okx {
+  my ($ok, $comment) = @_;
+
+  return okn($TESTNUM++, $ok, $comment);
+}
+
+sub okn {
+  my ($num, $ok, $comment) = @_;
+
+  if ($ok) {
+    print "ok $num # $comment\n";
+  }
+  else {
+    print "not ok $num # $comment\n";
+  }
+
+  return $ok;
+}
+
+sub requireokx {
+  my ($file, $comment) = @_;
+
+  eval {
+    require $file;
+  };
+  if ($@) {
+    my $msg = $@;
+    $msg =~ s/\n+$//;
+    $msg =~ s/\n/\n# /g;
+    okx(0, $comment);
+    print "# $msg\n";
+  }
+  else {
+    okx(1, $comment);
+  }
 }
 
 1;
