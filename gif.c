@@ -179,6 +179,14 @@ i_readgif_low(GifFileType *GifFile, int **colour_table, int *colours) {
   
 
   im = i_img_empty_ch(NULL, GifFile->SWidth, GifFile->SHeight, 3);
+  if (!im) {
+    if (colour_table && *colour_table) {
+      myfree(*colour_table);
+      *colour_table = NULL;
+    }
+    DGifCloseFile(GifFile);
+    return NULL;
+  }
 
   Size = GifFile->SWidth * sizeof(GifPixelType); 
   
@@ -354,6 +362,9 @@ i_readgif_low(GifFileType *GifFile, int **colour_table, int *colours) {
     i_img_destroy(im);
     return NULL;
   }
+
+  i_tags_add(&im->tags, "i_format", 0, "gif", -1, 0);
+
   return im;
 }
 
@@ -554,6 +565,10 @@ i_img **i_readgif_multi_low(GifFileType *GifFile, int *count) {
       if (got_gce && trans_index >= 0)
         channels = 4;
       img = i_img_pal_new(Width, Height, channels, 256);
+      if (!img) {
+        free_images(results, *count);
+        return NULL;
+      }
       /* populate the palette of the new image */
       mm_log((1, "ColorMapSize %d\n", ColorMapSize));
       for (i = 0; i < ColorMapSize; ++i) {
@@ -581,6 +596,7 @@ i_img **i_readgif_multi_low(GifFileType *GifFile, int *count) {
         }
       }
       results[*count-1] = img;
+      i_tags_add(&img->tags, "i_format", 0, "gif", -1, 0);
       i_tags_addn(&img->tags, "gif_left", 0, GifFile->Image.Left);
       /**(char *)0 = 1;*/
       i_tags_addn(&img->tags, "gif_top",  0, GifFile->Image.Top);
@@ -1663,6 +1679,7 @@ i_writegif_low(i_quantize *quant, GifFileType *gf, i_img **imgs, int count) {
       if ((map = make_gif_map(quant, imgs[0], want_trans)) == NULL) {
         i_mempool_destroy(&mp);
         EGifCloseFile(gf);
+        quant->mc_colors = orig_colors;
         mm_log((1, "Error in MakeMapObject"));
         return 0;
       }
@@ -1678,6 +1695,12 @@ i_writegif_low(i_quantize *quant, GifFileType *gf, i_img **imgs, int count) {
     result = quant_paletted(quant, imgs[0]);
   else
     result = quant_translate(quant, imgs[0]);
+  if (!result) {
+    i_mempool_destroy(&mp);
+    quant->mc_colors = orig_colors;
+    EGifCloseFile(gf);
+    return 0;
+  }
   if (want_trans) {
     quant_transparent(quant, result, imgs[0], quant->mc_count);
     trans_index = quant->mc_count;
@@ -1752,6 +1775,13 @@ i_writegif_low(i_quantize *quant, GifFileType *gf, i_img **imgs, int count) {
       else {
         quant_makemap(quant, imgs+imgn, 1);
         result = quant_translate(quant, imgs[imgn]);
+      }
+      if (!result) {
+        i_mempool_destroy(&mp);
+        quant->mc_colors = orig_colors;
+        EGifCloseFile(gf);
+        mm_log((1, "error in quant_translate()"));
+        return 0;
       }
       if (want_trans) {
         quant_transparent(quant, result, imgs[imgn], quant->mc_count);
@@ -1838,6 +1868,12 @@ i_writegif_low(i_quantize *quant, GifFileType *gf, i_img **imgs, int count) {
     mm_log((1, "Error in EGifCloseFile\n"));
     return 0;
   }
+  if (glob_colors) {
+    int i;
+    for (i = 0; i < glob_color_count; ++i)
+      orig_colors[i] = glob_colors[i];
+  }
+
   i_mempool_destroy(&mp);
   quant->mc_colors = orig_colors;
 

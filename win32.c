@@ -109,7 +109,7 @@ int i_wf_bbox(char *face, int size, char *text, int length, int *bbox) {
   ReleaseDC(NULL, dc);
   DeleteObject(font);
 
-  return 1;
+  return 6;
 }
 
 /*
@@ -223,7 +223,7 @@ static void set_logfont(char *face, int size, LOGFONT *lf) {
   memset(lf, 0, sizeof(LOGFONT));
 
   lf->lfHeight = -size; /* character height rather than cell height */
-  lf->lfCharSet = ANSI_CHARSET;
+  lf->lfCharSet = DEFAULT_CHARSET;
   lf->lfOutPrecision = OUT_TT_PRECIS;
   lf->lfClipPrecision = CLIP_DEFAULT_PRECIS;
   lf->lfQuality = PROOF_QUALITY;

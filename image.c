@@ -1,6 +1,5 @@
 #include "image.h"
 #include "imagei.h"
-#include "io.h"
 
 /*
 =head1 NAME
@@ -349,7 +348,25 @@ Re-new image reference
 
 i_img *
 i_img_empty_ch(i_img *im,int x,int y,int ch) {
+  int bytes;
+
   mm_log((1,"i_img_empty_ch(*im %p, x %d, y %d, ch %d)\n", im, x, y, ch));
+
+  if (x < 1 || y < 1) {
+    i_push_error(0, "Image sizes must be positive");
+    return NULL;
+  }
+  if (ch < 1 || ch > MAXCHANNELS) {
+    i_push_errorf(0, "channels must be between 1 and %d", MAXCHANNELS);
+    return NULL;
+  }
+  /* check this multiplication doesn't overflow */
+  bytes = x*y*ch;
+  if (bytes / y / ch != x) {
+    i_push_errorf(0, "integer overflow calculating image allocation");
+    return NULL;
+  }
+
   if (im == NULL)
     if ( (im=mymalloc(sizeof(i_img))) == NULL)
       m_fatal(2,"malloc() error\n");
@@ -360,8 +377,9 @@ i_img_empty_ch(i_img *im,int x,int y,int ch) {
   im->ysize    = y;
   im->channels = ch;
   im->ch_mask  = MAXINT;
-  im->bytes=x*y*im->channels;
-  if ( (im->idata=mymalloc(im->bytes)) == NULL) m_fatal(2,"malloc() error\n"); 
+  im->bytes=bytes;
+  if ( (im->idata=mymalloc(im->bytes)) == NULL) 
+    m_fatal(2,"malloc() error\n"); 
   memset(im->idata,0,(size_t)im->bytes);
   
   im->ext_data = NULL;
@@ -896,6 +914,10 @@ i_scaleaxis(i_img *im, float Value, int Axis) {
 
   if (Axis == XAXIS) {
     hsize = (int)(0.5 + im->xsize * Value);
+    if (hsize < 1) {
+      hsize = 1;
+      Value = 1.0 / im->xsize;
+    }
     vsize = im->ysize;
     
     jEnd = hsize;
@@ -903,6 +925,11 @@ i_scaleaxis(i_img *im, float Value, int Axis) {
   } else {
     hsize = im->xsize;
     vsize = (int)(0.5 + im->ysize * Value);
+
+    if (vsize < 1) {
+      vsize = 1;
+      Value = 1.0 / im->ysize;
+    }
 
     jEnd = vsize;
     iEnd = hsize;
@@ -1021,7 +1048,15 @@ i_scale_nn(i_img *im, float scx, float scy) {
   mm_log((1,"i_scale_nn(im 0x%x,scx %.2f,scy %.2f)\n",im,scx,scy));
 
   nxsize = (int) ((float) im->xsize * scx);
+  if (nxsize < 1) {
+    nxsize = 1;
+    scx = 1 / im->xsize;
+  }
   nysize = (int) ((float) im->ysize * scy);
+  if (nysize < 1) {
+    nysize = 1;
+    scy = 1 / im->ysize;
+  }
     
   new_img=i_img_empty_ch(NULL,nxsize,nysize,im->channels);
   
@@ -2042,14 +2077,7 @@ int i_free_gen_write_data(i_gen_write_data *info, int flush)
 /*
 =item i_test_format_probe(io_glue *data, int length)
 
-Cleans up the write buffer.
-
-Will flush any left-over data if I<flush> is non-zero.
-
-Returns non-zero if flush is zero or if info->cb() returns non-zero.
-
-Return zero only if flush is non-zero and info->cb() returns zero.
-ie. if it fails.
+Check the beginning of the supplied file for a 'magic number'
 
 =cut
 */

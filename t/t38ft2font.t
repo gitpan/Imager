@@ -7,7 +7,7 @@
 # Change 1..1 below to 1..last_test_to_print .
 # (It may become useful if the test is moved to ./t subdirectory.)
 
-BEGIN { $| = 1; print "1..116\n"; }
+BEGIN { $| = 1; print "1..120\n"; }
 END {print "not ok 1\n" unless $loaded;}
 use Imager qw(:all);
 
@@ -18,7 +18,7 @@ okx(1, "loaded");
 init_log("testout/t38ft2font.log",2);
 
 if (!(i_has_format("ft2")) ) { 
-  skipx(115, "No freetype2 library found");
+  skipx(119, "No freetype2 library found");
   exit;
 }
 print "# has ft2\n";
@@ -26,7 +26,7 @@ print "# has ft2\n";
 $fontname=$ENV{'TTFONTTEST'}||'./fontfiles/dodge.ttf';
 
 if (! -f $fontname) {
-  skipx(124, "cannot find fontfile $fontname");
+  skipx(119, "cannot find fontfile $fontname");
   malloc_state();
   exit;
 }
@@ -242,19 +242,30 @@ if (okx($exfont, "loaded existence font")) {
   okx($bbox->pos_width != $bbox->advance_width, "OO check");
 
   # name tests
-  my $facename = Imager::Font::FreeType2::i_ft2_face_name($exfont->{id});
-  print "# face name '$facename'\n";
-  okx($facename eq 'ExistenceTest', "test face name");
-  $facename = $exfont->face_name;
-  okx($facename eq 'ExistenceTest', "test face name OO");
-
+  # make sure the number of tests on each branch match
+  if (Imager::Font::FreeType2::i_ft2_can_face_name()) {
+    my $facename = Imager::Font::FreeType2::i_ft2_face_name($exfont->{id});
+    print "# face name '$facename'\n";
+    okx($facename eq 'ExistenceTest', "test face name");
+    $facename = $exfont->face_name;
+    okx($facename eq 'ExistenceTest', "test face name OO");
+  }
+  else {
+    # make sure we get the error we expect
+    my $facename = Imager::Font::FreeType2::i_ft2_face_name($exfont->{id});
+    my ($msg) = Imager::_error_as_msg();
+    okx(!defined($facename), "test face name not supported");
+    print "# $msg\n";
+    okx(scalar($msg =~ /or later required/), "test face name not supported");
+  }
 }
 else {
   skipx(5, "couldn't load test font");
 }
 
 if (Imager::Font::FreeType2->can_glyph_names) {
-  # pfaedit doesn't seem to save glyph names into TTF files
+  # FT2 considers POST tables in TTF fonts unreliable, so use
+  # a type 1 font, see below for TTF test 
   my $exfont = Imager::Font->new(file=>'fontfiles/ExistenceTest.pfb',
                                type=>'ft2');
   if (okx($exfont, "load Type 1 via FT2")) {
@@ -262,22 +273,51 @@ if (Imager::Font::FreeType2->can_glyph_names) {
       Imager::Font::FreeType2::i_ft2_glyph_name($exfont->{id}, "!J/");
     #use Data::Dumper;
     #print Dumper \@glyph_names;
-    okx($glyph_names[0] eq 'exclam', "check exclam name");
+    isx($glyph_names[0], 'exclam', "check exclam name");
     okx(!defined($glyph_names[1]), "check for no J name");
-    okx($glyph_names[2] eq 'slash', "check slash name");
+    isx($glyph_names[2], 'slash', "check slash name");
 
     # oo interfaces
     @glyph_names = $exfont->glyph_names(string=>"!J/");
-    okx($glyph_names[0] eq 'exclam', "check exclam name OO");
+    isx($glyph_names[0], 'exclam', "check exclam name OO");
     okx(!defined($glyph_names[1]), "check for no J name OO");
-    okx($glyph_names[2] eq 'slash', "check slash name OO");
+    isx($glyph_names[2], 'slash', "check slash name OO");
+
+    # make sure a missing string parameter is handled correctly
+    eval {
+      $exfont->glyph_names();
+    };
+    isx($@, "", "correct error handling");
+    matchx(Imager->errstr, qr/no string parameter/, "error message");
   }
   else {
-    skipx(6, "couldn't load type 1 with FT2");
+    skipx(8, "couldn't load type 1 with FT2");
+  }
+
+  # freetype 2 considers truetype glyph name tables unreliable
+  # due to some specific fonts, supplying reliable_only=>0 bypasses
+  # that check and lets us get the glyph names even for truetype fonts
+  # so we can test this stuff <sigh>
+  # we can't use ExistenceTest.ttf since that's generated with 
+  # AppleStandardEncoding since the same .sfd needs to generate
+  # a .pfb file, NameTest.ttf uses a Unicode encoding
+
+  # we were using an unsigned char to store a unicode character
+  # https://rt.cpan.org/Ticket/Display.html?id=7949
+  $exfont = Imager::Font->new(file=>'fontfiles/NameTest.ttf',
+                               type=>'ft2');
+  if (okx($exfont, "load TTF via FT2")) {
+    my $text = pack("C*", 0xE2, 0x80, 0x90); # "\x{2010}" as utf-8
+    my @names = $exfont->glyph_names(string=>$text,
+                                     utf8=>1, reliable_only=>0);
+    isx($names[0], "hyphentwo", "check utf8 glyph name");
+  }
+  else {
+    skipx(1, "could not load TTF with FT2");
   }
 }
 else {
-  skipx(7, "FT2 compiled without glyph names support");
+  skipx(9, "FT2 compiled without glyph names support");
 }
 
 sub align_test {

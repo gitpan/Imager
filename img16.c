@@ -143,14 +143,29 @@ Creates a new 16-bit per sample image.
 =cut
 */
 i_img *i_img_16_new_low(i_img *im, int x, int y, int ch) {
+  int bytes;
   mm_log((1,"i_img_16_new(x %d, y %d, ch %d)\n", x, y, ch));
+
+  if (x < 1 || y < 1) {
+    i_push_error(0, "Image sizes must be positive");
+    return NULL;
+  }
+  if (ch < 1 || ch > MAXCHANNELS) {
+    i_push_errorf(0, "channels must be between 1 and %d", MAXCHANNELS);
+    return NULL;
+  }
+  bytes =  x * y * ch * 2;
+  if (bytes / y / ch / 2 != x) {
+    i_push_errorf(0, "integer overflow calculating image allocation");
+    return NULL;
+  }
   
   *im = IIM_base_16bit_direct;
   i_tags_new(&im->tags);
   im->xsize = x;
   im->ysize = y;
   im->channels = ch;
-  im->bytes = x * y * ch * 2;
+  im->bytes = bytes;
   im->ext_data = NULL;
   im->idata = mymalloc(im->bytes);
   if (im->idata) {
@@ -166,6 +181,8 @@ i_img *i_img_16_new_low(i_img *im, int x, int y, int ch) {
 
 i_img *i_img_16_new(int x, int y, int ch) {
   i_img *im;
+  
+  i_clear_error();
 
   im = mymalloc(sizeof(i_img));
   if (im) {

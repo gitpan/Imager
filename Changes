@@ -733,17 +733,225 @@ Revision history for Perl extension Imager.
 	  them to imager.perl.org ones.
 
 0.43
-        - added log() and exp() functions to transform2()
+	- added log() and exp() functions to transform2()
 	- change the getpN() functions in transform2() to set a 
 	  reasonable alpha if the input image has no alpha
 	- document the constants that transform2() defines
 	- skip the right number of tests when FT2 isn't available
 	- This version pushed to CPAN because of skip problem in FT2 test.
 
+0.43_01 Fri 8 Oct 2004
+	- only call FT_Get_Postscript_Name() on FT 2.0.6 and later
+	- put the IM_LIBPATH and IM_INCPATH values first in the search
+	  path so the builder gets their local versions if desired rather
+	  than the system versions they might be trying to avoid
+	- document the exp() and log() transform2() functions
+	- document the constants normally set by transform2().
+	- refer the user to appropriate documents in the example in 
+	  Imager.pm
+	- change the list of documents in Imager.pm to move the document 
+	  names out of the =item lines so we can make them into links
+	- the scale() method now produces a warning when called in
+	  void context.
+	- font.c now only uses the defined T1Lib error codes
+	- update ppport.h and remove the duplicate definitions from
+	  Imager.xs.  Had to mangle ppport.h to prevent duplicate global
+	  function definitions.
+	- newer versions of tifflib require that all of the function
+	  pointers passed to TIFFClientOpen be non-NULL, the mmap() and
+	  munmap() pointers were always NULL and the sizeproc was
+	  sometimes NULL.
+        - there would be a link or load time error on m_init_log() if
+          Imager was built with IM_NOLOG, fixed by renamed init_log()
+          to m_init_log() in log.c (thanks to Takumi Yamani)
+        - moved some variable definitions to the right place
+        - the Win32 font driver bounding box function now returns the 
+          right number of values (both thanks to Takumi Yamani)
+        - the Win32 font driver now uses DEFAULT_CHARSET rather than
+          ANSI_CHARSET are the lfCharSet value for the LOGFONT,
+          as suggested by Takumi Yamani.
+        - fontfiles/ExistenceTest.{pfb,ttf} weren't marked as
+          binary in the CVS repository (caused test failures if you
+          built from CVS on Win32)
+        - Makefile.PL should now handle INCLUDE or LIB with spaces in them
+          correctly on Win32.
+        - the pnm reader read maxval for ppm/pgm files and then ignored it,
+          it's now validated (0 < maxval < 65536) and used to scale
+          samples.  Note that binary ppm/pgm files (P6/P5) with maxval >
+          255 result in an error, since I didn't want to add new features
+          just yet, just get the code that's there working correctly.
+          Thanks to Elthek on rhizo for reporting this and help in 
+          tracking it down.
+          Resolves https://rt.cpan.org/Ticket/Display.html?id=7465
+        - added a bunch of tests for reading pnm files.
+        - previously, if you supplied to_paletted and empty color map
+          and set make_colors to 'none', quant_translate() would segfault.
+          This was because it was making the reasonable assumption that
+          you'd have colors to map to.  quant_translate() now checks there
+          is at least one color and return NULL if there isn't.
+        - i_img_to_pal() now does error checking of the value returned by
+          quant_translate().
+        - Imager::to_paletted() now checks for success/failure of 
+          i_img_to_pal() correctly and does appropriate error handling.
+        - i_writegif_low() did no error checking on the result of
+          quant_translate(), it now does
+        - we now test that trying to write a GIF image with no palette
+          allowable by the quant options is a failure.
+        - Imager::write() was doing nothing with the result of the call 
+          to i_writegif_gen(), in particular it wasn't returning () on 
+          failure.
+        - added tests for paletted image handling and the methods
+          specific to those images
+        - the XS for i_setcolors() was missing the OUTPUT clause for
+          RETVAL, and hence wasn't returning failure on failure.
+        - supplying a sufficiently small scaling value could make the
+          scale() method return an image with zero height or width.
+          Several of the above together resolve 
+          https://rt.cpan.org/Ticket/Display.html?id=7467
+        - the void context warning for scale() now includes the callers
+          filename/line (instead of the default of Imager.pm line 15xx)
+        - Imager->new will now return undef if the dimensions or number of
+          channels specified for an image are out of range.  An error
+          message can be retrieved with Imager->errstr.
+        - added the C<builtin> color specifier and the 
+          Imager::Color::Table class which defines those colors.
+          Resolves https://rt.cpan.org/Ticket/Display.html?id=2593
+        - added the equals() method to Imager::Color.
+          Resolves https://rt.cpan.org/Ticket/Display.html?id=2238
+        - prevent a test warning introduced by the above
+        - the rotate() and matrix_transform() methods now accept a 'back'
+          parameter specifying a background color.  This is only used
+          where there is no source data (think of the corners around an
+          image rotated 45 degrees) and it not combined with transparent
+          pixels from the source image.
+          Resolves https://rt.cpan.org/Ticket/Display.html?id=6140
+        - removed a warning generated by the new matrix_transform() test
+        - added a method index to Imager.pm
+        - corrected "flood fill" to "flood_fill" in Imager/Draw.pod
+        - removed compose() method from Imager/Transformations.pod since
+          it isn't implemented yet
+        - the image resulting from a crop is now the same type as the
+          source image (paletted vs direct, bits/sample)
+          Resolves https://rt.cpan.org/Ticket/Display.html?id=7578
+        - the parameters to crop() weren't handled correctly in most 
+          cases other than supplying left,top,right,bottom.
+        - clarified the documentation for crop() providing more detail
+          and more examples
+        - the edges of the cropped area are now cropped against the 
+          edges of the source image
+        - cropping to zero width/height is treated as an error (no
+          image is returned and $src->errstr has a message)
+          Resolves https://rt.cpan.org/Ticket/Display.html?id=7581
+        - built 0.43_01 for testing
+
+0.43_02 Mon 26 Oct 2004
+
+- the changes to scale() had some problems with integer vs floating point
+  calculations (only caught in tests under perl 5.8.5 <sigh>)
+- the FT2 glyph_names() method didn't do correct error handling
+  when the string parameter wasn't supplied
+- i_ft2_glyph_name() accepted only an unsigned char as the
+  character code to get the name for, which meant it
+  didn't work for unicode characters \x{100} or above
+- the XS for i_ft2_glyph_name() had a similar problem
+- added NameTest.ttf to be used in checking unicode glyph
+  names
+- added reliable_only optional parameter to the glyph_names()
+  method so you can ignore theresult of FT_Has_PS_Glyph_Names()
+- handle errors given by i_ft2_glyph_name() a bit more
+  correctly
+- the FT1 glyph_names() method didn't do correct error handling 
+  when the string parameter wasn't supplied
+- some memory allocated when creating a callback IO object (io_new_cb)
+  wasn't being released (detected with valgrind)
+- the testtools.pl match[nx]() functions escapes the test string on 
+  test failure a bit better
+- the XS code for i_tt_glyph_name() used unsigned char to store a 
+  unicode character when it should have used unsigned long.
+- the XS code for i_t1_glyph_name() used unsigned char to store a 
+  unicode character when it should have used unsigned long.
+- resolves https://rt.cpan.org/Ticket/Display.html?id=7949
+- the type 1 glyph_names() method didn't do correct error handling 
+  when the string parameter wasn't supplied
+- renamed io.h to imio.h to prevent problems building under cygwin.
+  resolve https://rt.cpan.org/Ticket/Display.html?id=7948
+- i_writegif_low() wasn't setting the returned global palette, which
+  meant a rubbish palette was returned to the user (detected with valgrind)
+- built 0.43_02 for testing
+
+0.43_03 Wed 8 Dec 2004
+
+- change the "double-include" protection macro that imio.h uses.
+- updated download locations for the various libraries that Imager 
+  depends on.  Added some advice for cygwin.
+- more information on gif library versions in README and Makefile.PL
+- creating an image where the size of the allocated image buffer would
+  overflow an integer would cause too small a buffer to be allocated.
+  This could potentially be a security hole.
+  partly resolves https://rt.cpan.org/Ticket/Display.html?id=8213
+- set i_format to jpeg for jpeg files and test for it
+- set i_format to png when reading png files and test for it
+- i_yres was being set to the xres when reading a png file
+- added many bad BMP files to test various code paths in bmp.c, and 
+  made many minor fixes to bmp.c to make them work:
+  - it was possible for various types of read failures to SEGV, both
+    as NULL pointer dereferences and buffer overflows
+  - some errors, like palettes being too large for the number of bits
+    per pixel, were not being caught
+  - failing to read all of a packed data structure would not cause
+    a read failure
+  - invalid compression types were not always caught
+  - error messages are more consistent (still not always great messages,
+    but one step at a time)
+- added bmp_compression_name, bmp_used_colors, bmp_filesize, bmp_bit_count 
+  tags on reading a BMP file
+- added tools/imager to the distribution.  This is still very 
+  experimental and untested.  Patches welcome, if you write tests to go
+  with them.
+- the BMP reader now validates the bfOffBits value from the BMP header
+  and skips to that offset before reading image data.  Previously this
+  value was read but otherwise ignored.
+- added --palette action to tools/imager
+- i_img_pal_new() now releases the image object memory if creation
+  fails.
+- set i_format to gif when reading gif files and test for it
+- set i_format to pnm when reading pnm files and test for it
+- set i_format to tga when reading tga files and test for it
+- handle image creation failures when reading tga files
+- set i_format to tiff when reading tiff images and test for it
+- handle image creation failures when reading tiff files
+- test t/t35ttfont.t no longer requires TTFONTTEST to be set (and 
+  hasn't for a long time,) removed that requirement from README
+- updated home page URLs throughout the .pods
+- added information on reporting bugs to the SUPPORT section of Imager.pm
+- regops.perl now sorts the dumped data structure to produce minimal diffs
+- quant.c now checks for integer overflow allocating its image data
+- i_readraw_wiol() now checks for image creation failure
+- i_readrgb_wiol() now checks for image creation failure
+- i_writergb_wiol() was an empty stub, it now pushes an error message
+  and explicitly returns failure.
+- i_readrgb_wiol() now sets i_format to rgb.
+- set i_format to raw when reading tga files and test for it
+- document i_format tag
+- some tests were using $Config{ivsize} when they should have been 
+  using $Config{intsize}
+  Resolves: https://rt.cpan.org/Ticket/Display.html?id=8645
+- tools/imager has been removed from the MANIFEST, it's way too late
+  to test/debug for 0.44.
+- image.h had no prototype for i_ft2_bbox_r() and it was being called
+  from Imager.xs
+- giflib 4.1.3 still doesn't have all the bugs fixed, update the notes
+  in README and in the buggy_giflib.txt file that t105gif.t produces
+- make the inclusion of NO_META dependent on the version of EU::MM.
+  I was going to include a META.yml but EU::MM's generation is too 
+  simplistic (and misses the leading document header too).  For now
+  I'll leave it out.
+- built 0.43_03 for testing
+
 =================================================================
 
         For latest versions check the Imager-devel pages:
-        http://imager.perl.org/~addi/perl/Imager/
+        http://imager.perl.org/
 
 =================================================================
 

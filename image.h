@@ -1,7 +1,7 @@
 #ifndef _IMAGE_H_
 #define _IMAGE_H_
 
-#include "io.h"
+#include "imio.h"
 #include "iolayer.h"
 #include "log.h"
 #include "stackmach.h"
@@ -217,7 +217,9 @@ int  i_rubthru     (i_img *im, i_img *src, int tx, int ty, int src_minx, int src
 undef_int i_flipxy (i_img *im, int direction);
 extern i_img *i_rotate90(i_img *im, int degrees);
 extern i_img *i_rotate_exact(i_img *im, double amount);
+extern i_img *i_rotate_exact_bg(i_img *im, double amount, i_color *backp, i_fcolor *fbackp);
 extern i_img *i_matrix_transform(i_img *im, int xsize, int ysize, double *matrix);
+extern i_img *i_matrix_transform_bg(i_img *im, int xsize, int ysize, double *matrix,  i_color *backp, i_fcolor *fbackp);
 
 void i_bezier_multi(i_img *im,int l,double *x,double *y,i_color *val);
 void i_poly_aa     (i_img *im,int l,double *x,double *y,i_color *val);
@@ -293,6 +295,8 @@ extern int i_ft2_settransform(FT2_Fonthandle *handle, double *matrix);
 extern int i_ft2_sethinting(FT2_Fonthandle *handle, int hinting);
 extern int i_ft2_bbox(FT2_Fonthandle *handle, double cheight, double cwidth, 
                       char const *text, int len, int *bbox, int utf8);
+extern int i_ft2_bbox_r(FT2_Fonthandle *handle, double cheight, double cwidth, 
+		      char const *text, int len, int vlayout, int utf8, int *bbox);
 extern int i_ft2_text(FT2_Fonthandle *handle, i_img *im, int tx, int ty, 
                       i_color *cl, double cheight, double cwidth, 
                       char const *text, int len, int align, int aa, 
@@ -305,8 +309,10 @@ extern int i_ft2_has_chars(FT2_Fonthandle *handle, char const *text, int len,
                            int utf8, char *work);
 extern int i_ft2_face_name(FT2_Fonthandle *handle, char *name_buf, 
                            size_t name_buf_size);
-extern int i_ft2_glyph_name(FT2_Fonthandle *handle, unsigned char ch, 
-                            char *name_buf, size_t name_buf_size);
+extern int i_ft2_can_face_name(void);
+extern int i_ft2_glyph_name(FT2_Fonthandle *handle, unsigned long ch, 
+                            char *name_buf, size_t name_buf_size,
+                            int reliable_only);
 extern int i_ft2_can_do_glyph_names(void);
 extern int i_ft2_face_has_glyph_names(FT2_Fonthandle *handle);
 

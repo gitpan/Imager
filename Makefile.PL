@@ -1,4 +1,4 @@
-
+#!perl -w
 use ExtUtils::MakeMaker;
 use Cwd;
 use Config;
@@ -50,8 +50,9 @@ for $frm(values %formats) {
   $F_OBJECT .= ' '  .$frm->{objfiles};
 }
 
-$F_INC  = join(" ",map { (exists $definc{$_})?'':'-I'.$_ } @incs);
-$F_LIBS = join(" ",map { '-L'.$_ } @libs).' '.$F_LIBS;
+$F_INC  = join ' ', map "-I$_", map / / ? qq{"$_"} : $_, 
+  grep !exists $definc{$_}, @incs;
+$F_LIBS = join(' ',map "-L$_", map / / ? qq{"$_"} : $_, @libs) . $F_LIBS;
 
 $OSLIBS = '';
 $OSDEF  = "-DOS_$^O";
@@ -76,9 +77,12 @@ if (defined $Config{'d_dlsymun'}) { $OSDEF  .= ' -DDLSYMUN'; }
        clean          => { FILES=>'testout' },
       );
 
-if ($] ge '5.005') {
-  $opts{AUTHOR} = 'Arnar M. Hrafnkelsson, addi@umich.edu';
+if ($ExtUtils::MakeMaker::VERSION > 6.06) {
+  $opts{AUTHOR} = 'Tony Cook <tony@imager.perl.org>, Arnar M. Hrafnkelsson';
   $opts{ABSTRACT} = 'Perl extension for Generating 24 bit Images';
+}
+if ($ExtUtils::MakeMaker::VERSION > 6.10) {
+  $opts{NO_META} = 1;
 }
 
 if ($VERBOSE) { print Dumper(\%opts); }
@@ -150,6 +154,12 @@ You have libgif or libungif installed.  They are both known to have
 bugs.  Imager can crash or display other strange behaviour after
 reading or writing gif images.  Some of the gif tests can even fail
 since they stress some parts of the buggy code.
+
+libungif 4.1.2 and later is safe.  giflib 4.1.3 needs at least one
+patch to have all the bugs fixed, see README for details.
+
+Of course it's possible your operating system distributor has patched
+all of these problems and you have nothing to worry about.
 
 Do you want to remove gif support? [Y/n]
 EOFF
@@ -263,8 +273,12 @@ sub pathcheck {
 sub init {
 
   @definc{'/usr/include'}=();
-  @incs=(qw(/sw/include /usr/include/freetype2 /usr/local/include/freetype2 /usr/include /usr/local/include /usr/include/freetype /usr/local/include/freetype), split /\Q$Config{path_sep}/, $INCPATH );
-  @libs=(qw(/sw/lib), split(/\Q$Config{path_sep}/,$LIBPATH) , split(/ /, $Config{'libpth'}));
+  @incs=(split(/\Q$Config{path_sep}/, $INCPATH), 
+         qw(/sw/include /usr/include/freetype2 /usr/local/include/freetype2 
+            /usr/include /usr/local/include /usr/include/freetype 
+            /usr/local/include/freetype));
+  @libs=(split(/\Q$Config{path_sep}/,$LIBPATH), 
+         qw(/sw/lib),  split(/ /, $Config{'libpth'}));
   if ($^O =~ /win32/i && $Config{cc} =~ /\bcl\b/i) {
     push(@incs, split /;/, $ENV{INCLUDE}) if exists $ENV{INCLUDE};
     push(@libs, split /;/, $ENV{LIB}) if exists $ENV{LIB};

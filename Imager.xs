@@ -19,17 +19,6 @@ typedef i_color* Imager__Color;
 typedef i_fcolor* Imager__Color__Float;
 typedef i_img*   Imager__ImgRaw;
 
-/* later perls define this macro to prevent warning when converting
-from IV to pointer types */
-
-#ifndef INT2PTR
-#define INT2PTR(type,value) (type)(value)
-#endif
-
-#ifndef PTR2IV
-#define PTR2IV(p) INT2PTR(IV,p)
-#endif
-
 #ifdef HAVE_LIBTT
 typedef TT_Fonthandle* Imager__Font__TT;
 #endif
@@ -423,7 +412,6 @@ static ssize_t io_reader(void *p, void *data, size_t size) {
   struct cbdata *cbd = p;
   ssize_t total;
   char *out = data; /* so we can do pointer arithmetic */
-  int i;
 
   if (cbd->writing) {
     if (write_flush(cbd) <= 0)
@@ -505,6 +493,7 @@ static void io_destroyer(void *p) {
   SvREFCNT_dec(cbd->readcb);
   SvREFCNT_dec(cbd->seekcb);
   SvREFCNT_dec(cbd->closecb);
+  myfree(cbd);
 }
 
 struct value_name {
@@ -1096,7 +1085,6 @@ io_new_buffer(data)
 	  char   *data
 	PREINIT:
 	  size_t length;
-	  SV* sv;
 	CODE:
 	  SvPV(ST(0), length);
           SvREFCNT_inc(ST(0));
@@ -1190,6 +1178,19 @@ i_img_empty_ch(im,x,y,ch)
                int     x
 	       int     y
 	       int     ch
+
+Imager::ImgRaw
+i_sametype(im, x, y)
+    Imager::ImgRaw im
+               int x
+               int y
+
+Imager::ImgRaw
+i_sametype_chans(im, x, y, channels)
+    Imager::ImgRaw im
+               int x
+               int y
+               int channels
 
 void
 m_init_log(name,level)
@@ -1500,12 +1501,34 @@ i_rotate90(im, degrees)
                int      degrees
 
 Imager::ImgRaw
-i_rotate_exact(im, amount)
+i_rotate_exact(im, amount, ...)
     Imager::ImgRaw      im
             double      amount
+      PREINIT:
+	i_color *backp = NULL;
+	i_fcolor *fbackp = NULL;
+	int i;
+	SV * sv1;
+      CODE:
+	/* extract the bg colors if any */
+	/* yes, this is kind of strange */
+	for (i = 2; i < items; ++i) {
+          sv1 = ST(i);
+          if (sv_derived_from(sv1, "Imager::Color")) {
+	    IV tmp = SvIV((SV*)SvRV(sv1));
+	    backp = INT2PTR(i_color *, tmp);
+	  }
+	  else if (sv_derived_from(sv1, "Imager::Color::Float")) {
+	    IV tmp = SvIV((SV*)SvRV(sv1));
+	    fbackp = INT2PTR(i_fcolor *, tmp);
+	  }
+	}
+	RETVAL = i_rotate_exact_bg(im, amount, backp, fbackp);
+      OUTPUT:
+	RETVAL
 
 Imager::ImgRaw
-i_matrix_transform(im, xsize, ysize, matrix)
+i_matrix_transform(im, xsize, ysize, matrix, ...)
     Imager::ImgRaw      im
                int      xsize
                int      ysize
@@ -1515,6 +1538,8 @@ i_matrix_transform(im, xsize, ysize, matrix)
         IV len;
         SV *sv1;
         int i;
+	i_color *backp = NULL;
+	i_fcolor *fbackp = NULL;
       CODE:
         if (!SvROK(ST(3)) || SvTYPE(SvRV(ST(3))) != SVt_PVAV)
           croak("i_matrix_transform: parameter 4 must be an array ref\n");
@@ -1528,7 +1553,20 @@ i_matrix_transform(im, xsize, ysize, matrix)
         }
         for (; i < 9; ++i)
           matrix[i] = 0;
-        RETVAL = i_matrix_transform(im, xsize, ysize, matrix);        
+	/* extract the bg colors if any */
+	/* yes, this is kind of strange */
+	for (i = 4; i < items; ++i) {
+          sv1 = ST(i);
+          if (sv_derived_from(sv1, "Imager::Color")) {
+	    IV tmp = SvIV((SV*)SvRV(sv1));
+	    backp = INT2PTR(i_color *, tmp);
+	  }
+	  else if (sv_derived_from(sv1, "Imager::Color::Float")) {
+	    IV tmp = SvIV((SV*)SvRV(sv1));
+	    fbackp = INT2PTR(i_fcolor *, tmp);
+	  }
+	}
+        RETVAL = i_matrix_transform_bg(im, xsize, ysize, matrix, backp, fbackp);
       OUTPUT:
         RETVAL
 
@@ -1575,7 +1613,6 @@ i_convert(im, src, coeff)
 	  int inchan;
 	  AV *avmain;
           SV **temp;
-	  SV *svsub;
           AV *avsub;
 	  int len;
 	  int i, j;
@@ -1827,7 +1864,7 @@ i_t1_glyph_name(handle, text_sv, utf8 = 0)
         text = SvPV(text_sv, work_len);
         len = work_len;
         while (len) {
-          unsigned char ch;
+          unsigned long ch;
           if (utf8) {
             ch = i_utf8_advance(&text, &len);
             if (ch == ~0UL) {
@@ -2016,7 +2053,7 @@ i_tt_glyph_name(handle, text_sv, utf8 = 0)
         text = SvPV(text_sv, work_len);
         len = work_len;
         while (len) {
-          unsigned char ch;
+          unsigned long ch;
           if (utf8) {
             ch = i_utf8_advance(&text, &len);
             if (ch == ~0UL) {
@@ -2258,7 +2295,7 @@ i_writegif(im,fd,colors,pixdev,fixed)
 	       sv1=(*(av_fetch(av,i,0)));
                if (sv_derived_from(sv1, "Imager::Color")) {
                  Itmp = SvIV((SV*)SvRV(sv1));
-                 tmp = (i_color*) Itmp;
+                 tmp = INT2PTR(i_color*, Itmp);
                } else croak("Imager: one of the elements of array ref is not of Imager::Color type\n");
                fixed[i]=*tmp;
 	     }
@@ -2757,8 +2794,6 @@ i_writetga_wiol(im,ig, wierdpack, compress, idstring)
                int     compress
               char*    idstring
             PREINIT:
-                SV* sv1;
-                int rc;
                 int idlen;
 	       CODE:
                 idlen  = SvCUR(ST(4));
@@ -2781,8 +2816,6 @@ i_writergb_wiol(im,ig, wierdpack, compress, idstring)
                int     compress
               char*    idstring
             PREINIT:
-                SV* sv1;
-                int rc;
                 int idlen;
 	       CODE:
                 idlen  = SvCUR(ST(4));
@@ -2881,7 +2914,6 @@ i_transform2(sv_width,sv_height,channels,sv_ops,av_n_regs,av_c_regs,av_in_imgs)
 	     PREINIT:
              int width;
              int height;
-	     double* parm;
 	     struct rm_op *ops;
 	     STRLEN ops_len;
 	     int ops_count;
@@ -2891,8 +2923,7 @@ i_transform2(sv_width,sv_height,channels,sv_ops,av_n_regs,av_c_regs,av_in_imgs)
 	     int c_regs_count;
              int in_imgs_count;
              i_img **in_imgs;
-	     AV* av;
-	     SV* sv1;
+             SV *sv1;
              IV tmp;
 	     int i;
              CODE:
@@ -3163,7 +3194,6 @@ i_errors()
         i_errmsg *errors;
 	int i;
 	AV *av;
-	SV *ref;
 	SV *sv;
       PPCODE:
 	errors = i_errors();
@@ -3303,6 +3333,10 @@ DSO_call(handle,func_index,hv)
 
 
 # this is mostly for testing...
+# this function results in 'RETVAL' : unreferenced local variable
+# in VC++, and might be subtley wrong
+# the most obvious change may result in a double free so I'm leaving it
+# for now
 SV *
 i_get_pixel(im, x, y)
 	Imager::ImgRaw im
@@ -3400,7 +3434,7 @@ i_ppal(im, l, y, ...)
         int     y
       PREINIT:
         i_palidx *work;
-        int count, i;
+        int i;
       CODE:
         if (items > 3) {
           work = mymalloc(sizeof(i_palidx) * (items-3));
@@ -3450,7 +3484,7 @@ i_addcolors(im, ...)
           ST(0) = sv_2mortal(newSViv(index));
         }
 
-int 
+undef_int 
 i_setcolors(im, index, ...)
         Imager::ImgRaw  im
         int index
@@ -3474,6 +3508,8 @@ i_setcolors(im, index, ...)
         }
         RETVAL = i_setcolors(im, index, colors, items-2);
         myfree(colors);
+      OUTPUT:
+	RETVAL
 
 void
 i_getcolors(im, index, ...)
@@ -3629,7 +3665,7 @@ i_plin(im, l, y, ...)
         int     y
       PREINIT:
         i_color *work;
-        int count, i;
+        int i;
       CODE:
         if (items > 3) {
           work = mymalloc(sizeof(i_color) * (items-3));
@@ -3706,7 +3742,7 @@ i_plinf(im, l, y, ...)
         int     y
       PREINIT:
         i_fcolor *work;
-        int count, i;
+        int i;
       CODE:
         if (items > 3) {
           work = mymalloc(sizeof(i_fcolor) * (items-3));
@@ -3950,9 +3986,9 @@ i_wf_bbox(face, size, text)
 	char *face
 	int size
 	char *text
-        int rc, i;
       PREINIT:
 	int cords[BOUNDING_BOX_COUNT];
+        int rc, i;
       PPCODE:
         if (rc = i_wf_bbox(face, size, text, strlen(text), cords)) {
           EXTEND(SP, rc);  
@@ -4226,11 +4262,15 @@ i_ft2_face_name(handle)
           PUSHs(sv_2mortal(newSVpv(name, 0)));
         }
 
+undef_int
+i_ft2_can_face_name()
+
 void
-i_ft2_glyph_name(handle, text_sv, utf8 = 0)
+i_ft2_glyph_name(handle, text_sv, utf8 = 0, reliable_only = 1)
         Imager::Font::FT2 handle
         SV *text_sv
         int utf8
+        int reliable_only
       PREINIT:
         char const *text;
         STRLEN work_len;
@@ -4245,7 +4285,7 @@ i_ft2_glyph_name(handle, text_sv, utf8 = 0)
         text = SvPV(text_sv, work_len);
         len = work_len;
         while (len) {
-          unsigned char ch;
+          unsigned long ch;
           if (utf8) {
             ch = i_utf8_advance(&text, &len);
             if (ch == ~0UL) {
@@ -4258,7 +4298,8 @@ i_ft2_glyph_name(handle, text_sv, utf8 = 0)
             --len;
           }
           EXTEND(SP, 1);
-          if (outsize = i_ft2_glyph_name(handle, ch, name, sizeof(name))) {
+          if (outsize = i_ft2_glyph_name(handle, ch, name, sizeof(name), 
+                                         reliable_only)) {
             PUSHs(sv_2mortal(newSVpv(name, 0)));
           }
           else {
@@ -4370,3 +4411,4 @@ i_new_fill_image(src, matrix, xoff, yoff, combine)
         RETVAL = i_new_fill_image(src, matrixp, xoff, yoff, combine);
       OUTPUT:
         RETVAL
+

@@ -220,6 +220,48 @@ epsilon value is used.
 
 Basic logical operators.
 
+=item log(n), exp(n)
+
+Natural logarithm and exponential.
+
+=back
+
+=item Constants
+
+transform2() defines the following constants:
+
+=over
+
+=item pi
+
+The classical constant.
+
+=item w
+
+=item h
+
+The width and height of the output image.
+
+=item cx
+
+=item cy
+
+The center of the output image.
+
+=item wI<image number>
+
+=item hI<image number>
+
+The width and height of each of the input images, C<w1> is the width
+of the first input image and so on.
+
+=item cxI<image number>
+
+=item cyI<image number>
+
+The center of each of the input images, (C<cx1>, C<cy1>) is the center
+of the first input image and so on.
+
 =back
 
 A few examples:
@@ -305,8 +347,12 @@ WARNING: the matrix you provide in the matrix operator transforms the
 co-ordinates within the B<destination> image to the co-ordinates
 within the I<source> image.  This can be confusing.
 
-Since Imager has 3 different fairly general ways of transforming an
-image spatially, this method also has a yatf() alias.  Yet Another
-Transformation Function.
+You can also supply a C<back> argument which acts as a background
+color for the areas of the image with no samples available (outside
+the rectangle of the source image.)  This can be either an
+Imager::Color or Imager::Color::Float object.  This is B<not> mixed
+transparent pixels in the middle of the source image, it is B<only>
+used for pixels where there is no corresponding pixel in the source
+image.
 
 =cut

@@ -8,11 +8,13 @@
 use strict;
 
 my $loaded;
-BEGIN { $| = 1; print "1..71\n"; }
+BEGIN { $| = 1; print "1..93\n"; }
 END {print "not ok 1\n" unless $loaded;}
 use Imager qw(:handy :all);
 $loaded = 1;
 print "ok 1\n";
+
+require "t/testtools.pl";
 
 init_log("testout/t01introvert.log",1);
 
@@ -220,6 +222,76 @@ print "ok 56\n";
   print "ok 70\n";
   $impal3->type eq 'paletted' or print "not ";
   print "ok 71\n";
+}
+
+my $num = 72;
+okn($num++, !Imager->new(xsize=>0, ysize=>1), "fail to create 0 height image");
+matchn($num++, Imager->errstr, qr/Image sizes must be positive/,
+       "0 height error message check");
+okn($num++, !Imager->new(xsize=>1, ysize=>0), "fail to create 0 width image");
+matchn($num++, Imager->errstr, qr/Image sizes must be positive/,
+       "0 width error message check");
+okn($num++, !Imager->new(xsize=>-1, ysize=>1), "fail to create -ve height image");
+matchn($num++, Imager->errstr, qr/Image sizes must be positive/,
+       "-ve width error message check");
+okn($num++, !Imager->new(xsize=>1, ysize=>-1), "fail to create -ve width image");
+matchn($num++, Imager->errstr, qr/Image sizes must be positive/,
+       "-ve height error message check");
+okn($num++, !Imager->new(xsize=>-1, ysize=>-1), "fail to create -ve width/height image");
+matchn($num++, Imager->errstr, qr/Image sizes must be positive/,
+       "-ve width/height error message check");
+
+okn($num++, !Imager->new(xsize=>1, ysize=>1, channels=>0),
+    "fail to create a zero channel image");
+matchn($num++, Imager->errstr, qr/channels must be between 1 and 4/,
+       "out of range channel message check");
+okn($num++, !Imager->new(xsize=>1, ysize=>1, channels=>5),
+    "fail to create a five channel image");
+matchn($num++, Imager->errstr, qr/channels must be between 1 and 4/,
+       "out of range channel message check");
+
+{
+  # https://rt.cpan.org/Ticket/Display.html?id=8213
+  # check for handling of memory allocation of very large images
+  # only test this on 32-bit machines - on a 64-bit machine it may
+  # result in trying to allocate 4Gb of memory, which is unfriendly at
+  # least and may result in running out of memory, causing a different
+  # type of exit
+  use Config;
+  if ($Config{intsize} == 4) {
+    my $uint_range = 256 ** $Config{intsize};
+    print "# range $uint_range\n";
+    my $dim1 = int(sqrt($uint_range))+1;
+    
+    my $im_b = Imager->new(xsize=>$dim1, ysize=>$dim1, channels=>1);
+    isn($num++, $im_b, undef, "integer overflow check - 1 channel");
+    
+    $im_b = Imager->new(xisze=>$dim1, ysize=>1, channels=>1);
+    okn($num++, $im_b, "but same width ok");
+    $im_b = Imager->new(xisze=>1, ysize=>$dim1, channels=>1);
+    okn($num++, $im_b, "but same height ok");
+    matchn($num++, Imager->errstr, qr/integer overflow/,
+           "check the error message");
+
+    # do a similar test with a 3 channel image, so we're sure we catch
+    # the same case where the third dimension causes the overflow
+    my $dim3 = int(sqrt($uint_range / 3))+1;
+    
+    $im_b = Imager->new(xsize=>$dim3, ysize=>$dim3, channels=>3);
+    isn($num++, $im_b, undef, "integer overflow check - 3 channel");
+    
+    $im_b = Imager->new(xisze=>$dim3, ysize=>1, channels=>3);
+    okn($num++, $im_b, "but same width ok");
+    $im_b = Imager->new(xisze=>1, ysize=>$dim3, channels=>3);
+    okn($num++, $im_b, "but same height ok");
+
+    matchn($num++, Imager->errstr, qr/integer overflow/,
+           "check the error message");
+  }
+  else {
+    skipn($num, 8, "don't want to allocate 4Gb");
+    $num += 8;
+  }
 }
 
 sub check_add {

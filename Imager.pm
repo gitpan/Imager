@@ -147,7 +147,7 @@ BEGIN {
   require Exporter;
   require DynaLoader;
 
-  $VERSION = '0.43';
+  $VERSION = '0.43_03';
   @ISA = qw(Exporter DynaLoader);
   bootstrap Imager $VERSION;
 }
@@ -526,7 +526,12 @@ sub new {
   $self->{ERRSTR}=undef; #
   $self->{DEBUG}=$DEBUG;
   $self->{DEBUG} && print "Initialized Imager\n";
-  if ($hsh{xsize} && $hsh{ysize}) { $self->img_set(%hsh); }
+  if (defined $hsh{xsize} && defined $hsh{ysize}) { 
+    unless ($self->img_set(%hsh)) {
+      $Imager::ERRSTR = $self->{ERRSTR};
+      return;
+    }
+  }
   return $self;
 }
 
@@ -568,44 +573,104 @@ sub paste {
 sub crop {
   my $self=shift;
   unless ($self->{IMG}) { $self->{ERRSTR}='empty input image'; return undef; }
-  my %hsh=(left=>0,right=>$self->getwidth(),top=>0,bottom=>$self->getheight(),@_);
 
-  my ($w,$h,$l,$r,$b,$t)=($self->getwidth(),$self->getheight(),
-				@hsh{qw(left right bottom top)});
-  $l=0 if not defined $l;
-  $t=0 if not defined $t;
+  
+  my %hsh=@_;
 
-  $r||=$l+delete $hsh{'width'}    if defined $l and exists $hsh{'width'};
-  $b||=$t+delete $hsh{'height'}   if defined $t and exists $hsh{'height'};
-  $l||=$r-delete $hsh{'width'}    if defined $r and exists $hsh{'width'};
-  $t||=$b-delete $hsh{'height'}   if defined $b and exists $hsh{'height'};
+  my ($w, $h, $l, $r, $b, $t) =
+    @hsh{qw(width height left right bottom top)};
 
-  $r=$self->getwidth if not defined $r;
-  $b=$self->getheight if not defined $b;
+  # work through the various possibilities
+  if (defined $l) {
+    if (defined $w) {
+      $r = $l + $w;
+    }
+    elsif (!defined $r) {
+      $r = $self->getwidth;
+    }
+  }
+  elsif (defined $r) {
+    if (defined $w) {
+      $l = $r - $w;
+    }
+    else {
+      $l = 0;
+    }
+  }
+  elsif (defined $w) {
+    $l = int(0.5+($self->getwidth()-$w)/2);
+    $r = $l + $w;
+  }
+  else {
+    $l = 0;
+    $r = $self->getwidth;
+  }
+  if (defined $t) {
+    if (defined $h) {
+      $b = $t + $h;
+    }
+    elsif (!defined $b) {
+      $b = $self->getheight;
+    }
+  }
+  elsif (defined $b) {
+    if (defined $h) {
+      $t = $b - $h;
+    }
+    else {
+      $t = 0;
+    }
+  }
+  elsif (defined $h) {
+    $t=int(0.5+($self->getheight()-$h)/2);
+    $b=$t+$h;
+  }
+  else {
+    $t = 0;
+    $b = $self->getheight;
+  }
 
   ($l,$r)=($r,$l) if $l>$r;
   ($t,$b)=($b,$t) if $t>$b;
 
-  if ($hsh{'width'}) {
-    $l=int(0.5+($w-$hsh{'width'})/2);
-    $r=$l+$hsh{'width'};
-  } else {
-    $hsh{'width'}=$r-$l;
-  }
-  if ($hsh{'height'}) {
-    $b=int(0.5+($h-$hsh{'height'})/2);
-    $t=$h+$hsh{'height'};
-  } else {
-    $hsh{'height'}=$b-$t;
+  $l < 0 and $l = 0;
+  $r > $self->getwidth and $r = $self->getwidth;
+  $t < 0 and $t = 0;
+  $b > $self->getheight and $b = $self->getheight;
+
+  if ($l == $r || $t == $b) {
+    $self->_set_error("resulting image would have no content");
+    return;
   }
 
-#    print "l=$l, r=$r, h=$hsh{'width'}\n";
-#    print "t=$t, b=$b, w=$hsh{'height'}\n";
-
-  my $dst=Imager->new(xsize=>$hsh{'width'}, ysize=>$hsh{'height'}, channels=>$self->getchannels());
+  my $dst = $self->_sametype(xsize=>$r-$l, ysize=>$b-$t);
 
   i_copyto($dst->{IMG},$self->{IMG},$l,$t,$r,$b,0,0);
   return $dst;
+}
+
+sub _sametype {
+  my ($self, %opts) = @_;
+
+  $self->{IMG} or return $self->_set_error("Not a valid image");
+
+  my $x = $opts{xsize} || $self->getwidth;
+  my $y = $opts{ysize} || $self->getheight;
+  my $channels = $opts{channels} || $self->getchannels;
+  
+  my $out = Imager->new;
+  if ($channels == $self->getchannels) {
+    $out->{IMG} = i_sametype($self->{IMG}, $x, $y);
+  }
+  else {
+    $out->{IMG} = i_sametype_chans($self->{IMG}, $x, $y, $channels);
+  }
+  unless ($out->{IMG}) {
+    $self->{ERRSTR} = $self->_error_as_msg;
+    return;
+  }
+  
+  return $out;
 }
 
 # Sets an image to a certain size and channel number
@@ -637,6 +702,13 @@ sub img_set {
     $self->{IMG}=Imager::ImgRaw::new($hsh{'xsize'}, $hsh{'ysize'},
                                      $hsh{'channels'});
   }
+
+  unless ($self->{IMG}) {
+    $self->{ERRSTR} = Imager->_error_as_msg();
+    return;
+  }
+
+  $self;
 }
 
 # created a masked version of the current image
@@ -678,9 +750,13 @@ sub to_paletted {
 
   #print "Type ", i_img_type($result->{IMG}), "\n";
 
-  $result->{IMG} or undef $result;
-
-  return $result;
+  if ($result->{IMG}) {
+    return $result;
+  }
+  else {
+    $self->{ERRSTR} = $self->_error_as_msg;
+    return;
+  }
 }
 
 # convert a paletted (or any image) to an 8-bit/channel RGB images
@@ -1335,7 +1411,10 @@ sub write {
       $input{make_colors} = 'webmap'; # ignored
       $input{translate} = 'giflib';
     }
-    $rc = i_writegif_wiol($IO, \%input, $self->{IMG});
+    if (!i_writegif_wiol($IO, \%input, $self->{IMG})) {
+      $self->{ERRSTR} = $self->_error_as_msg;
+      return;
+    }
   }
 
   if (exists $input{'data'}) {
@@ -1521,6 +1600,12 @@ sub scale {
   my %opts=(scalefactor=>0.5,'type'=>'max',qtype=>'normal',@_);
   my $img = Imager->new();
   my $tmp = Imager->new();
+
+  unless (defined wantarray) {
+    my @caller = caller;
+    warn "scale() called in void context - scale() returns the scaled image at $caller[1] line $caller[2]\n";
+    return;
+  }
 
   unless ($self->{IMG}) { $self->{ERRSTR}='empty input image'; return undef; }
 
@@ -1804,7 +1889,13 @@ sub rotate {
     my $amount = $opts{radians} || $opts{degrees} * 3.1415926535 / 180;
 
     my $result = Imager->new;
-    if ($result->{IMG} = i_rotate_exact($self->{IMG}, $amount)) {
+    if ($opts{back}) {
+      $result->{IMG} = i_rotate_exact($self->{IMG}, $amount, $opts{back});
+    }
+    else {
+      $result->{IMG} = i_rotate_exact($self->{IMG}, $amount);
+    }
+    if ($result->{IMG}) {
       return $result;
     }
     else {
@@ -1813,7 +1904,7 @@ sub rotate {
     }
   }
   else {
-    $self->{ERRSTR} = "Only the 'right' parameter is available";
+    $self->{ERRSTR} = "Only the 'right', 'radians' and 'degrees' parameters are available";
     return undef;
   }
 }
@@ -1827,9 +1918,16 @@ sub matrix_transform {
     my $ysize = $opts{ysize} || $self->getheight;
 
     my $result = Imager->new;
-    $result->{IMG} = i_matrix_transform($self->{IMG}, $xsize, $ysize, 
-                                        $opts{matrix})
-      or return undef;
+    if ($opts{back}) {
+      $result->{IMG} = i_matrix_transform($self->{IMG}, $xsize, $ysize, 
+					  $opts{matrix}, $opts{back})
+	or return undef;
+    }
+    else {
+      $result->{IMG} = i_matrix_transform($self->{IMG}, $xsize, $ysize, 
+					  $opts{matrix})
+	or return undef;
+    }
 
     return $result;
   }
@@ -2596,11 +2694,13 @@ Imager - Perl extension for Generating 24 bit Images
   my $format;
 
   my $img = Imager->new();
+  # see Imager::Files for information on the open() method
   $img->open(file=>$file) or die $img->errstr();
 
   $file =~ s/\.[^.]*$//;
 
   # Create smaller version
+  # documented in Imager::Transformations
   my $thumb = $img->scale(scalefactor=>.3);
 
   # Autostretch individual channels
@@ -2614,14 +2714,12 @@ Imager - Perl extension for Generating 24 bit Images
     if ($Imager::formats{$format}) {
       $file.="_low.$format";
       print "Storing image as: $file\n";
+      # documented in Imager::Files
       $thumb->write(file=>$file) or
         die $thumb->errstr;
       last SAVE;
     }
   }
-
-
-
 
 =head1 DESCRIPTION
 
@@ -2634,66 +2732,70 @@ render text and more.
 
 =over
 
-=item Imager
+=item *
 
-This document - Synopsis Example, Table of Contents and Overview.
+Imager - This document - Synopsis Example, Table of Contents and
+Overview.
 
-=item Imager::ImageTypes
+=item *
 
-Basics of constructing image objects with C<new()>:
-Direct type/virtual images, RGB(A)/paletted images, 8/16/double
-bits/channel, color maps, channel masks, image tags, color
+L<Imager::ImageTypes> - Basics of constructing image objects with
+C<new()>: Direct type/virtual images, RGB(A)/paletted images,
+8/16/double bits/channel, color maps, channel masks, image tags, color
 quantization.  Also discusses basic image information methods.
 
-=item Imager::Files
+=item *
 
-IO interaction, reading/writing images, format specific tags.
+L<Imager::Files> - IO interaction, reading/writing images, format
+specific tags.
 
-=item Imager::Draw
+=item *
 
-Drawing Primitives, lines, boxes, circles, arcs, flood fill.
+L<Imager::Draw> - Drawing Primitives, lines, boxes, circles, arcs,
+flood fill.
 
-=item Imager::Color
+=item *
 
-Color specification.
+L<Imager::Color> - Color specification.
 
-=item Imager::Fill
+=item *
 
-Fill pattern specification.
+L<Imager::Fill> - Fill pattern specification.
 
-=item Imager::Font
+=item *
 
-General font rendering, bounding boxes and font metrics.
+L<Imager::Font> - General font rendering, bounding boxes and font
+metrics.
 
-=item Imager::Transformations
+=item *
 
-Copying, scaling, cropping, flipping, blending, pasting, convert and
-map.
+L<Imager::Transformations> - Copying, scaling, cropping, flipping,
+blending, pasting, convert and map.
 
-=item Imager::Engines
+=item *
 
-Programmable transformations through C<transform()>, C<transform2()>
-and C<matrix_transform()>.
+L<Imager::Engines> - Programmable transformations through
+C<transform()>, C<transform2()> and C<matrix_transform()>.
 
-=item Imager::Filters
+=item *
 
-Filters, sharpen, blur, noise, convolve etc. and filter plugins.
+L<Imager::Filters> - Filters, sharpen, blur, noise, convolve etc. and
+filter plugins.
 
-=item Imager::Expr
+=item *
 
-Expressions for evaluation engine used by transform2().
+L<Imager::Expr> - Expressions for evaluation engine used by
+transform2().
 
-=item Imager::Matrix2d
+=item *
 
-Helper class for affine transformations.
+L<Imager::Matrix2d> - Helper class for affine transformations.
 
-=item Imager::Fountain
+=item *
 
-Helper for making gradient profiles.
+L<Imager::Fountain> - Helper for making gradient profiles.
 
 =back
-
-
 
 =head2 Basic Overview
 
@@ -2720,8 +2822,113 @@ In cases where no image object is associated with an operation
 C<$Imager::ERRSTR> is used to report errors not directly associated
 with an image object.
 
-The C<Imager-E<gt>new> method is described in detail in the 
-Imager::ImageTypes manpage.
+The C<Imager-E<gt>new> method is described in detail in
+L<Imager::ImageTypes>.
+
+=head1 METHOD INDEX
+
+Where to find information on methods for Imager class objects.
+
+addcolors() -  L<Imager::ImageTypes>
+
+addtag() -  L<Imager::ImageTypes> - add image tags
+
+arc() - L<Imager::Draw/arc>
+
+bits() - L<Imager::ImageTypes> - number of bits per sample for the
+image
+
+box() - L<Imager::Draw/box>
+
+circle() - L<Imager::Draw/circle>
+
+convert() - L<Imager::Transformations/"Color transformations"> -
+transform the color space
+
+copy() - L<Imager::Transformations/copy>
+
+crop() - L<Imager::Transformations/crop> - extract part of an image
+
+deltag() -  L<Imager::ImageTypes> - delete image tags
+
+difference() - L<Imager::Filters/"Image Difference">
+
+filter() - L<Imager::Filters>
+
+findcolor() - L<Imager::ImageTypes> - search the image palette, if it
+has one
+
+flip() - L<Imager::Transformations/flip>
+
+flood_fill() - L<Imager::Draw/flood_fill>
+
+getchannels() -  L<Imager::ImageTypes>
+
+getcolorcount() -  L<Imager::ImageTypes>
+
+getcolors() - L<Imager::ImageTypes> - get colors from the image
+palette, if it has one
+
+getheight() - L<Imager::ImageTypes>
+
+getpixel() - L<Imager::Draw/setpixel and getpixel>
+
+getwidth() - L<Imager::ImageTypes>
+
+img_set() - L<Imager::ImageTypes>
+
+line() - L<Imager::Draw/line>
+
+map() - L<Imager::Transformations/"Color Mappings"> - remap color
+channel values
+
+masked() -  L<Imager::ImageTypes> - make a masked image
+
+matrix_transform() - L<Imager::Engines/"Matrix Transformations">
+
+new() - L<Imager::ImageTypes>
+
+paste() - L<Imager::Transformations/paste> - draw an image onto an image
+
+polygon() - L<Imager::Draw/polygon>
+
+polyline() - L<Imager::Draw/polyline>
+
+read() - L<Imager::Files>
+
+read_multi() - L<Imager::Files>
+
+rotate() - L<Imager::Transformations/rotate>
+
+rubthrough() - L<Imager::Transformations/rubthrough> - draw an image onto an
+image and use the alpha channel
+
+scale() - L<Imager::Transformations/scale>
+
+setcolors() - L<Imager::ImageTypes> - set palette colors in a paletted image
+
+setpixel() - L<Imager::Draw/setpixel and getpixel>
+
+string() - L<Imager::Font/string> - draw text on an image
+
+tags() -  L<Imager::ImageTypes> - fetch image tags
+
+to_paletted() -  L<Imager::ImageTypes>
+
+to_rgb8() - L<Imager::ImageTypes>
+
+transform() - L<Imager::Engines/"transform">
+
+transform2() - L<Imager::Engines/"transform2">
+
+type() -  L<Imager::ImageTypes> - type of image (direct vs paletted)
+
+virtual() - L<Imager::ImageTypes> - whether the image has it's own
+data
+
+write() - L<Imager::Files>
+
+write_multi() - L<Imager::Files>
 
 =head1 SUPPORT
 
@@ -2740,8 +2947,20 @@ or use the form at:
 where you can also find the mailing list archive.
 
 If you're into IRC, you can typically find the developers in #Imager
-on irc.rhizomatic.net.  As with any IRC channel, the participants
-could be occupied or asleep, so please be patient.
+on irc.perl.org.  As with any IRC channel, the participants could be
+occupied or asleep, so please be patient.
+
+You can report bugs either by sending email to:
+
+  bug-Imager@rt.cpan.org
+
+or by pointing your browser at:
+
+  https://rt.cpan.org/NoAuth/ReportBug.html?Queue=Imager
+
+Please remember to include the versions of Imager, perl, supporting
+libraries, and any relevant code.  If you have specific images that
+cause the problems, please include those too.
 
 =head1 BUGS
 
@@ -2760,10 +2979,6 @@ Imager::Transformations(3), Imager::Engines(3), Imager::Filters(3),
 Imager::Expr(3), Imager::Matrix2d(3), Imager::Fountain(3)
 
 Affix::Infix2Postfix(3), Parse::RecDescent(3)
-http://imager.perl.org/~addi/perl/Imager/
+http://imager.perl.org/
 
 =cut
-
-
-
-

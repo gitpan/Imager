@@ -1,5 +1,5 @@
-#ifndef _IO_H_
-#define _IO_H_
+#ifndef IMAGER_IMIO_H_
+#define IMAGER_IMIO_H_
 #include <stdio.h>
 #include <sys/stat.h>
 #ifndef _MSC_VER

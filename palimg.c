@@ -84,6 +84,7 @@ Currently 0 < maxpal <= 256
 */
 i_img *i_img_pal_new_low(i_img *im, int x, int y, int channels, int maxpal) {
   i_img_pal_ext *palext;
+  int bytes;
 
   i_clear_error();
   if (maxpal < 0 || maxpal > 256) {
@@ -95,7 +96,12 @@ i_img *i_img_pal_new_low(i_img *im, int x, int y, int channels, int maxpal) {
     return NULL;
   }
   if (channels < 1 || channels > MAXCHANNELS) {
-    i_push_errorf(0, "Channels must be postive and <= %d", MAXCHANNELS);
+    i_push_errorf(0, "Channels must be positive and <= %d", MAXCHANNELS);
+    return NULL;
+  }
+  bytes = sizeof(i_palidx) * x * y;
+  if (bytes / y / sizeof(i_palidx) != x) {
+    i_push_errorf(0, "integer overflow calculating image allocation");
     return NULL;
   }
 
@@ -107,7 +113,7 @@ i_img *i_img_pal_new_low(i_img *im, int x, int y, int channels, int maxpal) {
   palext->last_found = -1;
   im->ext_data = palext;
   i_tags_new(&im->tags);
-  im->bytes = sizeof(i_palidx) * x * y;
+  im->bytes = bytes;
   im->idata = mymalloc(im->bytes);
   im->channels = channels;
   memset(im->idata, 0, im->bytes);
@@ -121,7 +127,12 @@ i_img *i_img_pal_new(int x, int y, int channels, int maxpal) {
   i_img *im;
   mm_log((1, "i_img_pal_new(x %d, y %d, channels %d, maxpal %d)\n", x, y, channels, maxpal));
   im = mymalloc(sizeof(i_img));
-  return i_img_pal_new_low(im, x, y, channels, maxpal);
+  if (!i_img_pal_new_low(im, x, y, channels, maxpal)) {
+    myfree(im);
+    im = NULL;
+  }
+
+  return im;
 }
 
 /*
@@ -189,20 +200,28 @@ Converts an RGB image to a paletted image
 i_img *i_img_to_pal(i_img *src, i_quantize *quant) {
   i_palidx *result;
   i_img *im;
-  
-  im = i_img_pal_new(src->xsize, src->ysize, src->channels, quant->mc_size);
 
+  i_clear_error();
+  
   quant_makemap(quant, &src, 1);
   result = quant_translate(quant, src);
 
-  /* copy things over */
-  memcpy(im->idata, result, im->bytes);
-  PALEXT(im)->count = quant->mc_count;
-  memcpy(PALEXT(im)->pal, quant->mc_colors, sizeof(i_color) * quant->mc_count);
+  if (result) {
 
-  myfree(result);
+    im = i_img_pal_new(src->xsize, src->ysize, src->channels, quant->mc_size);
 
-  return im;
+    /* copy things over */
+    memcpy(im->idata, result, im->bytes);
+    PALEXT(im)->count = quant->mc_count;
+    memcpy(PALEXT(im)->pal, quant->mc_colors, sizeof(i_color) * quant->mc_count);
+    
+    myfree(result);
+
+    return im;
+  }
+  else {
+    return NULL;
+  }
 }
 
 /*
