@@ -960,7 +960,7 @@ i_gradgen(i_img *im, int num, int *xo, int *yo, i_color *ival, int dmeasure) {
 	fdist[p]  = xd*xd + yd*yd; /* euclidean distance */
 	break;
       case 2: /* euclidean squared */
-	fdist[p]  = max(xd*xd, yd*yd); /* manhattan distance */
+	fdist[p]  = i_max(xd*xd, yd*yd); /* manhattan distance */
 	break;
       default:
 	m_fatal(3,"i_gradgen: Unknown distance measure\n");
@@ -1013,7 +1013,7 @@ i_nearest_color_foo(i_img *im, int num, int *xo, int *yo, i_color *ival, int dme
       mindist = xd*xd + yd*yd; /* euclidean distance */
       break;
     case 2: /* euclidean squared */
-      mindist = max(xd*xd, yd*yd); /* manhattan distance */
+      mindist = i_max(xd*xd, yd*yd); /* manhattan distance */
       break;
     default:
       m_fatal(3,"i_nearest_color: Unknown distance measure\n");
@@ -1030,7 +1030,7 @@ i_nearest_color_foo(i_img *im, int num, int *xo, int *yo, i_color *ival, int dme
 	curdist = xd*xd + yd*yd; /* euclidean distance */
 	break;
       case 2: /* euclidean squared */
-	curdist = max(xd*xd, yd*yd); /* manhattan distance */
+	curdist = i_max(xd*xd, yd*yd); /* manhattan distance */
 	break;
       default:
 	m_fatal(3,"i_nearest_color: Unknown distance measure\n");
@@ -1083,7 +1083,7 @@ i_nearest_color(i_img *im, int num, int *xo, int *yo, i_color *oval, int dmeasur
       mindist = xd*xd + yd*yd; /* euclidean distance */
       break;
     case 2: /* euclidean squared */
-      mindist = max(xd*xd, yd*yd); /* manhattan distance */
+      mindist = i_max(xd*xd, yd*yd); /* manhattan distance */
       break;
     default:
       m_fatal(3,"i_nearest_color: Unknown distance measure\n");
@@ -1100,7 +1100,7 @@ i_nearest_color(i_img *im, int num, int *xo, int *yo, i_color *oval, int dmeasur
 	curdist = xd*xd + yd*yd; /* euclidean distance */
 	break;
       case 2: /* euclidean squared */
-	curdist = max(xd*xd, yd*yd); /* manhattan distance */
+	curdist = i_max(xd*xd, yd*yd); /* manhattan distance */
 	break;
       default:
 	m_fatal(3,"i_nearest_color: Unknown distance measure\n");
@@ -1195,6 +1195,110 @@ void i_unsharp_mask(i_img *im, double stddev, double scale) {
     myfree(blur);
   }
   i_img_exorcise(&copy);
+}
+
+/*
+=item i_diff_image(im1, im2, mindiff)
+
+Creates a new image that is transparent, except where the pixel in im2
+is different from im1, where it is the pixel from im2.
+
+The samples must differ by at least mindiff to be considered different.
+
+=cut
+*/
+
+i_img *
+i_diff_image(i_img *im1, i_img *im2, int mindiff) {
+  i_img *out;
+  int outchans, diffchans;
+  int xsize, ysize;
+  i_img temp;
+
+  i_clear_error();
+  if (im1->channels != im2->channels) {
+    i_push_error(0, "different number of channels");
+    return NULL;
+  }
+
+  outchans = diffchans = im1->channels;
+  if (outchans == 1 || outchans == 3)
+    ++outchans;
+
+  xsize = i_min(im1->xsize, im2->xsize);
+  ysize = i_min(im1->ysize, im2->ysize);
+
+  out = i_sametype_chans(im1, xsize, ysize, outchans);
+  
+  if (im1->bits == i_8_bits && im2->bits == i_8_bits) {
+    i_color *line1 = mymalloc(2 * xsize * sizeof(*line1));
+    i_color *line2 = line1 + xsize;
+    i_color empty;
+    int x, y, ch;
+
+    for (ch = 0; ch < MAXCHANNELS; ++ch)
+      empty.channel[ch] = 0;
+
+    for (y = 0; y < ysize; ++y) {
+      i_glin(im1, 0, xsize, y, line1);
+      i_glin(im2, 0, xsize, y, line2);
+      if (outchans != diffchans) {
+        /* give the output an alpha channel since it doesn't have one */
+        for (x = 0; x < xsize; ++x)
+          line2[x].channel[diffchans] = 255;
+      }
+      for (x = 0; x < xsize; ++x) {
+        int diff = 0;
+        for (ch = 0; ch < diffchans; ++ch) {
+          if (line1[x].channel[ch] != line2[x].channel[ch]
+              && abs(line1[x].channel[ch] - line2[x].channel[ch]) > mindiff) {
+            diff = 1;
+            break;
+          }
+        }
+        if (!diff)
+          line2[x] = empty;
+      }
+      i_plin(out, 0, xsize, y, line2);
+    }
+    myfree(line1);
+  }
+  else {
+    i_fcolor *line1 = mymalloc(2 * xsize * sizeof(*line1));
+    i_fcolor *line2 = line1 + xsize;
+    i_fcolor empty;
+    int x, y, ch;
+    double dist = mindiff / 255;
+
+    for (ch = 0; ch < MAXCHANNELS; ++ch)
+      empty.channel[ch] = 0;
+
+    for (y = 0; y < ysize; ++y) {
+      i_glinf(im1, 0, xsize, y, line1);
+      i_glinf(im2, 0, xsize, y, line2);
+      if (outchans != diffchans) {
+        /* give the output an alpha channel since it doesn't have one */
+        for (x = 0; x < xsize; ++x)
+          line2[x].channel[diffchans] = 1.0;
+      }
+      for (x = 0; x < xsize; ++x) {
+        int diff = 0;
+        for (ch = 0; ch < diffchans; ++ch) {
+          if (line1[x].channel[ch] != line2[x].channel[ch]
+              && abs(line1[x].channel[ch] - line2[x].channel[ch]) > dist) {
+            diff = 1;
+            break;
+          }
+        }
+        if (!diff)
+          line2[x] = empty;
+      }
+      i_plinf(out, 0, xsize, y, line2);
+    }
+    myfree(line1);
+  }
+
+  return out;
 }
 
 struct fount_state;
@@ -1468,7 +1572,7 @@ typedef struct {
 
 static void
 fill_fountf(i_fill_t *fill, int x, int y, int width, int channels, 
-            i_fcolor *data, i_fcolor *work);
+            i_fcolor *data);
 static void
 fount_fill_destroy(i_fill_t *fill);
 
@@ -2079,42 +2183,21 @@ The fill function for fountain fills.
 */
 static void
 fill_fountf(i_fill_t *fill, int x, int y, int width, int channels, 
-            i_fcolor *data, i_fcolor *work) {
+            i_fcolor *data) {
   i_fill_fountain_t *f = (i_fill_fountain_t *)fill;
   
-  if (fill->combinef) {
-    i_fcolor *wstart = work;
-    int count = width;
-
-    while (width--) {
-      i_fcolor c;
-      int got_one;
-
-      if (f->state.ssfunc)
-        got_one = f->state.ssfunc(&c, x, y, &f->state);
-      else
-        got_one = fount_getat(&c, x, y, &f->state);
-      
-      *work++ = c;
-      
-      ++x;
-    }
-    (fill->combinef)(data, wstart, channels, count);
-  }
-  else {
-    while (width--) {
-      i_fcolor c;
-      int got_one;
-
-      if (f->state.ssfunc)
-        got_one = f->state.ssfunc(&c, x, y, &f->state);
-      else
-        got_one = fount_getat(&c, x, y, &f->state);
-      
-      *data++ = c;
-      
-      ++x;
-    }
+  while (width--) {
+    i_fcolor c;
+    int got_one;
+    
+    if (f->state.ssfunc)
+      got_one = f->state.ssfunc(&c, x, y, &f->state);
+    else
+      got_one = fount_getat(&c, x, y, &f->state);
+    
+    *data++ = c;
+    
+    ++x;
   }
 }
 

@@ -395,14 +395,14 @@ tga_source_read(tga_source *s, unsigned char *buf, size_t pixels) {
 
       break;
     case Rle:
-      ml = min(s->len, pixels-cp);
+      ml = i_min(s->len, pixels-cp);
       for(k=0; k<ml; k++) for(j=0; j<s->bytepp; j++) 
 	buf[(cp+k)*s->bytepp+j] = s->cval[j];
       cp     += ml;
       s->len -= ml;
       break;
     case Raw:
-      ml = min(s->len, pixels-cp);
+      ml = i_min(s->len, pixels-cp);
       if (s->ig->readcb(s->ig, buf+cp*s->bytepp, ml*s->bytepp) != ml*s->bytepp) return 0;
       cp     += ml;
       s->len -= ml;
@@ -868,6 +868,9 @@ i_writetga_wiol(i_img *img, io_glue *ig, int wierdpack, int compress, char *idst
     myfree(buf);
     myfree(vals);
   }
+
+  ig->closecb(ig);
+
   return 1;
 }
 

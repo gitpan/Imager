@@ -13,7 +13,7 @@ freetyp2.c - font support via the FreeType library version 2.
   double matrix[6];
   if (!i_ft2_settransform(font, matrix)) { error }
   int bbox[6];
-  if (!i_ft2_bbox(font, cheight, cwidth, text, length, bbox)) { error }
+  if (!i_ft2_bbox(font, cheight, cwidth, text, length, bbox, utf8)) { error }
   i_img *im = ...;
   i_color cl;
   if (!i_ft2_text(font, im, tx, ty, cl, cheight, cwidth, text, length, align,
@@ -71,9 +71,31 @@ struct FT2_Fonthandle {
   FT_Face face;
   int xdpi, ydpi;
   int hint;
+  FT_Encoding encoding;
 
   /* used to adjust so we can align the draw point to the top-left */
   double matrix[6];
+};
+
+/* the following is used to select a "best" encoding */
+static struct enc_score {
+  FT_Encoding encoding;
+  int score;
+} enc_scores[] =
+{
+  /* the selections here are fairly arbitrary
+     ideally we need to give the user a list of encodings available
+     and a mechanism to choose one */
+  { ft_encoding_unicode,        10 },
+  { ft_encoding_sjis,            8 },
+  { ft_encoding_gb2312,          8 },
+  { ft_encoding_big5,            8 },
+  { ft_encoding_wansung,         8 },
+  { ft_encoding_johab,           8 },  
+  { ft_encoding_latin_2,         6 },
+  { ft_encoding_apple_roman,     6 },
+  { ft_encoding_adobe_standard,  6 },
+  { ft_encoding_adobe_expert,    6 },
 };
 
 /*
@@ -95,6 +117,9 @@ i_ft2_new(char *name, int index) {
   FT_Face face;
   double matrix[6] = { 1, 0, 0,
                        0, 1, 0 };
+  int i, j;
+  FT_Encoding encoding;
+  int score;
 
   mm_log((1, "i_ft2_new(name %p, index %d)\n", name, index));
 
@@ -106,9 +131,28 @@ i_ft2_new(char *name, int index) {
     return NULL;
   }
 
+  encoding = face->num_charmaps ? face->charmaps[0]->encoding : ft_encoding_unicode;
+  score = 0;
+  for (i = 0; i < face->num_charmaps; ++i) {
+    FT_Encoding enc_entry = face->charmaps[i]->encoding;
+    mm_log((2, "i_ft2_new, encoding %lX platform %u encoding %u\n",
+            enc_entry, face->charmaps[i]->platform_id,
+            face->charmaps[i]->encoding_id));
+    for (j = 0; j < sizeof(enc_scores) / sizeof(*enc_scores); ++j) {
+      if (enc_scores[j].encoding == enc_entry && enc_scores[j].score > score) {
+        encoding = enc_entry;
+        score = enc_scores[j].score;
+        break;
+      }
+    }
+  }
+  FT_Select_Charmap(face, encoding);
+  mm_log((2, "i_ft2_new, selected encoding %lX\n", encoding));
+
   result = mymalloc(sizeof(FT2_Fonthandle));
   result->face = face;
   result->xdpi = result->ydpi = 72;
+  result->encoding = encoding;
 
   /* by default we disable hinting on a call to i_ft2_settransform()
      if we don't do this, then the hinting can the untransformed text
@@ -242,7 +286,7 @@ Returns non-zero on success.
 */
 int
 i_ft2_bbox(FT2_Fonthandle *handle, double cheight, double cwidth, 
-           char *text, int len, int *bbox) {
+           char *text, int len, int *bbox, int utf8) {
   FT_Error error;
   int width;
   int index;
@@ -264,9 +308,20 @@ i_ft2_bbox(FT2_Fonthandle *handle, double cheight, double cwidth,
 
   first = 1;
   width = 0;
-  while (len--) {
-    int c = (unsigned char)*text++;
-    
+  while (len) {
+    unsigned long c;
+    if (utf8) {
+      c = utf8_advance(&text, &len);
+      if (c == ~0UL) {
+        i_push_error(0, "invalid UTF8 character");
+        return 0;
+      }
+    }
+    else {
+      c = (unsigned char)*text++;
+      --len;
+    }
+
     index = FT_Get_Char_Index(handle->face, c);
     error = FT_Load_Glyph(handle->face, index, FT_LOAD_DEFAULT);
     if (error) {
@@ -288,7 +343,7 @@ i_ft2_bbox(FT2_Fonthandle *handle, double cheight, double cwidth,
 
     if (glyph_ascent > ascent)
       ascent = glyph_ascent;
-    if (glyph_descent > descent)
+    if (glyph_descent < descent)
       descent = glyph_descent;
 
     width += gm->horiAdvance / 64;
@@ -345,10 +400,10 @@ void ft2_transform_box(FT2_Fonthandle *handle, int bbox[4]) {
   work[6] = matrix[0] * bbox[2] + matrix[1] * bbox[3];
   work[7] = matrix[3] * bbox[2] + matrix[4] * bbox[3];
 
-  bbox[0] = floor(min(min(work[0], work[2]),min(work[4], work[6])));
-  bbox[1] = floor(min(min(work[1], work[3]),min(work[5], work[7])));
-  bbox[2] = ceil(max(max(work[0], work[2]),max(work[4], work[6])));
-  bbox[3] = ceil(max(max(work[1], work[3]),max(work[5], work[7])));
+  bbox[0] = floor(i_min(i_min(work[0], work[2]),i_min(work[4], work[6])));
+  bbox[1] = floor(i_min(i_min(work[1], work[3]),i_min(work[5], work[7])));
+  bbox[2] = ceil(i_max(i_max(work[0], work[2]),i_max(work[4], work[6])));
+  bbox[3] = ceil(i_max(i_max(work[1], work[3]),i_max(work[5], work[7])));
 }
 
 /*
@@ -360,10 +415,10 @@ bounding box in bbox[] that encloses both.
 =cut
 */
 static void expand_bounds(int bbox[4], int bbox2[4]) {
-  bbox[0] = min(bbox[0], bbox2[0]);
-  bbox[1] = min(bbox[1], bbox2[1]);
-  bbox[2] = max(bbox[2], bbox2[2]);
-  bbox[3] = max(bbox[3], bbox2[3]);
+  bbox[0] = i_min(bbox[0], bbox2[0]);
+  bbox[1] = i_min(bbox[1], bbox2[1]);
+  bbox[2] = i_max(bbox[2], bbox2[2]);
+  bbox[3] = i_max(bbox[3], bbox2[3]);
 }
 
 /*
@@ -567,7 +622,7 @@ i_ft2_text(FT2_Fonthandle *handle, i_img *im, int tx, int ty, i_color *cl,
     loadFlags |= FT_LOAD_NO_HINTING;
 
   /* set the base-line based on the string ascent */
-  if (!i_ft2_bbox(handle, cheight, cwidth, text, len, bbox))
+  if (!i_ft2_bbox(handle, cheight, cwidth, text, len, bbox, utf8))
     return 0;
 
   if (!align) {
@@ -719,6 +774,44 @@ i_ft2_cp(FT2_Fonthandle *handle, i_img *im, int tx, int ty, int channel,
   }
   i_img_destroy(work);
   return 1;
+}
+
+/*
+=item i_ft2_has_chars(handle, char *text, int len, int utf8, char *out)
+
+Check if the given characters are defined by the font.
+
+Returns the number of characters that were checked.
+
+=cut
+*/
+int i_ft2_has_chars(FT2_Fonthandle *handle, char *text, int len, int utf8, 
+                       char *out) {
+  int count = 0;
+  mm_log((1, "i_ft2_check_chars(handle %p, text %p, len %d, utf8 %d)\n", 
+	  handle, text, len, utf8));
+
+  while (len) {
+    unsigned long c;
+    int index;
+    if (utf8) {
+      c = utf8_advance(&text, &len);
+      if (c == ~0UL) {
+        i_push_error(0, "invalid UTF8 character");
+        return 0;
+      }
+    }
+    else {
+      c = (unsigned char)*text++;
+      --len;
+    }
+    
+    index = FT_Get_Char_Index(handle->face, c);
+    *out++ = index != 0;
+    ++count;
+  }
+
+  return count;
 }
 
 /* uses a method described in fterrors.h to build an error translation

@@ -1,11 +1,12 @@
 #!perl -w
 use strict;
 
-print "1..39\n";
+print "1..40\n";
 
 use Imager ':handy';
 use Imager::Fill;
 use Imager::Color::Float;
+use Config;
 
 sub ok ($$$);
 
@@ -239,6 +240,28 @@ ok($testnum++,
 ok($testnum++,
    $oocopy->errstr =~ /Unknown hatch type/,
    "error message for automatic fill conversion");
+
+# previous box fills to float images, or using the fountain fill
+# got into a loop here
+
+if ($Config{d_alarm}) {
+  local $SIG{ALRM} = sub { die; };
+
+  eval {
+    alarm(2);
+    ok($testnum,
+       $ooim->box(xmin=>20, ymin=>20, xmax=>80, ymax=>40,
+                  fill=>{ fountain=>'linear', xa=>20, ya=>20, xb=>80, 
+                          yb=>20 }), "linear box fill");
+    ++$testnum;
+    alarm 0;
+  };
+  $@ and ok($testnum++, 0, "linear box fill $@");
+}
+else {
+  print "ok $testnum # skipped can't test without alarm\n";
+  ++$testnum;
+}
 
 sub ok ($$$) {
   my ($num, $test, $desc) = @_;

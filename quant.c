@@ -5,6 +5,7 @@
 #include "image.h"
 
 static void makemap_addi(i_quantize *, i_img **imgs, int count);
+static void makemap_mediancut(i_quantize *, i_img **imgs, int count);
 
 static
 void
@@ -27,11 +28,17 @@ setcol(i_color *cl,unsigned char r,unsigned char g,unsigned char b,unsigned char
 
 void
 quant_makemap(i_quantize *quant, i_img **imgs, int count) {
-#ifdef HAVE_LIBGIF
-  /* giflib does it's own color table generation */
-  if (quant->translate == pt_giflib) 
+
+  if (quant->translate == pt_giflib) {
+    /* giflib does it's own color table generation */
+    /* previously we used giflib's quantizer, but it didn't handle multiple
+       images, which made it hard to build a global color map
+       We've implemented our own median cut code so we can ignore 
+       the giflib version */
+    makemap_mediancut(quant, imgs, count);
     return;
-#endif
+  }
+
   switch (quant->make_colors & mc_mask) {
   case mc_none:
     /* use user's specified map */
@@ -46,6 +53,10 @@ quant_makemap(i_quantize *quant, i_img **imgs, int count) {
 	    setcol(quant->mc_colors+i++, r, g, b, 0);
       quant->mc_count = i;
     }
+    break;
+
+  case mc_median_cut:
+    makemap_mediancut(quant, imgs, count);
     break;
 
   case mc_addi:
@@ -73,13 +84,8 @@ i_palidx *quant_translate(i_quantize *quant, i_img *img) {
   result = mymalloc(img->xsize * img->ysize);
 
   switch (quant->translate) {
-#ifdef HAVE_LIBGIF
-  case pt_giflib:
-    translate_giflib(quant, img, result);
-    break;
-#endif
-
   case pt_closest:
+  case pt_giflib:
     translate_closest(quant, img, result);
     break;
     
@@ -96,7 +102,8 @@ i_palidx *quant_translate(i_quantize *quant, i_img *img) {
   return result;
 }
 
-#ifdef HAVE_LIBGIF
+#ifdef HAVE_LIBGIF_THIS_NOT_USED
+
 #include "gif_lib.h"
 
 #define GET_RGB(im, x, y, ri, gi, bi, col) \
@@ -105,6 +112,7 @@ i_palidx *quant_translate(i_quantize *quant, i_img *img) {
 
 static int 
 quant_replicate(i_img *im, i_palidx *output, i_quantize *quant);
+
 
 /* Use the gif_lib quantization functions to quantize the image */
 static void translate_giflib(i_quantize *quant, i_img *img, i_palidx *out) {
@@ -280,7 +288,7 @@ typedef struct {
   int pdc;
 } pbox;
 
-static void prescan(i_img **im,int count, int cnum, cvec *clr);
+static void prescan(i_img **im,int count, int cnum, cvec *clr, i_sample_t *line);
 static void reorder(pbox prescan[512]);
 static int pboxcmp(const pbox *a,const pbox *b);
 static void boxcenter(int box,cvec *cv);
@@ -296,6 +304,9 @@ static int maxdist(int boxnum,cvec *cv);
 
 static int
 pixbox(i_color *ic) { return ((ic->channel[0] & 224)<<1)+ ((ic->channel[1]&224)>>2) + ((ic->channel[2] &224) >> 5); }
+
+static int
+pixbox_ch(i_sample_t *chans) { return ((chans[0] & 224)<<1)+ ((chans[1]&224)>>2) + ((chans[2] &224) >> 5); }
 
 static unsigned char
 g_sat(int in) {
@@ -316,7 +327,17 @@ eucl_d(cvec* cv,i_color *cl) { return PWR2(cv->r-cl->channel[0])+PWR2(cv->g-cl->
 
 static
 int
+eucl_d_ch(cvec* cv,i_sample_t *chans) { 
+  return PWR2(cv->r - chans[0]) + PWR2(cv->g - chans[1]) 
+    + PWR2(cv->b - chans[2]);
+}
+
+static
+int
 ceucl_d(i_color *c1, i_color *c2) { return PWR2(c1->channel[0]-c2->channel[0])+PWR2(c1->channel[1]-c2->channel[1])+PWR2(c1->channel[2]-c2->channel[2]); }
+
+static const int
+gray_samples[] = { 0, 0, 0 };
 
 /* 
 
@@ -374,11 +395,18 @@ static void
 makemap_addi(i_quantize *quant, i_img **imgs, int count) {
   cvec *clr;
   int cnum, i, x, y, bst_idx=0, ld, cd, iter, currhb, img_num;
-  i_color val;
+  i_sample_t *val;
   float dlt, accerr;
-  hashbox hb[512];
+  hashbox *hb;
+  i_mempool mp;
+  int maxwidth = 0;
+  i_sample_t *line;
+  const int *sample_indices;
 
-  clr = (cvec *)mymalloc(sizeof(cvec) * quant->mc_size);
+  i_mempool_init(&mp);
+
+  clr = i_mempool_alloc(&mp, sizeof(cvec) * quant->mc_size);
+  hb = i_mempool_alloc(&mp, sizeof(hashbox) * 512);
   for (i=0; i < quant->mc_count; ++i) {
     clr[i].r = quant->mc_colors[i].rgb.r;
     clr[i].g = quant->mc_colors[i].rgb.g;
@@ -394,7 +422,13 @@ makemap_addi(i_quantize *quant, i_img **imgs, int count) {
   cnum = quant->mc_size;
   dlt = 1;
 
-  prescan(imgs, count, cnum, clr);
+  for (img_num = 0; img_num < count; ++img_num) {
+    if (imgs[img_num]->xsize > maxwidth)
+      maxwidth = imgs[img_num]->xsize;
+  }
+  line = i_mempool_alloc(&mp, 3 * maxwidth * sizeof(*line));
+
+  prescan(imgs, count, cnum, clr, line);
   cr_hashindex(clr, cnum, hb);
 
   for(iter=0;iter<3;iter++) {
@@ -402,51 +436,64 @@ makemap_addi(i_quantize *quant, i_img **imgs, int count) {
     
     for (img_num = 0; img_num < count; ++img_num) {
       i_img *im = imgs[img_num];
-      for(y=0;y<im->ysize;y++) for(x=0;x<im->xsize;x++) {
-	ld=196608;
-	i_gpix(im,x,y,&val);
-	currhb=pixbox(&val);
-	/*      printf("box = %d \n",currhb); */
-	for(i=0;i<hb[currhb].cnt;i++) { 
-	  /*	printf("comparing: pix (%d,%d,%d) vec (%d,%d,%d)\n",val.channel[0],val.channel[1],val.channel[2],clr[hb[currhb].vec[i]].r,clr[hb[currhb].vec[i]].g,clr[hb[currhb].vec[i]].b); */
-	  
-	  cd=eucl_d(&clr[hb[currhb].vec[i]],&val);
-	  if (cd<ld) {
-	    ld=cd;     /* shortest distance yet */
-	    bst_idx=hb[currhb].vec[i]; /* index of closest vector  yet */
-	  }
-	}
-	
-	clr[bst_idx].mcount++;
-	accerr+=(ld);
-	clr[bst_idx].dr+=val.channel[0];
-	clr[bst_idx].dg+=val.channel[1];
-	clr[bst_idx].db+=val.channel[2];
+      sample_indices = im->channels >= 3 ? NULL : gray_samples;
+      for(y=0;y<im->ysize;y++) {
+        i_gsamp(im, 0, im->xsize, y, line, sample_indices, 3);
+        val = line;
+        for(x=0;x<im->xsize;x++) {
+          ld=196608;
+          /*i_gpix(im,x,y,&val);*/
+          currhb=pixbox_ch(val);
+          /*      printf("box = %d \n",currhb); */
+          for(i=0;i<hb[currhb].cnt;i++) { 
+            /*	printf("comparing: pix (%d,%d,%d) vec (%d,%d,%d)\n",val.channel[0],val.channel[1],val.channel[2],clr[hb[currhb].vec[i]].r,clr[hb[currhb].vec[i]].g,clr[hb[currhb].vec[i]].b); */
+            
+            cd=eucl_d_ch(&clr[hb[currhb].vec[i]],val);
+            if (cd<ld) {
+              ld=cd;     /* shortest distance yet */
+              bst_idx=hb[currhb].vec[i]; /* index of closest vector  yet */
+            }
+          }
+          
+          clr[bst_idx].mcount++;
+          accerr+=(ld);
+          clr[bst_idx].dr+=val[0];
+          clr[bst_idx].dg+=val[1];
+          clr[bst_idx].db+=val[2];
+          
+          val += 3; /* next 3 samples (next pixel) */
+        }
       }
     }
-    for(i=0;i<cnum;i++) if (clr[i].mcount) { clr[i].dr/=clr[i].mcount; clr[i].dg/=clr[i].mcount; clr[i].db/=clr[i].mcount; }
-
+    
+    for(i=0;i<cnum;i++) 
+      if (clr[i].mcount) { 
+        clr[i].dr/=clr[i].mcount; 
+        clr[i].dg/=clr[i].mcount; 
+        clr[i].db/=clr[i].mcount; 
+      }
+      
     /*    for(i=0;i<cnum;i++) printf("vec(%d)=(%d,%d,%d) dest=(%d,%d,%d) matchcount=%d\n",
-	  i,clr[i].r,clr[i].g,clr[i].b,clr[i].dr,clr[i].dg,clr[i].db,clr[i].mcount); */
-
+          i,clr[i].r,clr[i].g,clr[i].b,clr[i].dr,clr[i].dg,clr[i].db,clr[i].mcount); */
+    
     /*    printf("total error: %.2f\n",sqrt(accerr)); */
-
+    
     for(i=0;i<cnum;i++) {
       if (clr[i].fixed) continue; /* skip reserved colors */
-
+      
       if (clr[i].mcount) {
-	clr[i].used = 1;
-	clr[i].r=clr[i].r*(1-dlt)+dlt*clr[i].dr;
-	clr[i].g=clr[i].g*(1-dlt)+dlt*clr[i].dg;
-	clr[i].b=clr[i].b*(1-dlt)+dlt*clr[i].db;
+        clr[i].used = 1;
+        clr[i].r=clr[i].r*(1-dlt)+dlt*clr[i].dr;
+        clr[i].g=clr[i].g*(1-dlt)+dlt*clr[i].dg;
+        clr[i].b=clr[i].b*(1-dlt)+dlt*clr[i].db;
       } else {
-	/* let's try something else */
-	clr[i].used = 0;
-	clr[i].r=rand();
-	clr[i].g=rand();
-	clr[i].b=rand();
+        /* let's try something else */
+        clr[i].used = 0;
+        clr[i].r=rand();
+        clr[i].g=rand();
+        clr[i].b=rand();
       }
-
+      
       clr[i].dr=0;
       clr[i].dg=0;
       clr[i].db=0;
@@ -491,8 +538,264 @@ makemap_addi(i_quantize *quant, i_img **imgs, int count) {
   quant->mc_count = cnum;
 #endif
 
-  /* don't want to keep this */
-  myfree(clr);
+  i_mempool_destroy(&mp);
+}
+
+typedef struct {
+  i_sample_t rgb[3];
+  int count;
+} quant_color_entry;
+
+#define MEDIAN_CUT_COLORS 32768
+
+#define MED_CUT_INDEX(c) ((((c).rgb.r & 0xF8) << 7) | \
+        (((c).rgb.g & 0xF8) << 2) | (((c).rgb.b & 0xF8) >> 3))
+
+#define MED_CUT_GRAY_INDEX(c) ((((c).rgb.r & 0xF8) << 7) | \
+        (((c).rgb.r & 0xF8) << 2) | (((c).rgb.r & 0xF8) >> 3))
+
+/* scale these to cover the whole range */
+#define MED_CUT_RED(index) ((((index) & 0x7C00) >> 10) * 255 / 31)
+#define MED_CUT_GREEN(index) ((((index) & 0x3E0) >> 5) * 255 / 31)
+#define MED_CUT_BLUE(index) (((index) & 0x1F) * 255 / 31)
+
+typedef struct {
+  i_sample_t min[3]; /* minimum for each channel */
+  i_sample_t max[3]; /* maximum for each channel */
+  i_sample_t width[3]; /* width for each channel */
+  int start, size;   /* beginning and size of the partition */
+  int pixels; /* number of pixels represented by this partition */
+} medcut_partition;
+
+/*
+=item calc_part(part, colors)
+
+Calculates the new color limits for the given partition.
+
+Giflib assumes that the limits for the non-split channels stay the
+same, but this strikes me as incorrect, especially if the colors tend
+to be color ramps.
+
+Of course this could be optimized by not recalculating the channel we
+just sorted on, but it's not worth the effort right now.
+
+=cut
+*/
+static void calc_part(medcut_partition *part, quant_color_entry *colors) {
+  int i, ch;
+  
+  for (ch = 0; ch < 3; ++ch) {
+    part->min[ch] = 255;
+    part->max[ch] = 0;
+  }
+  for (i = part->start; i < part->start + part->size; ++i) {
+    for (ch = 0; ch < 3; ++ch) {
+      if (part->min[ch] > colors[i].rgb[ch])
+        part->min[ch] = colors[i].rgb[ch];
+      if (part->max[ch] < colors[i].rgb[ch])
+        part->max[ch] = colors[i].rgb[ch];
+    }
+  }
+  for (ch = 0; ch < 3; ++ch) {
+    part->width[ch] = part->max[ch] - part->min[ch];
+  }
+}
+
+/* simple functions to sort by each channel - we could use a global, but 
+   that would be bad */
+
+static int
+color_sort_red(void const *left, void const *right) {
+  return ((quant_color_entry *)left)->rgb[0] - ((quant_color_entry *)right)->rgb[0];
+}
+
+static int
+color_sort_green(void const *left, void const *right) {
+  return ((quant_color_entry *)left)->rgb[1] - ((quant_color_entry *)right)->rgb[1];
+}
+
+static int
+color_sort_blue(void const *left, void const *right) {
+  return ((quant_color_entry *)left)->rgb[2] - ((quant_color_entry *)right)->rgb[2];
+}
+
+static int (*sorters[])(void const *, void const *) =
+{
+  color_sort_red,
+  color_sort_green,
+  color_sort_blue,
+};
+
+static void
+makemap_mediancut(i_quantize *quant, i_img **imgs, int count) {
+  quant_color_entry *colors;
+  i_mempool mp;
+  int imgn, x, y, i, ch;
+  int max_width;
+  i_color *line;
+  int color_count;
+  int total_pixels;
+  medcut_partition *parts;
+  int part_num;
+  int in, out;
+  /* number of channels we search for the best channel to partition
+     this isn't terribly efficient, but it should work */
+  int chan_count; 
+
+  /*printf("images %d  pal size %d\n", count, quant->mc_size);*/
+
+  i_mempool_init(&mp);
+
+  colors = i_mempool_alloc(&mp, sizeof(*colors) * MEDIAN_CUT_COLORS);
+  for (i = 0; i < MEDIAN_CUT_COLORS; ++i) {
+    colors[i].rgb[0] = MED_CUT_RED(i);
+    colors[i].rgb[1] = MED_CUT_GREEN(i);
+    colors[i].rgb[2] = MED_CUT_BLUE(i);
+    colors[i].count = 0;
+  }
+
+  max_width = -1;
+  for (imgn = 0; imgn < count; ++imgn) {
+    if (imgs[imgn]->xsize > max_width)
+      max_width = imgs[imgn]->xsize;
+  }
+  line = i_mempool_alloc(&mp, sizeof(i_color) * max_width);
+
+  /* build the stats */
+  total_pixels = 0;
+  chan_count = 1; /* assume we just have grayscale */
+  for (imgn = 0; imgn < count; ++imgn) {
+    total_pixels += imgs[imgn]->xsize * imgs[imgn]->ysize;
+    for (y = 0; y < imgs[imgn]->ysize; ++y) {
+      i_glin(imgs[imgn], 0, imgs[imgn]->xsize, y, line);
+      if (imgs[imgn]->channels > 2) {
+        chan_count = 3;
+        for (x = 0; x < imgs[imgn]->xsize; ++x) {
+          ++colors[MED_CUT_INDEX(line[x])].count;
+        }
+      }
+      else {
+        /* a gray-scale image, just use the first channel */
+        for (x = 0; x < imgs[imgn]->xsize; ++x) {
+          ++colors[MED_CUT_GRAY_INDEX(line[x])].count;
+        }
+      }
+    }
+  }
+
+  /* eliminate the empty colors */
+  out = 0;
+  for (in = 0; in < MEDIAN_CUT_COLORS; ++in) {
+    if (colors[in].count) {
+      colors[out++] = colors[in];
+    }
+  }
+  /*printf("out %d\n", out);
+
+  for (i = 0; i < out; ++i) {
+    if (colors[i].count) {
+      printf("%d: (%d,%d,%d) -> %d\n", i, colors[i].rgb[0], colors[i].rgb[1], 
+             colors[i].rgb[2], colors[i].count);
+    }
+    }*/
+
+  if (out < quant->mc_size) {
+    /* just copy them into the color table */
+    for (i = 0; i < out; ++i) {
+      for (ch = 0; ch < 3; ++ch) {
+        quant->mc_colors[i].channel[ch] = colors[i].rgb[ch];
+      }
+    }
+    quant->mc_count = out;
+  }
+  else {
+    /* build the starting partition */
+    parts = i_mempool_alloc(&mp, sizeof(*parts) * quant->mc_size);
+    parts[0].start = 0;
+    parts[0].size = out;
+    parts[0].pixels = total_pixels;
+    calc_part(parts, colors);
+    color_count = 1;
+    
+    while (color_count < quant->mc_size) {
+      int max_index, max_ch; /* index/channel with biggest spread */
+      int max_size;
+      medcut_partition *workpart;
+      int cum_total;
+      int half;
+      
+      /* find the partition with the most biggest span with more than 
+         one color */
+      max_size = -1;
+      for (i = 0; i < color_count; ++i) {
+        for (ch = 0; ch < chan_count; ++ch) {
+          if (parts[i].width[ch] > max_size 
+              && parts[i].size > 1) {
+            max_index = i;
+            max_ch = ch;
+            max_size = parts[i].width[ch];
+          }
+        }
+      }
+      
+      /* nothing else we can split */
+      if (max_size == -1)
+        break;
+      
+      workpart = parts+max_index;
+      /*printf("splitting partition %d (pixels %ld, start %d, size %d)\n", max_index, workpart->pixels, workpart->start, workpart->size);*/
+      qsort(colors + workpart->start, workpart->size, sizeof(*colors),
+            sorters[max_ch]);
+      
+      /* find the median or something like it we need to make sure both
+         sides of the split have at least one color in them, so we don't
+         test at the first or last entry */
+      i = workpart->start;
+      cum_total = colors[i].count;
+      ++i;
+      half = workpart->pixels / 2;
+      while (i < workpart->start + workpart->size - 1
+             && cum_total < half) {
+        cum_total += colors[i++].count;
+      }
+      /*printf("Split at %d to make %d (half %ld, cumtotal %ld)\n", i, color_count, half, cum_total);*/
+      
+      /* found the spot to split */
+      parts[color_count].start = i;
+      parts[color_count].size = workpart->start + workpart->size - i;
+      workpart->size = i - workpart->start;
+      parts[color_count].pixels = workpart->pixels - cum_total;
+      workpart->pixels = cum_total;
+      
+      /* recalculate the limits */
+      calc_part(workpart, colors);
+      calc_part(parts+color_count, colors);
+      ++color_count;
+    }
+    
+    /* fill in the color table - since we could still have partitions
+       that have more than one color, we need to average the colors */
+    for (part_num = 0; part_num < color_count; ++part_num) {
+      long sums[3];
+      medcut_partition *workpart;
+      
+      workpart = parts+part_num;
+      for (ch = 0; ch < 3; ++ch)
+        sums[ch] = 0;
+      
+      for (i = workpart->start; i < workpart->start + workpart->size; ++i) {
+        for (ch = 0; ch < 3; ++ch) {
+          sums[ch] += colors[i].rgb[ch] * colors[i].count;
+        }
+      }
+      for (ch = 0; ch < 3; ++ch) {
+        quant->mc_colors[part_num].channel[ch] = sums[ch] / workpart->pixels;
+      }
+    }
+    quant->mc_count = color_count;
+  }
+  /*printf("out %d colors\n", quant->mc_count);*/
+  i_mempool_destroy(&mp);
 }
 
 #define pboxjump 32
@@ -542,7 +845,7 @@ makemap_addi(i_quantize *quant, i_img **imgs, int count) {
 #define HB_SORT
 
 /* assume i is available */
-#define CF_VARS hashbox hb[512]; \
+#define CF_VARS hashbox *hb = mymalloc(sizeof(hashbox) * 512); \
                int currhb;  \
                long ld, cd
 
@@ -642,7 +945,7 @@ static void hbsetup(i_quantize *quant, hashbox *hb) {
     if (cd < ld) { ld = cd; bst_idx = hb[currhb].vec[i]; } \
   }
 
-#define CF_CLEANUP
+#define CF_CLEANUP myfree(hb)
   
 #endif
 
@@ -893,22 +1196,44 @@ static void translate_addi(i_quantize *quant, i_img *img, i_palidx *out) {
 
   CF_SETUP;
 
-  if (pixdev) {
-    k=0;
-    for(y=0;y<img->ysize;y++) for(x=0;x<img->xsize;x++) {
-      i_gpix(img,x,y,&val);
-      val.channel[0]=g_sat(val.channel[0]+(int)(pixdev*frandn()));
-      val.channel[1]=g_sat(val.channel[1]+(int)(pixdev*frandn()));
-      val.channel[2]=g_sat(val.channel[2]+(int)(pixdev*frandn()));
-      CF_FIND;
-      out[k++]=bst_idx;
+  if (img->channels >= 3) {
+    if (pixdev) {
+      k=0;
+      for(y=0;y<img->ysize;y++) for(x=0;x<img->xsize;x++) {
+        i_gpix(img,x,y,&val);
+        val.channel[0]=g_sat(val.channel[0]+(int)(pixdev*frandn()));
+        val.channel[1]=g_sat(val.channel[1]+(int)(pixdev*frandn()));
+        val.channel[2]=g_sat(val.channel[2]+(int)(pixdev*frandn()));
+        CF_FIND;
+        out[k++]=bst_idx;
+      }
+    } else {
+      k=0;
+      for(y=0;y<img->ysize;y++) for(x=0;x<img->xsize;x++) {
+        i_gpix(img,x,y,&val);
+        CF_FIND;
+        out[k++]=bst_idx;
+      }
     }
-  } else {
-    k=0;
-    for(y=0;y<img->ysize;y++) for(x=0;x<img->xsize;x++) {
-      i_gpix(img,x,y,&val);
-      CF_FIND;
-      out[k++]=bst_idx;
+  }
+  else {
+    if (pixdev) {
+      k=0;
+      for(y=0;y<img->ysize;y++) for(x=0;x<img->xsize;x++) {
+        i_gpix(img,x,y,&val);
+        val.channel[1] = val.channel[2] =
+          val.channel[0]=g_sat(val.channel[0]+(int)(pixdev*frandn()));
+        CF_FIND;
+        out[k++]=bst_idx;
+      }
+    } else {
+      k=0;
+      for(y=0;y<img->ysize;y++) for(x=0;x<img->xsize;x++) {
+        i_gpix(img,x,y,&val);
+        val.channel[1] = val.channel[2] = val.channel[0];
+        CF_FIND;
+        out[k++]=bst_idx;
+      }
     }
   }
   CF_CLEANUP;
@@ -1005,6 +1330,9 @@ translate_errdiff(i_quantize *quant, i_img *img, i_palidx *out) {
       long ld, cd;
       errdiff_t perr;
       i_gpix(img, x, y, &val);
+      if (img->channels < 3) {
+        val.channel[1] = val.channel[2] = val.channel[0];
+      }
       perr = err[x+mapo];
       perr.r = perr.r < 0 ? -((-perr.r)/difftotal) : perr.r/difftotal;
       perr.g = perr.g < 0 ? -((-perr.g)/difftotal) : perr.g/difftotal;
@@ -1041,9 +1369,10 @@ translate_errdiff(i_quantize *quant, i_img *img, i_palidx *out) {
    and that result is used as the initial value for the vectores */
 
 
-static void prescan(i_img **imgs,int count, int cnum, cvec *clr) {
+static void prescan(i_img **imgs,int count, int cnum, cvec *clr, i_sample_t *line) {
   int i,k,j,x,y;
-  i_color val;
+  i_sample_t *val;
+  const int *chans;
 
   pbox prebox[512];
   for(i=0;i<512;i++) {
@@ -1055,9 +1384,13 @@ static void prescan(i_img **imgs,int count, int cnum, cvec *clr) {
   /* process each image */
   for (i = 0; i < count; ++i) {
     i_img *im = imgs[i];
-    for(y=0;y<im->ysize;y++) for(x=0;x<im->xsize;x++) {
-      i_gpix(im,x,y,&val);
-      prebox[pixbox(&val)].pixcnt++;
+    chans = im->channels >= 3 ? NULL : gray_samples;
+    for(y=0;y<im->ysize;y++) {
+      i_gsamp(im, 0, im->xsize, y, line, chans, 3);
+      val = line;
+      for(x=0;x<im->xsize;x++) {
+        prebox[pixbox_ch(val)].pixcnt++;
+      }
     }
   }
 
@@ -1192,9 +1525,9 @@ maxdist(int boxnum,cvec *cv) {
   
   bbox(boxnum,&r0,&r1,&g0,&g1,&b0,&b1);
 
-  mr=max(abs(b-b0),abs(b-b1));
-  mg=max(abs(g-g0),abs(g-g1));
-  mb=max(abs(r-r0),abs(r-r1));
+  mr=i_max(abs(b-b0),abs(b-b1));
+  mg=i_max(abs(g-g0),abs(g-g1));
+  mb=i_max(abs(r-r0),abs(r-r1));
   
   return PWR2(mr)+PWR2(mg)+PWR2(mb);
 }
@@ -1214,9 +1547,9 @@ mindist(int boxnum,cvec *cv) {
 
   if (r0<=r && r<=r1 && g0<=g && g<=g1 && b0<=b && b<=b1) return 0;
 
-  mr=min(abs(b-b0),abs(b-b1));
-  mg=min(abs(g-g0),abs(g-g1));
-  mb=min(abs(r-r0),abs(r-r1));
+  mr=i_min(abs(b-b0),abs(b-b1));
+  mg=i_min(abs(g-g0),abs(g-g1));
+  mb=i_min(abs(r-r0),abs(r-r1));
   
   mr=PWR2(mr);
   mg=PWR2(mg);
@@ -1266,15 +1599,17 @@ transparent_threshold(i_quantize *quant, i_palidx *data, i_img *img,
 		      i_palidx trans_index)
 {
   int x, y;
+  i_sample_t *line = mymalloc(img->xsize * sizeof(i_sample_t));
+  int trans_chan = img->channels > 2 ? 3 : 1;
   
   for (y = 0; y < img->ysize; ++y) {
+    i_gsamp(img, 0, img->xsize, y, line, &trans_chan, 1);
     for (x = 0; x < img->xsize; ++x) {
-      i_color val;
-      i_gpix(img, x, y, &val);
-      if (val.rgba.a < quant->tr_threshold)
+      if (line[x] < quant->tr_threshold)
 	data[y*img->xsize+x] = trans_index;
     }
   }
+  myfree(line);
 }
 
 static void
@@ -1287,6 +1622,8 @@ transparent_errdiff(i_quantize *quant, i_palidx *data, i_img *img,
   int errw, *err, *errp;
   int difftotal, out, error;
   int x, y, dx, dy, i;
+  i_sample_t *line;
+  int trans_chan = img->channels > 2 ? 3 : 1;
 
   /* no custom map for transparency (yet) */
   index = quant->tr_errdiff & ed_mask;
@@ -1301,22 +1638,22 @@ transparent_errdiff(i_quantize *quant, i_palidx *data, i_img *img,
   errp = err+mapo;
   memset(err, 0, sizeof(*err) * maph * errw);
 
+  line = mymalloc(img->xsize * sizeof(i_sample_t));
   difftotal = 0;
   for (i = 0; i < maph * mapw; ++i)
     difftotal += map[i];
   for (y = 0; y < img->ysize; ++y) {
+    i_gsamp(img, 0, img->xsize, y, line, &trans_chan, 1);
     for (x = 0; x < img->xsize; ++x) {
-      i_color val;
-      i_gpix(img, x, y, &val);
-      val.rgba.a = g_sat(val.rgba.a-errp[x]/difftotal);
-      if (val.rgba.a < 128) {
+      line[x] = g_sat(line[x]-errp[x]/difftotal);
+      if (line[x] < 128) {
 	out = 0;
 	data[y*img->xsize+x] = trans_index;
       }
       else {
 	out = 255;
       }
-      error = out - val.rgba.a;
+      error = out - line[x];
       for (dx = 0; dx < mapw; ++dx) {
 	for (dy = 0; dy < maph; ++dy) {
 	  errp[x+dx-mapo+dy*errw] += error * map[dx+mapw*dy];
@@ -1328,10 +1665,13 @@ transparent_errdiff(i_quantize *quant, i_palidx *data, i_img *img,
       memcpy(err+dy*errw, err+(dy+1)*errw, sizeof(*err)*errw);
     memset(err+(maph-1)*errw, 0, sizeof(*err)*errw);
   }
+  myfree(err);
+  myfree(line);
 }
 
 /* builtin ordered dither maps */
-unsigned char orddith_maps[][64] =
+static unsigned char 
+orddith_maps[][64] =
 {
   { /* random 
        this is purely random - it's pretty awful
@@ -1441,16 +1781,21 @@ transparent_ordered(i_quantize *quant, i_palidx *data, i_img *img,
 {
   unsigned char *spot;
   int x, y;
+  i_sample_t *line;
+  int trans_chan = img->channels > 2 ? 3 : 1;
   if (quant->tr_orddith == od_custom)
     spot = quant->tr_custom;
   else
     spot = orddith_maps[quant->tr_orddith];
+
+  line = mymalloc(img->xsize * sizeof(i_sample_t));
   for (y = 0; y < img->ysize; ++y) {
+    i_gsamp(img, 0, img->xsize, y, line, &trans_chan, 1);
     for (x = 0; x < img->xsize; ++x) {
-      i_color val;
-      i_gpix(img, x, y, &val);
-      if (val.rgba.a < spot[(x&7)+(y&7)*8])
+      if (line[x] < spot[(x&7)+(y&7)*8])
 	data[x+y*img->xsize] = trans_index;
     }
   }
+  myfree(line);
 }
+

@@ -1,86 +1,12 @@
 #include "dynaload.h"
-#include "XSUB.h" /* so we can compile on threaded perls */
+/* #include "XSUB.h"  so we can compile on threaded perls */
+#include "imagei.h"
 
-/* These functions are all shared - then comes platform dependant code */
+static symbol_table_t symbol_table={i_has_format,ICL_set_internal,ICL_info,
+			     i_img_new,i_img_empty,i_img_empty_ch,i_img_exorcise,
+			     i_img_info,i_img_setmask,i_img_getmask,
+			     i_box,i_draw,i_arc,i_copyto,i_copyto_trans,i_rubthru};
 
-
-int getstr(void *hv_t,char *key,char **store) {
-  SV** svpp;
-  HV* hv=(HV*)hv_t;
-
-  mm_log((1,"getstr(hv_t 0x%X, key %s, store 0x%X)\n",hv_t,key,store));
-
-  if ( !hv_exists(hv,key,strlen(key)) ) return 0;
-
-  svpp=hv_fetch(hv, key, strlen(key), 0);
-  *store=SvPV(*svpp, PL_na );
-
-  return 1;
-}
-
-int getint(void *hv_t,char *key,int *store) {
-  SV** svpp;
-  HV* hv=(HV*)hv_t;  
-
-  mm_log((1,"getint(hv_t 0x%X, key %s, store 0x%X)\n",hv_t,key,store));
-
-  if ( !hv_exists(hv,key,strlen(key)) ) return 0;
-
-  svpp=hv_fetch(hv, key, strlen(key), 0);
-  *store=(int)SvIV(*svpp);
-  return 1;
-}
-
-int getdouble(void *hv_t,char* key,double *store) {
-  SV** svpp;
-  HV* hv=(HV*)hv_t;
-
-  mm_log((1,"getdouble(hv_t 0x%X, key %s, store 0x%X)\n",hv_t,key,store));
-
-  if ( !hv_exists(hv,key,strlen(key)) ) return 0;
-  svpp=hv_fetch(hv, key, strlen(key), 0);
-  *store=(float)SvNV(*svpp);
-  return 1;
-}
-
-int getvoid(void *hv_t,char* key,void **store) {
-  SV** svpp;
-  HV* hv=(HV*)hv_t;
-
-  mm_log((1,"getvoid(hv_t 0x%X, key %s, store 0x%X)\n",hv_t,key,store));
-
-  if ( !hv_exists(hv,key,strlen(key)) ) return 0;
-
-  svpp=hv_fetch(hv, key, strlen(key), 0);
-  *store=(void*)SvIV(*svpp);
-
-  return 1;
-}
-
-int getobj(void *hv_t,char *key,char *type,void **store) {
-  SV** svpp;
-  HV* hv=(HV*)hv_t;
-
-  mm_log((1,"getobj(hv_t 0x%X, key %s,type %s, store 0x%X)\n",hv_t,key,type,store));
-
-  if ( !hv_exists(hv,key,strlen(key)) ) return 0;
-
-  svpp=hv_fetch(hv, key, strlen(key), 0);
-
-  if (sv_derived_from(*svpp,type)) {
-    IV tmp = SvIV((SV*)SvRV(*svpp));
-    *store = (void*) tmp;
-  } else {
-    mm_log((1,"getobj: key exists in hash but is not of correct type"));
-    return 0;
-  }
-
-  return 1;
-}
-
-
-UTIL_table_t UTIL_table={getstr,getint,getdouble,getvoid,getobj};
-extern symbol_table_t symbol_table;
 
 /*
   Dynamic loading works like this:
@@ -120,13 +46,13 @@ DSO_open(char* file,char** evalstring) {
   if ( (shl_findsym(&tt_handle, "symbol_table",TYPE_UNDEFINED,(void*)&plugin_symtab))) return NULL;
   if ( (shl_findsym(&tt_handle, "util_table",TYPE_UNDEFINED,&plugin_utiltab))) return NULL;
   (*plugin_symtab)=&symbol_table;
-  (*plugin_utiltab)=&UTIL_table;
+  (*plugin_utiltab)=&i_UTIL_table;
   */
 
   if ( (shl_findsym(&tt_handle, I_INSTALL_TABLES ,TYPE_UNDEFINED, &f ))) return NULL; 
  
   mm_log( (1,"Calling install_tables\n") );
-  f(&symbol_table,&UTIL_table);
+  f(&symbol_table,&i_UTIL_table);
   mm_log( (1,"Call ok.\n") ); 
  
   if ( (shl_findsym(&tt_handle, I_FUNCTION_LIST ,TYPE_UNDEFINED,(func_ptr*)&function_list))) return NULL; 
@@ -176,7 +102,7 @@ DSO_open(char *file, char **evalstring) {
     return NULL;
   }
   mm_log((1, "Calling install tables\n"));
-  f(&symbol_table, &UTIL_table);
+  f(&symbol_table, &i_UTIL_table);
   mm_log((1, "Call ok\n"));
   
   if ( (function_list = (func_ptr *)GetProcAddress(d_handle, I_FUNCTION_LIST)) == NULL) {
@@ -202,9 +128,11 @@ DSO_open(char *file, char **evalstring) {
 undef_int
 DSO_close(void *ptr) {
   DSO_handle *handle = (DSO_handle *)ptr;
-  FreeLibrary(handle->handle);
+  BOOL result = FreeLibrary(handle->handle);
   free(handle->filename);
   free(handle);
+
+  return result;
 }
 
 #else
@@ -217,6 +145,86 @@ dlclose(minthandle_t h) {
 }
 #endif /* __EMX__ */
 
+#ifdef OS_darwin
+
+#import <mach-o/dyld.h>
+
+static char *dl_error = "unknown";
+
+static char *dlopen(char *path, int mode /* mode is ignored */)
+{
+  int dyld_result;
+  NSObjectFileImage ofile;
+  NSModule handle = NULL;
+
+
+
+  dyld_result = NSCreateObjectFileImageFromFile(path, &ofile);
+  if (dyld_result != NSObjectFileImageSuccess)
+    {
+     switch (dyld_result) {
+       case NSObjectFileImageFailure:
+           dl_error = "object file setup failure";
+           break;
+       case NSObjectFileImageInappropriateFile:
+           dl_error = "not a Mach-O MH_BUNDLE file type";
+           break;
+       case NSObjectFileImageArch:
+           dl_error = "no object for this architecture";
+           break;
+       case NSObjectFileImageFormat:
+           dl_error = "bad object file format";
+           break;
+       case NSObjectFileImageAccess:
+           dl_error = "can't read object file";
+           break;
+       default:
+           dl_error = "unknown error from NSCreateObjectFileImageFromFile()";
+           break;
+     }
+    }
+    else
+      {
+        // NSLinkModule will cause the run to abort on any link error's
+        // not very friendly but the error recovery functionality is limited.
+        handle = NSLinkModule(ofile, path, TRUE);
+      }
+
+  return handle;
+}
+
+static void *
+dlsym(void *handle, char *symbol)
+{
+  void *addr;
+
+  if (NSIsSymbolNameDefined(symbol))
+  {
+    addr = NSAddressOfSymbol(NSLookupAndBindSymbol(symbol));
+  }
+  else
+  {
+    dl_error = "cannot find symbol";
+    addr = NULL;
+  }
+
+  return addr;
+}
+
+static int dlclose(void *handle) /* stub only */
+{
+  return 0;
+}
+
+static char *dlerror(void) /* stub only */
+{
+  printf("Error occurred\n");
+  return dl_error; 
+}
+
+#define RTLD_LAZY 0
+
+#endif 
 
 void*
 DSO_open(char* file,char** evalstring) {
@@ -266,11 +274,11 @@ DSO_open(char* file,char** evalstring) {
   }
 
   mm_log( (1,"Calling install_tables\n") );
-  f(&symbol_table,&UTIL_table);
+  f(&symbol_table,&i_UTIL_table);
   mm_log( (1,"Call ok.\n") );
 
   /* (*plugin_symtab)=&symbol_table;
-     (*plugin_utiltab)=&UTIL_table; */
+     (*plugin_utiltab)=&i_UTIL_table; */
   
   mm_log( (1,"DSO_open: going to dlsym '%s'\n", I_FUNCTION_LIST ));
   if ( (function_list=(func_ptr *)dlsym(d_handle, I_FUNCTION_LIST)) == NULL) {

@@ -15,7 +15,7 @@ extern int i_gpixf_fp(i_img *im, int x, int y, i_fcolor *pix);
 extern int i_plinf_fp(i_img *im, int l, int r, int y, i_fcolor *pix);
 extern int i_glinf_fp(i_img *im, int l, int r, int y, i_fcolor *pix);
 extern int i_gsampf_fp(i_img *im, int l, int r, int y, i_fsample_t *samp,
-                       int *chans, int chan_count);
+                       int const *chans, int chan_count);
 
 /* wrapper functions that forward palette calls to the underlying image,
    assuming the underlying image is the first pointer in whatever
@@ -40,5 +40,9 @@ extern int i_setcolors_forward(i_img *im, int index, i_color *colors,
 #define Sample8To16(num) ((num) * 257)
 
 extern void i_get_combine(int combine, i_fill_combine_f *, i_fill_combinef_f *);
+
+#include "ext.h"
+
+extern UTIL_table_t i_UTIL_table;
 
 #endif

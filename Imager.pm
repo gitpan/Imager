@@ -1,7 +1,7 @@
 package Imager;
 
 use strict;
-use vars qw($VERSION @ISA @EXPORT @EXPORT_OK %EXPORT_TAGS %formats $DEBUG %filters %DSOs $ERRSTR $fontstate %OPCODES $I2P $FORMATGUESS);
+use vars qw($VERSION @ISA @EXPORT @EXPORT_OK %EXPORT_TAGS %formats $DEBUG %filters %DSOs $ERRSTR $fontstate %OPCODES $I2P $FORMATGUESS $warn_obsolete);
 use IO::File;
 
 use Imager::Color;
@@ -44,6 +44,7 @@ use Imager::Font;
 
 		i_bezier_multi
 		i_poly_aa
+		i_poly_aa_cfill
 
 		i_copyto
 		i_rubthru
@@ -84,6 +85,7 @@ use Imager::Font;
 		i_writepng_wiol
 
 		i_readgif
+		i_readgif_wiol
 		i_readgif_callback
 		i_writegif
 		i_writegifmc
@@ -117,7 +119,7 @@ use Imager::Font;
 		NF
 );
 
-@EXPORT=qw( 
+@EXPORT=qw(
 	   init_log
 	   i_list_formats
 	   i_has_format
@@ -145,7 +147,7 @@ BEGIN {
   require Exporter;
   require DynaLoader;
 
-  $VERSION = '0.39';
+  $VERSION = '0.40';
   @ISA = qw(Exporter DynaLoader);
   bootstrap Imager $VERSION;
 }
@@ -361,6 +363,8 @@ BEGIN {
     };
 
   $FORMATGUESS=\&def_guess_type;
+
+  $warn_obsolete = 1;
 }
 
 #
@@ -378,10 +382,20 @@ BEGIN {
 #  print Dumper(@_);
 #}
 
+sub init_log {
+	m_init_log($_[0],$_[1]);
+	log_entry("Imager $VERSION starting\n", 1);
+}
+
+
 sub init {
   my %parms=(loglevel=>1,@_);
   if ($parms{'log'}) {
     init_log($parms{'log'},$parms{'loglevel'});
+  }
+
+  if (exists $parms{'warn_obsolete'}) {
+    $warn_obsolete = $parms{'warn_obsolete'};
   }
 
 #    if ($parms{T1LIB_CONFIG}) { $ENV{T1LIB_CONFIG}=$parms{T1LIB_CONFIG}; }
@@ -389,6 +403,9 @@ sub init {
 #	i_init_fonts();
 #	$fontstate='ok';
 #    }
+  if (exists $parms{'t1log'}) {
+    i_init_fonts($parms{'t1log'});
+  }
 }
 
 END {
@@ -443,6 +460,54 @@ sub unload_plugin {
 sub _error_as_msg {
   return join(": ", map $_->[0], i_errors());
 }
+
+# this function tries to DWIM for color parameters
+#  color objects are used as is
+#  simple scalars are simply treated as single parameters to Imager::Color->new
+#  hashrefs are treated as named argument lists to Imager::Color->new
+#  arrayrefs are treated as list arguments to Imager::Color->new iff any
+#    parameter is > 1
+#  other arrayrefs are treated as list arguments to Imager::Color::Float
+
+sub _color {
+  my $arg = shift;
+  # perl 5.6.0 seems to do weird things to $arg if we don't make an 
+  # explicitly stringified copy
+  # I vaguely remember a bug on this on p5p, but couldn't find it
+  # through bugs.perl.org (I had trouble getting it to find any bugs)
+  my $copy = $arg . "";
+  my $result;
+
+  if (ref $arg) {
+    if (UNIVERSAL::isa($arg, "Imager::Color")
+        || UNIVERSAL::isa($arg, "Imager::Color::Float")) {
+      $result = $arg;
+    }
+    else {
+      if ($copy =~ /^HASH\(/) {
+        $result = Imager::Color->new(%$arg);
+      }
+      elsif ($copy =~ /^ARRAY\(/) {
+        if (grep $_ > 1, @$arg) {
+          $result = Imager::Color->new(@$arg);
+        }
+        else {
+          $result = Imager::Color::Float->new(@$arg);
+        }
+      }
+      else {
+        $Imager::ERRSTR = "Not a color";
+      }
+    }
+  }
+  else {
+    # assume Imager::Color::new knows how to handle it
+    $result = Imager::Color->new($arg);
+  }
+
+  return $result;
+}
+
 
 #
 # Methods to be called on objects.
@@ -809,33 +874,135 @@ sub deltag {
   }
 }
 
+sub settag {
+  my ($self, %opts) = @_;
+
+  if ($opts{name}) {
+    $self->deltag(name=>$opts{name});
+    return $self->addtag(name=>$opts{name}, value=>$opts{value});
+  }
+  elsif (defined $opts{code}) {
+    $self->deltag(code=>$opts{code});
+    return $self->addtag(code=>$opts{code}, value=>$opts{value});
+  }
+  else {
+    return undef;
+  }
+}
+
+my @needseekcb = qw/tiff/;
+my %needseekcb = map { $_, $_ } @needseekcb;
+
+
+sub _get_reader_io {
+  my ($self, $input, $type) = @_;
+
+  if ($input->{fd}) {
+    return io_new_fd($input->{fd});
+  }
+  elsif ($input->{fh}) {
+    my $fd = fileno($input->{fh});
+    unless ($fd) {
+      $self->_set_error("Handle in fh option not opened");
+      return;
+    }
+    return io_new_fd($fd);
+  }
+  elsif ($input->{file}) {
+    my $file = IO::File->new($input->{file}, "r");
+    unless ($file) {
+      $self->_set_error("Could not open $input->{file}: $!");
+      return;
+    }
+    binmode $file;
+    return (io_new_fd(fileno($file)), $file);
+  }
+  elsif ($input->{data}) {
+    return io_new_buffer($input->{data});
+  }
+  elsif ($input->{callback} || $input->{readcb}) {
+    if ($needseekcb{$type} && !$input->{seekcb}) {
+      $self->_set_error("Format $type needs a seekcb parameter");
+    }
+    if ($input->{maxbuffer}) {
+      return io_new_cb($input->{writecb},
+                       $input->{callback} || $input->{readcb},
+                       $input->{seekcb}, $input->{closecb},
+                       $input->{maxbuffer});
+    }
+    else {
+      return io_new_cb($input->{writecb},
+                       $input->{callback} || $input->{readcb},
+                       $input->{seekcb}, $input->{closecb});
+    }
+  }
+  else {
+    $self->_set_error("file/fd/fh/data/callback parameter missing");
+    return;
+  }
+}
+
+sub _get_writer_io {
+  my ($self, $input, $type) = @_;
+
+  if ($input->{fd}) {
+    return io_new_fd($input->{fd});
+  }
+  elsif ($input->{fh}) {
+    my $fd = fileno($input->{fh});
+    unless ($fd) {
+      $self->_set_error("Handle in fh option not opened");
+      return;
+    }
+    # flush it
+    my $oldfh = select($input->{fh});
+    # flush anything that's buffered, and make sure anything else is flushed
+    $| = 1;
+    select($oldfh);
+    return io_new_fd($fd);
+  }
+  elsif ($input->{file}) {
+    my $fh = new IO::File($input->{file},"w+");
+    unless ($fh) { 
+      $self->_set_error("Could not open file $input->{file}: $!");
+      return;
+    }
+    binmode($fh) or die;
+    return (io_new_fd(fileno($fh)), $fh);
+  }
+  elsif ($input->{data}) {
+    return io_new_bufchain();
+  }
+  elsif ($input->{callback} || $input->{writecb}) {
+    if ($input->{maxbuffer}) {
+      return io_new_cb($input->{callback} || $input->{writecb},
+                       $input->{readcb},
+                       $input->{seekcb}, $input->{closecb},
+                       $input->{maxbuffer});
+    }
+    else {
+      return io_new_cb($input->{callback} || $input->{writecb},
+                       $input->{readcb},
+                       $input->{seekcb}, $input->{closecb});
+    }
+  }
+  else {
+    $self->_set_error("file/fd/fh/data/callback parameter missing");
+    return;
+  }
+}
+
 # Read an image from file
 
 sub read {
   my $self = shift;
   my %input=@_;
-  my ($fh, $fd, $IO);
 
   if (defined($self->{IMG})) {
     # let IIM_DESTROY do the destruction, since the image may be
     # referenced from elsewhere
     #i_img_destroy($self->{IMG});
     undef($self->{IMG});
-  }
-
-  if (!$input{fd} and !$input{file} and !$input{data}) {
-    $self->{ERRSTR}='no file, fd or data parameter'; return undef;
-  }
-  if ($input{file}) {
-    $fh = new IO::File($input{file},"r");
-    if (!defined $fh) {
-      $self->{ERRSTR}='Could not open file'; return undef;
-    }
-    binmode($fh);
-    $fd = $fh->fileno();
-  }
-  if ($input{fd}) {
-    $fd=$input{fd};
   }
 
   # FIXME: Find the format here if not specified
@@ -847,15 +1014,20 @@ sub read {
   if (!$input{'type'} and $input{file}) {
     $input{'type'}=$FORMATGUESS->($input{file});
   }
+  unless ($input{'type'}) {
+    $self->_set_error('type parameter missing and not possible to guess from extension'); 
+    return undef;
+  }
   if (!$formats{$input{'type'}}) {
     $self->{ERRSTR}='format not supported'; return undef;
   }
 
-  my %iolready=(jpeg=>1, png=>1, tiff=>1, pnm=>1, raw=>1, bmp=>1, tga=>1);
+  my %iolready=(jpeg=>1, png=>1, tiff=>1, pnm=>1, raw=>1, bmp=>1, tga=>1, rgb=>1, gif=>1);
 
   if ($iolready{$input{'type'}}) {
     # Setup data source
-    $IO = defined $fd ? io_new_fd($fd) : io_new_buffer($input{data});
+    my ($IO, $fh) = $self->_get_reader_io(\%input, $input{'type'})
+      or return;
 
     if ( $input{'type'} eq 'jpeg' ) {
       ($self->{IMG},$self->{IPTCRAW})=i_readjpeg_wiol( $IO );
@@ -869,7 +1041,7 @@ sub read {
     if ( $input{'type'} eq 'tiff' ) {
       $self->{IMG}=i_readtiff_wiol( $IO, -1 ); # Fixme, check if that length parameter is ever needed
       if ( !defined($self->{IMG}) ) {
-	$self->{ERRSTR}='unable to read tiff image'; return undef;
+	$self->{ERRSTR}=$self->_error_as_msg(); return undef;
       }
       $self->{DEBUG} && print "loading a tiff file\n";
       return $self;
@@ -896,21 +1068,53 @@ sub read {
     if ( $input{'type'} eq 'bmp' ) {
       $self->{IMG}=i_readbmp_wiol( $IO );
       if ( !defined($self->{IMG}) ) {
-	$self->{ERRSTR}='unable to read bmp image';
+	$self->{ERRSTR}=$self->_error_as_msg();
 	return undef;
       }
       $self->{DEBUG} && print "loading a bmp file\n";
+    }
+
+    if ( $input{'type'} eq 'gif' ) {
+      if ($input{colors} && !ref($input{colors})) {
+	# must be a reference to a scalar that accepts the colour map
+	$self->{ERRSTR} = "option 'colors' must be a scalar reference";
+	return undef;
+      }
+      if ($input{colors}) {
+        my $colors;
+        ($self->{IMG}, $colors) =i_readgif_wiol( $IO );
+        if ($colors) {
+          ${ $input{colors} } = [ map { NC(@$_) } @$colors ];
+        }
+      }
+      else {
+        $self->{IMG} =i_readgif_wiol( $IO );
+      }
+      if ( !defined($self->{IMG}) ) {
+	$self->{ERRSTR}=$self->_error_as_msg();
+	return undef;
+      }
+      $self->{DEBUG} && print "loading a gif file\n";
     }
 
     if ( $input{'type'} eq 'tga' ) {
       $self->{IMG}=i_readtga_wiol( $IO, -1 ); # Fixme, check if that length parameter is ever needed
       if ( !defined($self->{IMG}) ) {
 	$self->{ERRSTR}=$self->_error_as_msg();
-#	$self->{ERRSTR}='unable to read tga image';
 	return undef;
       }
       $self->{DEBUG} && print "loading a tga file\n";
     }
+
+    if ( $input{'type'} eq 'rgb' ) {
+      $self->{IMG}=i_readrgb_wiol( $IO, -1 ); # Fixme, check if that length parameter is ever needed
+      if ( !defined($self->{IMG}) ) {
+	$self->{ERRSTR}=$self->_error_as_msg();
+	return undef;
+      }
+      $self->{DEBUG} && print "loading a tga file\n";
+    }
+
 
     if ( $input{'type'} eq 'raw' ) {
       my %params=(datachannels=>3,storechannels=>3,interleave=>1,%input);
@@ -950,6 +1154,7 @@ sub read {
       return undef;
     }
 
+    my ($fh, $fd);
     if ($input{file}) {
       $fh = new IO::File($input{file},"r");
       if (!defined $fh) {
@@ -998,6 +1203,94 @@ sub read {
   return $self;
 }
 
+sub _fix_gif_positions {
+  my ($opts, $opt, $msg, @imgs) = @_;
+  
+  my $positions = $opts->{'gif_positions'};
+  my $index = 0;
+  for my $pos (@$positions) {
+    my ($x, $y) = @$pos;
+    my $img = $imgs[$index++];
+    $img->settag(name=>'gif_left', value=>$x);
+    $img->settag(name=>'gif_top', value=>$y) if defined $y;
+  }
+  $$msg .= "replaced with the gif_left and gif_top tags";
+}
+
+my %obsolete_opts =
+  (
+   gif_each_palette=>'gif_local_map',
+   interlace       => 'gif_interlace',
+   gif_delays => 'gif_delay',
+   gif_positions => \&_fix_gif_positions,
+   gif_loop_count => 'gif_loop',
+  );
+
+sub _set_opts {
+  my ($self, $opts, $prefix, @imgs) = @_;
+
+  for my $opt (keys %$opts) {
+    my $tagname = $opt;
+    if ($obsolete_opts{$opt}) {
+      my $new = $obsolete_opts{$opt};
+      my $msg = "Obsolete option $opt ";
+      if (ref $new) {
+        $new->($opts, $opt, \$msg, @imgs);
+      }
+      else {
+        $msg .= "replaced with the $new tag ";
+        $tagname = $new;
+      }
+      $msg .= "line ".(caller(2))[2]." of file ".(caller(2))[1];
+      warn $msg if $warn_obsolete && $^W;
+    }
+    next unless $tagname =~ /^\Q$prefix/;
+    my $value = $opts->{$opt};
+    if (ref $value) {
+      if (UNIVERSAL::isa($value, "Imager::Color")) {
+        my $tag = sprintf("color(%d,%d,%d,%d)", $value->rgba);
+        for my $img (@imgs) {
+          $img->settag(name=>$tagname, value=>$tag);
+        }
+      }
+      elsif (ref($value) eq 'ARRAY') {
+        for my $i (0..$#$value) {
+          my $val = $value->[$i];
+          if (ref $val) {
+            if (UNIVERSAL::isa($val, "Imager::Color")) {
+              my $tag = sprintf("color(%d,%d,%d,%d)", $value->rgba);
+              $i < @imgs and
+                $imgs[$i]->settag(name=>$tagname, value=>$tag);
+            }
+            else {
+              $self->_set_error("Unknown reference type " . ref($value) . 
+                                " supplied in array for $opt");
+              return;
+            }
+          }
+          else {
+            $i < @imgs
+              and $imgs[$i]->settag(name=>$tagname, value=>$val);
+          }
+        }
+      }
+      else {
+        $self->_set_error("Unknown reference type " . ref($value) . 
+                          " supplied for $opt");
+        return;
+      }
+    }
+    else {
+      # set it as a tag for every image
+      for my $img (@imgs) {
+        $img->settag(name=>$tagname, value=>$value);
+      }
+    }
+  }
+
+  return 1;
+}
+
 # Write an image to file
 sub write {
   my $self = shift;
@@ -1009,13 +1302,16 @@ sub write {
 	     compress=>1,
 	     wierdpack=>0,
 	     fax_fine=>1, @_);
-  my ($fh, $rc, $fd, $IO);
+  my $rc;
 
-  my %iolready=( tiff=>1, raw=>1, png=>1, pnm=>1, bmp=>1, jpeg=>1, tga=>1 ); # this will be SO MUCH BETTER once they are all in there
+  $self->_set_opts(\%input, "i_", $self)
+    or return undef;
+
+  my %iolready=( tiff=>1, raw=>1, png=>1, pnm=>1, bmp=>1, jpeg=>1, tga=>1, 
+                 gif=>1 ); # this will be SO MUCH BETTER once they are all in there
 
   unless ($self->{IMG}) { $self->{ERRSTR}='empty input image'; return undef; }
 
-  if (!$input{file} and !$input{'fd'} and !$input{'data'}) { $self->{ERRSTR}='file/fd/data parameter missing'; return undef; }
   if (!$input{'type'} and $input{file}) { 
     $input{'type'}=$FORMATGUESS->($input{file});
   }
@@ -1026,23 +1322,18 @@ sub write {
 
   if (!$formats{$input{'type'}}) { $self->{ERRSTR}='format not supported'; return undef; }
 
-  if (exists $input{'fd'}) {
-    $fd=$input{'fd'};
-  } elsif (exists $input{'data'}) {
-    $IO = Imager::io_new_bufchain();
-  } else {
-    $fh = new IO::File($input{file},"w+");
-    if (!defined $fh) { $self->{ERRSTR}='Could not open file'; return undef; }
-    binmode($fh) or die;
-    $fd = $fh->fileno();
-  }
+  my ($IO, $fh) = $self->_get_writer_io(\%input, $input{'type'})
+    or return undef;
 
+  # this conditional is probably obsolete
   if ($iolready{$input{'type'}}) {
-    if (defined $fd) {
-      $IO = io_new_fd($fd);
-    }
 
     if ($input{'type'} eq 'tiff') {
+      $self->_set_opts(\%input, "tiff_", $self)
+        or return undef;
+      $self->_set_opts(\%input, "exif_", $self)
+        or return undef;
+
       if (defined $input{class} && $input{class} eq 'fax') {
 	if (!i_writetiff_wiol_faxable($self->{IMG}, $IO, $input{fax_fine})) {
 	  $self->{ERRSTR}='Could not write to buffer';
@@ -1055,42 +1346,71 @@ sub write {
 	}
       }
     } elsif ( $input{'type'} eq 'pnm' ) {
+      $self->_set_opts(\%input, "pnm_", $self)
+        or return undef;
       if ( ! i_writeppm_wiol($self->{IMG},$IO) ) {
 	$self->{ERRSTR}='unable to write pnm image';
 	return undef;
       }
       $self->{DEBUG} && print "writing a pnm file\n";
     } elsif ( $input{'type'} eq 'raw' ) {
+      $self->_set_opts(\%input, "raw_", $self)
+        or return undef;
       if ( !i_writeraw_wiol($self->{IMG},$IO) ) {
 	$self->{ERRSTR}='unable to write raw image';
 	return undef;
       }
       $self->{DEBUG} && print "writing a raw file\n";
     } elsif ( $input{'type'} eq 'png' ) {
+      $self->_set_opts(\%input, "png_", $self)
+        or return undef;
       if ( !i_writepng_wiol($self->{IMG}, $IO) ) {
 	$self->{ERRSTR}='unable to write png image';
 	return undef;
       }
       $self->{DEBUG} && print "writing a png file\n";
     } elsif ( $input{'type'} eq 'jpeg' ) {
+      $self->_set_opts(\%input, "jpeg_", $self)
+        or return undef;
+      $self->_set_opts(\%input, "exif_", $self)
+        or return undef;
       if ( !i_writejpeg_wiol($self->{IMG}, $IO, $input{jpegquality})) {
         $self->{ERRSTR} = $self->_error_as_msg();
 	return undef;
       }
       $self->{DEBUG} && print "writing a jpeg file\n";
     } elsif ( $input{'type'} eq 'bmp' ) {
+      $self->_set_opts(\%input, "bmp_", $self)
+        or return undef;
       if ( !i_writebmp_wiol($self->{IMG}, $IO) ) {
 	$self->{ERRSTR}='unable to write bmp image';
 	return undef;
       }
       $self->{DEBUG} && print "writing a bmp file\n";
     } elsif ( $input{'type'} eq 'tga' ) {
+      $self->_set_opts(\%input, "tga_", $self)
+        or return undef;
 
       if ( !i_writetga_wiol($self->{IMG}, $IO, $input{wierdpack}, $input{compress}, $input{idstring}) ) {
 	$self->{ERRSTR}=$self->_error_as_msg();
 	return undef;
       }
       $self->{DEBUG} && print "writing a tga file\n";
+    } elsif ( $input{'type'} eq 'gif' ) {
+      $self->_set_opts(\%input, "gif_", $self)
+        or return undef;
+      # compatibility with the old interfaces
+      if ($input{gifquant} eq 'lm') {
+        $input{make_colors} = 'addi';
+        $input{translate} = 'perturb';
+        $input{perturb} = $input{lmdither};
+      } elsif ($input{gifquant} eq 'gen') {
+        # just pass options through
+      } else {
+        $input{make_colors} = 'webmap'; # ignored
+        $input{translate} = 'giflib';
+      }
+      $rc = i_writegif_wiol($IO, \%input, $self->{IMG});
     }
 
     if (exists $input{'data'}) {
@@ -1102,98 +1422,59 @@ sub write {
       ${$input{data}} = $data;
     }
     return $self;
-  } else {
-    if ( $input{'type'} eq 'gif' ) {
-      if (not $input{gifplanes}) {
-	my $gp;
-	my $count=i_count_colors($self->{IMG}, 256);
-	$gp=8 if $count == -1;
-	$gp=1 if not $gp and $count <= 2;
-	$gp=2 if not $gp and $count <= 4;
-	$gp=3 if not $gp and $count <= 8;
-	$gp=4 if not $gp and $count <= 16;
-	$gp=5 if not $gp and $count <= 32;
-	$gp=6 if not $gp and $count <= 64;
-	$gp=7 if not $gp and $count <= 128;
-	$input{gifplanes} = $gp || 8;
-      }
-
-      if ($input{gifplanes}>8) {
-	$input{gifplanes}=8;
-      }
-      if ($input{gifquant} eq 'gen' || $input{callback}) {
-
-
-	if ($input{gifquant} eq 'lm') {
-
-	  $input{make_colors} = 'addi';
-	  $input{translate} = 'perturb';
-	  $input{perturb} = $input{lmdither};
-	} elsif ($input{gifquant} eq 'gen') {
-	  # just pass options through
-	} else {
-	  $input{make_colors} = 'webmap'; # ignored
-	  $input{translate} = 'giflib';
-	}
-
-	if ($input{callback}) {
-	  defined $input{maxbuffer} or $input{maxbuffer} = -1;
-	  $rc = i_writegif_callback($input{callback}, $input{maxbuffer},
-				    \%input, $self->{IMG});
-	} else {
-	  $rc = i_writegif_gen($fd, \%input, $self->{IMG});
-	}
-
-      } elsif ($input{gifquant} eq 'lm') {
-	$rc=i_writegif($self->{IMG},$fd,$input{gifplanes},$input{lmdither},$input{lmfixed});
-      } else {
-	$rc=i_writegifmc($self->{IMG},$fd,$input{gifplanes});
-      }
-      if ( !defined($rc) ) {
-	$self->{ERRSTR} = "Writing GIF file: "._error_as_msg(); return undef;
-      }
-      $self->{DEBUG} && print "writing a gif file\n";
-
-    }
   }
+
   return $self;
 }
 
 sub write_multi {
   my ($class, $opts, @images) = @_;
 
+  if (!$opts->{'type'} && $opts->{'file'}) {
+    $opts->{'type'} = $FORMATGUESS->($opts->{'file'});
+  }
+  unless ($opts->{'type'}) {
+    $class->_set_error('type parameter missing and not possible to guess from extension');
+    return;
+  }
+  # translate to ImgRaw
+  if (grep !UNIVERSAL::isa($_, 'Imager') || !$_->{IMG}, @images) {
+    $class->_set_error('Usage: Imager->write_multi({ options }, @images)');
+    return 0;
+  }
+  $class->_set_opts($opts, "i_", @images)
+    or return;
+  my @work = map $_->{IMG}, @images;
+  my ($IO, $file) = $class->_get_writer_io($opts, $opts->{'type'})
+    or return undef;
   if ($opts->{'type'} eq 'gif') {
+    $class->_set_opts($opts, "gif_", @images)
+      or return;
     my $gif_delays = $opts->{gif_delays};
     local $opts->{gif_delays} = $gif_delays;
-    unless (ref $opts->{gif_delays}) {
+    if ($opts->{gif_delays} && !ref $opts->{gif_delays}) {
       # assume the caller wants the same delay for each frame
       $opts->{gif_delays} = [ ($gif_delays) x @images ];
     }
-    # translate to ImgRaw
-    if (grep !UNIVERSAL::isa($_, 'Imager') || !$_->{IMG}, @images) {
-      $ERRSTR = "Usage: Imager->write_multi({ options }, @images)";
-      return 0;
-    }
-    my @work = map $_->{IMG}, @images;
-    if ($opts->{callback}) {
-      # Note: you may need to fix giflib for this one to work
-      my $maxbuffer = $opts->{maxbuffer};
-      defined $maxbuffer or $maxbuffer = -1; # max by default
-      return i_writegif_callback($opts->{callback}, $maxbuffer,
-				 $opts, @work);
-    }
-    if ($opts->{fd}) {
-      return i_writegif_gen($opts->{fd}, $opts, @work);
+    my $res = i_writegif_wiol($IO, $opts, @work);
+    $res or $class->_set_error($class->_error_as_msg());
+    return $res;
+  }
+  elsif ($opts->{'type'} eq 'tiff') {
+    $class->_set_opts($opts, "tiff_", @images)
+      or return;
+    $class->_set_opts($opts, "exif_", @images)
+      or return;
+    my $res;
+    $opts->{fax_fine} = 1 unless exists $opts->{fax_fine};
+    if ($opts->{'class'} && $opts->{'class'} eq 'fax') {
+      $res = i_writetiff_multi_wiol_faxable($IO, $opts->{fax_fine}, @work);
     }
     else {
-      my $fh = IO::File->new($opts->{file}, "w+");
-      unless ($fh) {
-	$ERRSTR = "Error creating $opts->{file}: $!";
-	return 0;
-      }
-      binmode($fh);
-      return i_writegif_gen(fileno($fh), $opts, @work);
+      $res = i_writetiff_multi_wiol($IO, @work);
     }
+    $res or $class->_set_error($class->_error_as_msg());
+    return $res;
   }
   else {
     $ERRSTR = "Sorry, write_multi doesn't support $opts->{'type'} yet";
@@ -1214,52 +1495,24 @@ sub read_multi {
     $ERRSTR = "No type parameter supplied and it couldn't be guessed";
     return;
   }
-  my $fd;
-  my $file;
-  if ($opts{file}) {
-    $file = IO::File->new($opts{file}, "r");
-    unless ($file) {
-      $ERRSTR = "Could not open file $opts{file}: $!";
-      return;
-    }
-    binmode $file;
-    $fd = fileno($file);
-  }
-  elsif ($opts{fh}) {
-    $fd = fileno($opts{fh});
-    unless ($fd) {
-      $ERRSTR = "File handle specified with fh option not open";
-      return;
-    }
-  }
-  elsif ($opts{fd}) {
-    $fd = $opts{fd};
-  }
-  elsif ($opts{callback} || $opts{data}) {
-    # don't fail here
-  }
-  else {
-    $ERRSTR = "You need to specify one of file, fd, fh, callback or data";
-    return;
-  }
 
+  my ($IO, $file) = $class->_get_reader_io(\%opts, $opts{'type'})
+    or return;
   if ($opts{'type'} eq 'gif') {
     my @imgs;
-    if ($fd) {
-      @imgs = i_readgif_multi($fd);
+    @imgs = i_readgif_multi_wiol($IO);
+    if (@imgs) {
+      return map { 
+        bless { IMG=>$_, DEBUG=>$DEBUG, ERRSTR=>undef }, 'Imager' 
+      } @imgs;
     }
     else {
-      if (Imager::i_giflib_version() < 4.0) {
-        $ERRSTR = "giflib3.x does not support callbacks";
-        return;
-      }
-      if ($opts{callback}) {
-        @imgs = i_readgif_multi_callback($opts{callback})
-      }
-      else {
-        @imgs = i_readgif_multi_scalar($opts{data});
-      }
+      $ERRSTR = _error_as_msg();
+      return;
     }
+  }
+  elsif ($opts{'type'} eq 'tiff') {
+    my @imgs = i_readtiff_multi_wiol($IO, -1);
     if (@imgs) {
       return map { 
         bless { IMG=>$_, DEBUG=>$DEBUG, ERRSTR=>undef }, 'Imager' 
@@ -1547,7 +1800,7 @@ sub transform2 {
     $Imager::ERRSTR = Imager::Expr::error();
     return;
   }
-  
+
   my $img = Imager->new();
   $img->{IMG} = i_transform2($opts->{width}, $opts->{height}, $code->code(),
                              $code->nregs(), $code->cregs(),
@@ -1556,7 +1809,7 @@ sub transform2 {
     $Imager::ERRSTR = Imager->_error_as_msg();
     return;
   }
-  
+
   return $img;
 }
 
@@ -1680,8 +1933,13 @@ sub box {
   }
 
   if ($opts{filled}) { 
+    my $color = _color($opts{'color'});
+    unless ($color) { 
+      $self->{ERRSTR} = $Imager::ERRSTR; 
+      return; 
+    }
     i_box_filled($self->{IMG},$opts{xmin},$opts{ymin},$opts{xmax},
-                 $opts{ymax},$opts{color}); 
+                 $opts{ymax}, $color); 
   }
   elsif ($opts{fill}) {
     unless (UNIVERSAL::isa($opts{fill}, 'Imager::Fill')) {
@@ -1695,8 +1953,14 @@ sub box {
     i_box_cfill($self->{IMG},$opts{xmin},$opts{ymin},$opts{xmax},
                 $opts{ymax},$opts{fill}{fill});
   }
-  else { 
-    i_box($self->{IMG},$opts{xmin},$opts{ymin},$opts{xmax},$opts{ymax},$opts{color});
+  else {
+    my $color = _color($opts{'color'});
+    unless ($color) { 
+      $self->{ERRSTR} = $Imager::ERRSTR;
+      return;
+    }
+    i_box($self->{IMG},$opts{xmin},$opts{ymin},$opts{xmax},$opts{ymax},
+          $color);
   }
   return $self;
 }
@@ -1725,15 +1989,26 @@ sub arc {
                 $opts{'d2'}, $opts{fill}{fill});
   }
   else {
+    my $color = _color($opts{'color'});
+    unless ($color) { 
+      $self->{ERRSTR} = $Imager::ERRSTR; 
+      return; 
+    }
     if ($opts{d1} == 0 && $opts{d2} == 361 && $opts{aa}) {
       i_circle_aa($self->{IMG}, $opts{'x'}, $opts{'y'}, $opts{'r'}, 
-                  $opts{'color'});
+                  $color);
     }
     else {
-      #      i_arc($self->{IMG},$opts{'x'},$opts{'y'},$opts{'r'},$opts{'d1'}, $opts{'d2'},$opts{'color'});
-      if ($opts{'d1'} <= $opts{'d2'}) { i_arc($self->{IMG},$opts{'x'},$opts{'y'},$opts{'r'},$opts{'d1'},$opts{'d2'},$opts{'color'}); }
-      else                            { i_arc($self->{IMG},$opts{'x'},$opts{'y'},$opts{'r'},$opts{'d1'},        361,$opts{'color'});
-					i_arc($self->{IMG},$opts{'x'},$opts{'y'},$opts{'r'},          0,$opts{'d2'},$opts{'color'}); }
+      if ($opts{'d1'} <= $opts{'d2'}) { 
+        i_arc($self->{IMG},$opts{'x'},$opts{'y'},$opts{'r'},
+              $opts{'d1'}, $opts{'d2'}, $color); 
+      }
+      else {
+        i_arc($self->{IMG},$opts{'x'},$opts{'y'},$opts{'r'},
+              $opts{'d1'}, 361,         $color);
+        i_arc($self->{IMG},$opts{'x'},$opts{'y'},$opts{'r'},
+              0,           $opts{'d2'}, $color); 
+      }
     }
   }
 
@@ -1751,10 +2026,18 @@ sub line {
   unless (exists $opts{x1} and exists $opts{y1}) { $self->{ERRSTR}='missing begining coord'; return undef; }
   unless (exists $opts{x2} and exists $opts{y2}) { $self->{ERRSTR}='missing ending coord'; return undef; }
 
+  my $color = _color($opts{'color'});
+  unless ($color) { 
+    $self->{ERRSTR} = $Imager::ERRSTR; 
+    return; 
+  }
+  $opts{antialias} = $opts{aa} if defined $opts{aa};
   if ($opts{antialias}) {
-    i_line_aa($self->{IMG},$opts{x1}, $opts{y1}, $opts{x2}, $opts{y2}, $opts{color});
+    i_line_aa($self->{IMG},$opts{x1}, $opts{y1}, $opts{x2}, $opts{y2}, 
+              $color);
   } else {
-    i_draw($self->{IMG},$opts{x1}, $opts{y1}, $opts{x2}, $opts{y2}, $opts{color});
+    i_draw($self->{IMG},$opts{x1}, $opts{y1}, $opts{x2}, $opts{y2}, 
+           $color);
   }
   return $self;
 }
@@ -1777,21 +2060,73 @@ sub polyline {
 
 #  print Dumper(\@points);
 
+  my $color = _color($opts{'color'});
+  unless ($color) { 
+    $self->{ERRSTR} = $Imager::ERRSTR; 
+    return; 
+  }
+  $opts{antialias} = $opts{aa} if defined $opts{aa};
   if ($opts{antialias}) {
     for $pt(@points) {
-      if (defined($ls)) { i_line_aa($self->{IMG},$ls->[0],$ls->[1],$pt->[0],$pt->[1],$opts{color}); }
+      if (defined($ls)) { 
+        i_line_aa($self->{IMG},$ls->[0],$ls->[1],$pt->[0],$pt->[1],$color);
+      }
       $ls=$pt;
     }
   } else {
     for $pt(@points) {
-      if (defined($ls)) { i_draw($self->{IMG},$ls->[0],$ls->[1],$pt->[0],$pt->[1],$opts{color}); }
+      if (defined($ls)) { 
+        i_draw($self->{IMG},$ls->[0],$ls->[1],$pt->[0],$pt->[1],$color);
+      }
       $ls=$pt;
     }
   }
   return $self;
 }
 
-# this the multipoint bezier curve 
+sub polygon {
+  my $self = shift;
+  my ($pt,$ls,@points);
+  my $dflcl = i_color_new(0,0,0,0);
+  my %opts = (color=>$dflcl, @_);
+
+  unless ($self->{IMG}) { $self->{ERRSTR}='empty input image'; return undef; }
+
+  if (exists($opts{points})) {
+    $opts{'x'} = [ map { $_->[0] } @{$opts{points}} ];
+    $opts{'y'} = [ map { $_->[1] } @{$opts{points}} ];
+  }
+
+  if (!exists $opts{'x'} or !exists $opts{'y'})  {
+    $self->{ERRSTR} = 'no points array, or x and y arrays.'; return undef;
+  }
+
+  if ($opts{'fill'}) {
+    unless (UNIVERSAL::isa($opts{'fill'}, 'Imager::Fill')) {
+      # assume it's a hash ref
+      require 'Imager/Fill.pm';
+      unless ($opts{'fill'} = Imager::Fill->new(%{$opts{'fill'}})) {
+        $self->{ERRSTR} = $Imager::ERRSTR;
+        return undef;
+      }
+    }
+    i_poly_aa_cfill($self->{IMG}, $opts{'x'}, $opts{'y'}, 
+                    $opts{'fill'}{'fill'});
+  }
+  else {
+    my $color = _color($opts{'color'});
+    unless ($color) { 
+      $self->{ERRSTR} = $Imager::ERRSTR; 
+      return; 
+    }
+    i_poly_aa($self->{IMG}, $opts{'x'}, $opts{'y'}, $color);
+  }
+
+  return $self;
+}
+
+
+# this the multipoint bezier curve
 # this is here more for testing that actual usage since
 # this is not a good algorithm.  Usually the curve would be
 # broken into smaller segments and each done individually.
@@ -1814,7 +2149,12 @@ sub polybezier {
     return;
   }
 
-  i_bezier_multi($self->{IMG},$opts{'x'},$opts{'y'},$opts{'color'});
+  my $color = _color($opts{'color'});
+  unless ($color) { 
+    $self->{ERRSTR} = $Imager::ERRSTR; 
+    return; 
+  }
+  i_bezier_multi($self->{IMG},$opts{'x'},$opts{'y'},$color);
   return $self;
 }
 
@@ -1839,7 +2179,96 @@ sub flood_fill {
     i_flood_cfill($self->{IMG}, $opts{'x'}, $opts{'y'}, $opts{fill}{fill});
   }
   else {
-    i_flood_fill($self->{IMG}, $opts{'x'}, $opts{'y'}, $opts{color});
+    my $color = _color($opts{'color'});
+    unless ($color) { 
+      $self->{ERRSTR} = $Imager::ERRSTR; 
+      return; 
+    }
+    i_flood_fill($self->{IMG}, $opts{'x'}, $opts{'y'}, $color);
+  }
+
+  $self;
+}
+
+sub setpixel {
+  my $self = shift;
+
+  my %opts = ( color=>$self->{fg} || NC(255, 255, 255), @_);
+
+  unless (exists $opts{'x'} && exists $opts{'y'}) {
+    $self->{ERRSTR} = 'missing x and y parameters';
+    return undef;
+  }
+
+  my $x = $opts{'x'};
+  my $y = $opts{'y'};
+  my $color = _color($opts{color})
+    or return undef;
+  if (ref $x && ref $y) {
+    unless (@$x == @$y) {
+      $self->{ERRSTR} = 'length of x and y mismatch';
+      return undef;
+    }
+    if ($color->isa('Imager::Color')) {
+      for my $i (0..$#{$opts{'x'}}) {
+        i_ppix($self->{IMG}, $x->[$i], $y->[$i], $color);
+      }
+    }
+    else {
+      for my $i (0..$#{$opts{'x'}}) {
+        i_ppixf($self->{IMG}, $x->[$i], $y->[$i], $color);
+      }
+    }
+  }
+  else {
+    if ($color->isa('Imager::Color')) {
+      i_ppix($self->{IMG}, $x, $y, $color);
+    }
+    else {
+      i_ppixf($self->{IMG}, $x, $y, $color);
+    }
+  }
+
+  $self;
+}
+
+sub getpixel {
+  my $self = shift;
+
+  my %opts = ( "type"=>'8bit', @_);
+
+  unless (exists $opts{'x'} && exists $opts{'y'}) {
+    $self->{ERRSTR} = 'missing x and y parameters';
+    return undef;
+  }
+
+  my $x = $opts{'x'};
+  my $y = $opts{'y'};
+  if (ref $x && ref $y) {
+    unless (@$x == @$y) {
+      $self->{ERRSTR} = 'length of x and y mismatch';
+      return undef;
+    }
+    my @result;
+    if ($opts{"type"} eq '8bit') {
+      for my $i (0..$#{$opts{'x'}}) {
+        push(@result, i_get_pixel($self->{IMG}, $x->[$i], $y->[$i]));
+      }
+    }
+    else {
+      for my $i (0..$#{$opts{'x'}}) {
+        push(@result, i_gpixf($self->{IMG}, $x->[$i], $y->[$i]));
+      }
+    }
+    return wantarray ? @result : \@result;
+  }
+  else {
+    if ($opts{"type"} eq '8bit') {
+      return i_get_pixel($self->{IMG}, $x, $y);
+    }
+    else {
+      return i_gpixf($self->{IMG}, $x, $y);
+    }
   }
 
   $self;
@@ -1980,6 +2409,27 @@ sub map {
   return $self;
 }
 
+sub difference {
+  my ($self, %opts) = @_;
+
+  defined $opts{mindist} or $opts{mindist} = 0;
+
+  defined $opts{other}
+    or return $self->_set_error("No 'other' parameter supplied");
+  defined $opts{other}{IMG}
+    or return $self->_set_error("No image data in 'other' image");
+
+  $self->{IMG}
+    or return $self->_set_error("No image data");
+
+  my $result = Imager->new;
+  $result->{IMG} = i_diff_image($self->{IMG}, $opts{other}{IMG}, 
+                                $opts{mindist})
+    or return $self->_set_error($self->_error_as_msg());
+
+  return $result;
+}
+
 # destructive border - image is shrunk by one pixel all around
 
 sub border {
@@ -2085,6 +2535,18 @@ sub errstr {
   ref $_[0] ? $_[0]->{ERRSTR} : $ERRSTR
 }
 
+sub _set_error {
+  my ($self, $msg) = @_;
+
+  if (ref $self) {
+    $self->{ERRSTR} = $msg;
+  }
+  else {
+    $ERRSTR = $msg;
+  }
+  return;
+}
+
 # Default guess for the type of an image from extension
 
 sub def_guess_type {
@@ -2097,7 +2559,9 @@ sub def_guess_type {
   return 'png'  if ($ext eq "png");
   return 'bmp'  if ($ext eq "bmp" || $ext eq "dib");
   return 'tga'  if ($ext eq "tga");
+  return 'rgb'  if ($ext eq "rgb");
   return 'gif'  if ($ext eq "gif");
+  return 'raw'  if ($ext eq "raw");
   return ();
 }
 
@@ -2147,19 +2611,19 @@ sub parseiptc {
     if (/^\004\004/) {
       @sar=split(/\034\002/);
       foreach $item (@sar) {
-	if ($item =~ m/^x/) { 
+	if ($item =~ m/^x/) {
 	  $caption=&clean($item);
 	  $i++;
 	}
-	if ($item =~ m/^P/) { 
+	if ($item =~ m/^P/) {
 	  $photogr=&clean($item);
 	  $i++;
 	}
-	if ($item =~ m/^i/) { 
+	if ($item =~ m/^i/) {
 	  $headln=&clean($item);
 	  $i++;
 	}
-	if ($item =~ m/^n/) { 
+	if ($item =~ m/^n/) {
 	  $credit=&clean($item);
 	  $i++;
 	}
@@ -2181,1816 +2645,182 @@ Imager - Perl extension for Generating 24 bit Images
 
 =head1 SYNOPSIS
 
-  use Imager qw(init);
+  # Thumbnail example
 
-  init();
-  $img = Imager->new();
-  $img->open(file=>'image.ppm',type=>'pnm')
-    || print "failed: ",$img->{ERRSTR},"\n";
-  $scaled=$img->scale(xpixels=>400,ypixels=>400);
-  $scaled->write(file=>'sc_image.ppm',type=>'pnm')
-    || print "failed: ",$scaled->{ERRSTR},"\n";
+  #!/usr/bin/perl -w
+  use strict;
+  use Imager;
+
+  die "Usage: thumbmake.pl filename\n" if !-f $ARGV[0];
+  my $file = shift;
+
+  my $format;
+
+  my $img = Imager->new();
+  $img->open(file=>$file) or die $img->errstr();
+
+  $file =~ s/\.[^.]*$//;
+
+  # Create smaller version
+  my $thumb = $img->scale(scalefactor=>.3);
+
+  # Autostretch individual channels
+  $thumb->filter(type=>'autolevels');
+
+  # try to save in one of these formats
+  SAVE:
+
+  for $format ( qw( png gif jpg tiff ppm ) ) {
+    # Check if given format is supported
+    if ($Imager::formats{$format}) {
+      $file.="_low.$format";
+      print "Storing image as: $file\n";
+      $thumb->write(file=>$file) or
+        die $thumb->errstr;
+      last SAVE;
+    }
+  }
+
+
+
 
 =head1 DESCRIPTION
 
-Imager is a module for creating and altering images - It is not meant
-as a replacement or a competitor to ImageMagick or GD. Both are
-excellent packages and well supported.
+Imager is a module for creating and altering images.  It can read and
+write various image formats, draw primitive shapes like lines,and
+polygons, blend multiple images together in various ways, scale, crop,
+render text and more.
 
-=head2 API
+=head2 Overview of documentation
 
-Almost all functions take the parameters in the hash fashion.
-Example:
+=over
 
-  $img->open(file=>'lena.png',type=>'png');
+=item Imager
 
-or just:
+This document - Synopsis Example, Table of Contents and Overview.
 
-  $img->open(file=>'lena.png');
+=item Imager::ImageTypes
 
-=head2 Basic concept
+Direct type/virtual images, RGB(A)/paletted images, 8/16/double
+bits/channel, color maps, channel masks, image tags, color
+quantization.
 
-An Image object is created with C<$img = Imager-E<gt>new()> Should
-this fail for some reason an explanation can be found in
-C<$Imager::ERRSTR> usually error messages are stored in
-C<$img-E<gt>{ERRSTR}>, but since no object is created this is the only
-way to give back errors.  C<$Imager::ERRSTR> is also used to report
-all errors not directly associated with an image object. Examples:
+=item Imager::Files
 
-  $img=Imager->new(); # This is an empty image (size is 0 by 0)
-  $img->open(file=>'lena.png',type=>'png'); # initializes from file
+IO interaction, reading/writing images, format specific tags.
+
+=item Imager::Draw
+
+Drawing Primitives, lines, boxes, circles, arcs, flood fill.
+
+=item Imager::Color
+
+Color specification.
+
+=item Imager::Fill
+
+Fill pattern specification.
+
+=item Imager::Font
+
+General font rendering, bounding boxes and font metrics.
+
+=item Imager::Transformations
+
+Copying, scaling, cropping, flipping, blending, pasting, convert and
+map.
+
+=item Imager::Engines
+
+Programmable transformations through C<transform()>, C<transform2()>
+and C<matrix_transform()>.
+
+=item Imager::Filters
+
+Filters, sharpen, blur, noise, convolve etc. and filter plugins.
+
+=item Imager::Expr
+
+Expressions for evaluation engine used by transform2().
+
+=item Imager::Matrix2d
+
+Helper class for affine transformations.
+
+=item Imager::Fountain
+
+Helper for making gradient profiles.
+
+=back
+
+
+
+=head2 Basic Overview
+
+An Image object is created with C<$img = Imager-E<gt>new()>.
+Examples:
+
+  $img=Imager->new();                         # create empty image
+  $img->open(file=>'lena.png',type=>'png') or # read image from file
+     die $img->errstr();                      # give an explanation
+                                              # if something failed
 
 or if you want to create an empty image:
 
   $img=Imager->new(xsize=>400,ysize=>300,channels=>4);
 
-This example creates a completely black image of width 400 and
-height 300 and 4 channels.
+This example creates a completely black image of width 400 and height
+300 and 4 channels.
 
-If you have an existing image, use img_set() to change it's dimensions
-- this will destroy any existing image data:
+When an operation fails which can be directly associated with an image
+the error message is stored can be retrieved with
+C<$img-E<gt>errstr()>.
 
-  $img->img_set(xsize=>500, ysize=>500, channels=>4);
+In cases where no image object is associated with an operation
+C<$Imager::ERRSTR> is used to report errors not directly associated
+with an image object.
 
-To create paletted images, set the 'type' parameter to 'paletted':
+=head1 SUPPORT
 
-  $img = Imager->new(xsize=>200, ysize=>200, channels=>3, type=>'paletted');
+You can ask for help, report bugs or express your undying love for
+Imager on the Imager-devel mailing list.
 
-which creates an image with a maxiumum of 256 colors, which you can
-change by supplying the C<maxcolors> parameter.
+To subscribe send a message with C<subscribe> in the body to:
 
-You can create a new paletted image from an existing image using the
-to_paletted() method:
+   imager-devel+request@molar.is
 
- $palimg = $img->to_paletted(\%opts)
+or use the form at:
 
-where %opts contains the options specified under L<Quantization options>.
+   http://www.molar.is/en/lists/imager-devel/
+   (annonymous is temporarily off due to spam)
 
-You can convert a paletted image (or any image) to an 8-bit/channel
-RGB image with:
+where you can also find the mailing list archive.
 
-  $rgbimg = $img->to_rgb8;
-
-Warning: if you draw on a paletted image with colors that aren't in
-the palette, the image will be internally converted to a normal image.
-
-For improved color precision you can use the bits parameter to specify
-16 bit per channel:
-
-  $img = Imager->new(xsize=>200, ysize=>200, channels=>3, bits=>16);
-
-or for even more precision:
-
-  $img = Imager->new(xsize=>200, ysize=>200, channels=>3, bits=>'double');
-
-to get an image that uses a double for each channel.
-
-Note that as of this writing all functions should work on images with
-more than 8-bits/channel, but many will only work at only
-8-bit/channel precision.
-
-Currently only 8-bit, 16-bit, and double per channel image types are
-available, this may change later.
-
-Color objects are created by calling the Imager::Color->new()
-method:
-
-  $color = Imager::Color->new($red, $green, $blue);
-  $color = Imager::Color->new($red, $green, $blue, $alpha);
-  $color = Imager::Color->new("#C0C0FF"); # html color specification
-
-This object can then be passed to functions that require a color parameter.
-
-Coordinates in Imager have the origin in the upper left corner.  The
-horizontal coordinate increases to the right and the vertical
-downwards.
-
-=head2 Reading and writing images
-
-C<$img-E<gt>read()> generally takes two parameters, 'file' and 'type'.
-If the type of the file can be determined from the suffix of the file
-it can be omitted.  Format dependant parameters are: For images of
-type 'raw' two extra parameters are needed 'xsize' and 'ysize', if the
-'channel' parameter is omitted for type 'raw' it is assumed to be 3.
-gif and png images might have a palette are converted to truecolor bit
-when read.  Alpha channel is preserved for png images irregardless of
-them being in RGB or gray colorspace.  Similarly grayscale jpegs are
-one channel images after reading them.  For jpeg images the iptc
-header information (stored in the APP13 header) is avaliable to some
-degree. You can get the raw header with C<$img-E<gt>{IPTCRAW}>, but
-you can also retrieve the most basic information with
-C<%hsh=$img-E<gt>parseiptc()> as always patches are welcome.  pnm has no 
-extra options. Examples:
-
-  $img = Imager->new();
-  $img->read(file=>"cover.jpg") or die $img->errstr; # gets type from name
-
-  $img = Imager->new();
-  { local(*FH,$/); open(FH,"file.gif") or die $!; $a=<FH>; }
-  $img->read(data=>$a,type=>'gif') or die $img->errstr;
-
-The second example shows how to read an image from a scalar, this is
-usefull if your data originates from somewhere else than a filesystem
-such as a database over a DBI connection.
-
-When writing to a tiff image file you can also specify the 'class'
-parameter, which can currently take a single value, "fax".  If class
-is set to fax then a tiff image which should be suitable for faxing
-will be written.  For the best results start with a grayscale image.
-By default the image is written at fine resolution you can override
-this by setting the "fax_fine" parameter to 0.
-
-If you are reading from a gif image file, you can supply a 'colors'
-parameter which must be a reference to a scalar.  The referenced
-scalar will receive an array reference which contains the colors, each
-represented as an Imager::Color object.
-
-If you already have an open file handle, for example a socket or a
-pipe, you can specify the 'fd' parameter instead of supplying a
-filename.  Please be aware that you need to use fileno() to retrieve
-the file descriptor for the file:
-
-  $img->read(fd=>fileno(FILE), type=>'gif') or die $img->errstr;
-
-For writing using the 'fd' option you will probably want to set $| for
-that descriptor, since the writes to the file descriptor bypass Perl's
-(or the C libraries) buffering.  Setting $| should avoid out of order
-output.  For example a common idiom when writing a CGI script is:
-
-  # the $| _must_ come before you send the content-type
-  $| = 1;
-  print "Content-Type: image/jpeg\n\n";
-  $img->write(fd=>fileno(STDOUT), type=>'jpeg') or die $img->errstr;
-
-*Note that load() is now an alias for read but will be removed later*
-
-C<$img-E<gt>write> has the same interface as C<read()>.  The earlier
-comments on C<read()> for autodetecting filetypes apply.  For jpegs
-quality can be adjusted via the 'jpegquality' parameter (0-100).  The
-number of colorplanes in gifs are set with 'gifplanes' and should be
-between 1 (2 color) and 8 (256 colors).  It is also possible to choose
-between two quantizing methods with the parameter 'gifquant'. If set
-to mc it uses the mediancut algorithm from either giflibrary. If set
-to lm it uses a local means algorithm. It is then possible to give
-some extra settings. lmdither is the dither deviation amount in pixels
-(manhattan distance).  lmfixed can be an array ref who holds an array
-of Imager::Color objects.  Note that the local means algorithm needs
-much more cpu time but also gives considerable better results than the
-median cut algorithm.
-
-When storing targa images rle compression can be activated with the
-'compress' parameter, the 'idstring' parameter can be used to set the
-targa comment field and the 'wierdpack' option can be used to use the
-15 and 16 bit targa formats for rgb and rgba data.  The 15 bit format
-has 5 of each red, green and blue.  The 16 bit format in addition
-allows 1 bit of alpha.  The most significant bits are used for each
-channel.
-
-Currently just for gif files, you can specify various options for the
-conversion from Imager's internal RGB format to the target's indexed
-file format.  If you set the gifquant option to 'gen', you can use the
-options specified under L<Quantization options>.
-
-To see what Imager is compiled to support the following code snippet
-is sufficient:
-
-  use Imager;
-  print "@{[keys %Imager::formats]}";
-
-When reading raw images you need to supply the width and height of the
-image in the xsize and ysize options:
-
-  $img->read(file=>'foo.raw', xsize=>100, ysize=>100)
-    or die "Cannot read raw image\n";
-
-If your input file has more channels than you want, or (as is common),
-junk in the fourth channel, you can use the datachannels and
-storechannels options to control the number of channels in your input
-file and the resulting channels in your image.  For example, if your
-input image uses 32-bits per pixel with red, green, blue and junk
-values for each pixel you could do:
-
-  $img->read(file=>'foo.raw', xsize=>100, ysize=>100, datachannels=>4,
-	     storechannels=>3)
-    or die "Cannot read raw image\n";
-
-Normally the raw image is expected to have the value for channel 1
-immediately following channel 0 and channel 2 immediately following
-channel 1 for each pixel.  If your input image has all the channel 0
-values for the first line of the image, followed by all the channel 1
-values for the first line and so on, you can use the interleave option:
-
-  $img->read(file=>'foo.raw', xsize=100, ysize=>100, interleave=>1)
-    or die "Cannot read raw image\n";
-
-=head2 Multi-image files
-
-Currently just for gif files, you can create files that contain more
-than one image.
-
-To do this:
-
-  Imager->write_multi(\%opts, @images)
-
-Where %opts describes 4 possible types of outputs:
-
-=over 5
-
-=item type
-
-This is C<gif> for gif animations.
-
-=item callback
-
-A code reference which is called with a single parameter, the data to
-be written.  You can also specify $opts{maxbuffer} which is the
-maximum amount of data buffered.  Note that there can be larger writes
-than this if the file library writes larger blocks.  A smaller value
-maybe useful for writing to a socket for incremental display.
-
-=item fd
-
-The file descriptor to save the images to.
-
-=item file
-
-The name of the file to write to.
-
-%opts may also include the keys from L<Gif options> and L<Quantization
-options>.
-
-=back
-
-You must also specify the file format using the 'type' option.
-
-The current aim is to support other multiple image formats in the
-future, such as TIFF, and to support reading multiple images from a
-single file.
-
-A simple example:
-
-    my @images;
-    # ... code to put images in @images
-    Imager->write_multi({type=>'gif',
-			 file=>'anim.gif',
-			 gif_delays=>[ (10) x @images ] },
-			@images)
-    or die "Oh dear!";
-
-You can read multi-image files (currently only GIF files) using the
-read_multi() method:
-
-  my @imgs = Imager->read_multi(file=>'foo.gif')
-    or die "Cannot read images: ",Imager->errstr;
-
-The possible parameters for read_multi() are:
-
-=over
-
-=item file
-
-The name of the file to read in.
-
-=item fh
-
-A filehandle to read in.  This can be the name of a filehandle, but it
-will need the package name, no attempt is currently made to adjust
-this to the caller's package.
-
-=item fd
-
-The numeric file descriptor of an open file (or socket).
-
-=item callback
-
-A function to be called to read in data, eg. reading a blob from a
-database incrementally.
-
-=item data
-
-The data of the input file in memory.
-
-=item type
-
-The type of file.  If the file is parameter is given and provides
-enough information to guess the type, then this parameter is optional.
-
-=back
-
-Note: you cannot use the callback or data parameter with giflib
-versions before 4.0.
-
-When reading from a GIF file with read_multi() the images are returned
-as paletted images.
-
-=head2 Gif options
-
-These options can be specified when calling write_multi() for gif
-files, when writing a single image with the gifquant option set to
-'gen', or for direct calls to i_writegif_gen and i_writegif_callback.
-
-Note that some viewers will ignore some of these options
-(gif_user_input in particular).
-
-=over 4
-
-=item gif_each_palette
-
-Each image in the gif file has it's own palette if this is non-zero.
-All but the first image has a local colour table (the first uses the
-global colour table.
-
-=item interlace
-
-The images are written interlaced if this is non-zero.
-
-=item gif_delays
-
-A reference to an array containing the delays between images, in 1/100
-seconds.
-
-If you want the same delay for every frame you can simply set this to
-the delay in 1/100 seconds.
-
-=item gif_user_input
-
-A reference to an array contains user input flags.  If the given flag
-is non-zero the image viewer should wait for input before displaying
-the next image.
-
-=item gif_disposal
-
-A reference to an array of image disposal methods.  These define what
-should be done to the image before displaying the next one.  These are
-integers, where 0 means unspecified, 1 means the image should be left
-in place, 2 means restore to background colour and 3 means restore to
-the previous value.
-
-=item gif_tran_color
-
-A reference to an Imager::Color object, which is the colour to use for
-the palette entry used to represent transparency in the palette.  You
-need to set the transp option (see L<Quantization options>) for this
-value to be used.
-
-=item gif_positions
-
-A reference to an array of references to arrays which represent screen
-positions for each image.
-
-=item gif_loop_count
-
-If this is non-zero the Netscape loop extension block is generated,
-which makes the animation of the images repeat.
-
-This is currently unimplemented due to some limitations in giflib.
-
-=item gif_eliminate_unused
-
-If this is true, when you write a paletted image any unused colors
-will be eliminated from its palette.  This is set by default.
-
-=back
-
-=head2 Quantization options
-
-These options can be specified when calling write_multi() for gif
-files, when writing a single image with the gifquant option set to
-'gen', or for direct calls to i_writegif_gen and i_writegif_callback.
-
-=over 4
-
-=item colors
-
-A arrayref of colors that are fixed.  Note that some color generators
-will ignore this.
-
-=item transp
-
-The type of transparency processing to perform for images with an
-alpha channel where the output format does not have a proper alpha
-channel (eg. gif).  This can be any of:
-
-=over 4
-
-=item none
-
-No transparency processing is done. (default)
-
-=item threshold
-
-Pixels more transparent that tr_threshold are rendered as transparent.
-
-=item errdiff
-
-An error diffusion dither is done on the alpha channel.  Note that
-this is independent of the translation performed on the colour
-channels, so some combinations may cause undesired artifacts.
-
-=item ordered
-
-The ordered dither specified by tr_orddith is performed on the alpha
-channel.
-
-=back
-
-This will only be used if the image has an alpha channel, and if there
-is space in the palette for a transparency colour.
-
-=item tr_threshold
-
-The highest alpha value at which a pixel will be made transparent when
-transp is 'threshold'. (0-255, default 127)
-
-=item tr_errdiff
-
-The type of error diffusion to perform on the alpha channel when
-transp is 'errdiff'.  This can be any defined error diffusion type
-except for custom (see errdiff below).
-
-=item tr_orddith
-
-The type of ordered dither to perform on the alpha channel when transp
-is 'ordered'.  Possible values are:
-
-=over 4
-
-=item random
-
-A semi-random map is used.  The map is the same each time.
-
-=item dot8
-
-8x8 dot dither.
-
-=item dot4
-
-4x4 dot dither
-
-=item hline
-
-horizontal line dither.
-
-=item vline
-
-vertical line dither.
-
-=item "/line"
-
-=item slashline
-
-diagonal line dither
-
-=item '\line'
-
-=item backline
-
-diagonal line dither
-
-=item tiny
-
-dot matrix dither (currently the default).  This is probably the best
-for displays (like web pages).
-
-=item custom
-
-A custom dither matrix is used - see tr_map
-
-=back
-
-=item tr_map
-
-When tr_orddith is custom this defines an 8 x 8 matrix of integers
-representing the transparency threshold for pixels corresponding to
-each position.  This should be a 64 element array where the first 8
-entries correspond to the first row of the matrix.  Values should be
-betweern 0 and 255.
-
-=item make_colors
-
-Defines how the quantization engine will build the palette(s).
-Currently this is ignored if 'translate' is 'giflib', but that may
-change.  Possible values are:
-
-=over 4
-
-=item none
-
-Only colors supplied in 'colors' are used.
-
-=item webmap
-
-The web color map is used (need url here.)
-
-=item addi
-
-The original code for generating the color map (Addi's code) is used.
-
-=back
-
-Other methods may be added in the future.
-
-=item colors
-
-A arrayref containing Imager::Color objects, which represents the
-starting set of colors to use in translating the images.  webmap will
-ignore this.  The final colors used are copied back into this array
-(which is expanded if necessary.)
-
-=item max_colors
-
-The maximum number of colors to use in the image.
-
-=item translate
-
-The method used to translate the RGB values in the source image into
-the colors selected by make_colors.  Note that make_colors is ignored
-whene translate is 'giflib'.
-
-Possible values are:
-
-=over 4
-
-=item giflib
-
-The giflib native quantization function is used.
-
-=item closest
-
-The closest color available is used.
-
-=item perturb
-
-The pixel color is modified by perturb, and the closest color is chosen.
-
-=item errdiff
-
-An error diffusion dither is performed.
-
-=back
-
-It's possible other transate values will be added.
-
-=item errdiff
-
-The type of error diffusion dither to perform.  These values (except
-for custom) can also be used in tr_errdif.
-
-=over 4
-
-=item floyd
-
-Floyd-Steinberg dither
-
-=item jarvis
-
-Jarvis, Judice and Ninke dither
-
-=item stucki
-
-Stucki dither
-
-=item custom
-
-Custom.  If you use this you must also set errdiff_width,
-errdiff_height and errdiff_map.
-
-=back
-
-=item errdiff_width
-
-=item errdiff_height
-
-=item errdiff_orig
-
-=item errdiff_map
-
-When translate is 'errdiff' and errdiff is 'custom' these define a
-custom error diffusion map.  errdiff_width and errdiff_height define
-the size of the map in the arrayref in errdiff_map.  errdiff_orig is
-an integer which indicates the current pixel position in the top row
-of the map.
-
-=item perturb
-
-When translate is 'perturb' this is the magnitude of the random bias
-applied to each channel of the pixel before it is looked up in the
-color table.
-
-=back
-
-=head2 Obtaining/setting attributes of images
-
-To get the size of an image in pixels the C<$img-E<gt>getwidth()> and
-C<$img-E<gt>getheight()> are used.
-
-To get the number of channels in
-an image C<$img-E<gt>getchannels()> is used.  $img-E<gt>getmask() and
-$img-E<gt>setmask() are used to get/set the channel mask of the image.
-
-  $mask=$img->getmask();
-  $img->setmask(mask=>1+2); # modify red and green only
-  $img->setmask(mask=>8); # modify alpha only
-  $img->setmask(mask=>$mask); # restore previous mask
-
-The mask of an image describes which channels are updated when some
-operation is performed on an image.  Naturally it is not possible to
-apply masks to operations like scaling that alter the dimensions of
-images.
-
-It is possible to have Imager find the number of colors in an image
-by using C<$img-E<gt>getcolorcount()>. It requires memory proportionally
-to the number of colors in the image so it is possible to have it
-stop sooner if you only need to know if there are more than a certain number
-of colors in the image.  If there are more colors than asked for
-the function return undef.  Examples:
-
-  if (!defined($img->getcolorcount(maxcolors=>512)) {
-    print "Less than 512 colors in image\n";
-  }
-
-The bits() method retrieves the number of bits used to represent each
-channel in a pixel, 8 for a normal image, 16 for 16-bit image and
-'double' for a double/channel image.  The type() method returns either
-'direct' for truecolor images or 'paletted' for paletted images.  The
-virtual() method returns non-zero if the image contains no actual
-pixels, for example masked images.
-
-=head2 Paletted Images
-
-In general you can work with paletted images in the same way as RGB
-images, except that if you attempt to draw to a paletted image with a
-color that is not in the image's palette, the image will be converted
-to an RGB image.  This means that drawing on a paletted image with
-anti-aliasing enabled will almost certainly convert the image to RGB.
-
-You can add colors to a paletted image with the addcolors() method:
-
-   my @colors = ( Imager::Color->new(255, 0, 0), 
-                  Imager::Color->new(0, 255, 0) );
-   my $index = $img->addcolors(colors=>\@colors);
-
-The return value is the index of the first color added, or undef if
-adding the colors would overflow the palette.
-
-Once you have colors in the palette you can overwrite them with the
-setcolors() method:
-
-  $img->setcolors(start=>$start, colors=>\@colors);
-
-Returns true on success.
-
-To retrieve existing colors from the palette use the getcolors() method:
-
-  # get the whole palette
-  my @colors = $img->getcolors();
-  # get a single color
-  my $color = $img->getcolors(start=>$index);
-  # get a range of colors
-  my @colors = $img->getcolors(start=>$index, count=>$count);
-
-To quickly find a color in the palette use findcolor():
-
-  my $index = $img->findcolor(color=>$color);
-
-which returns undef on failure, or the index of the color.
-
-You can get the current palette size with $img->colorcount, and the
-maximum size of the palette with $img->maxcolors.
-
-=head2 Drawing Methods
-
-IMPLEMENTATION MORE OR LESS DONE CHECK THE TESTS
-DOCUMENTATION OF THIS SECTION OUT OF SYNC
-
-It is possible to draw with graphics primitives onto images.  Such
-primitives include boxes, arcs, circles and lines.  A reference
-oriented list follows.
-
-Box:
-  $img->box(color=>$blue,xmin=>10,ymin=>30,xmax=>200,ymax=>300,filled=>1);
-
-The above example calls the C<box> method for the image and the box
-covers the pixels with in the rectangle specified.  If C<filled> is
-ommited it is drawn as an outline.  If any of the edges of the box are
-ommited it will snap to the outer edge of the image in that direction.
-Also if a color is omitted a color with (255,255,255,255) is used
-instead.
-
-Arc:
-  $img->arc(color=>$red, r=20, x=>200, y=>100, d1=>10, d2=>20 );
-
-This creates a filled red arc with a 'center' at (200, 100) and spans
-10 degrees and the slice has a radius of 20. SEE section on BUGS.
-
-Both the arc() and box() methods can take a C<fill> parameter which
-can either be an Imager::Fill object, or a reference to a hash
-containing the parameters used to create the fill:
-
-  $img->box(xmin=>10, ymin=>30, xmax=>150, ymax=>60,
-            fill => { hatch=>'cross2' });
-  use Imager::Fill;
-  my $fill = Imager::Fill->new(hatch=>'stipple');
-  $img->box(fill=>$fill);
-
-See L<Imager::Fill> for the type of fills you can use.
-
-Circle:
-  $img->circle(color=>$green, r=50, x=>200, y=>100);
-
-This creates a green circle with its center at (200, 100) and has a
-radius of 20.
-
-Line:
-  $img->line(color=>$green, x1=10, x2=>100, 
-                            y1=>20, y2=>50, antialias=>1 );
-
-That draws an antialiased line from (10,100) to (20,50).
-
-Polyline:
-  $img->polyline(points=>[[$x0,$y0],[$x1,$y1],[$x2,$y2]],color=>$red);
-  $img->polyline(x=>[$x0,$x1,$x2], y=>[$y0,$y1,$y2], antialias=>1);
-
-Polyline is used to draw multilple lines between a series of points.
-The point set can either be specified as an arrayref to an array of
-array references (where each such array represents a point).  The
-other way is to specify two array references.
-
-You can fill a region that all has the same color using the
-flood_fill() method, for example:
-
-  $img->flood_fill(x=>50, y=>50, color=>$color);
-
-will fill all regions the same color connected to the point (50, 50).
-
-You can also use a general fill, so you could fill the same region
-with a check pattern using:
-
-  $img->flood_fill(x=>50, y=>50, fill=>{ hatch=>'check2x2' });
-
-See L<Imager::Fill> for more information on general fills.
-
-=head2 Text rendering
-
-Text rendering is described in the Imager::Font manpage.
-
-=head2 Image resizing
-
-To scale an image so porportions are maintained use the
-C<$img-E<gt>scale()> method.  if you give either a xpixels or ypixels
-parameter they will determine the width or height respectively.  If
-both are given the one resulting in a larger image is used.  example:
-C<$img> is 700 pixels wide and 500 pixels tall.
-
-  $img->scale(xpixels=>400); # 400x285
-  $img->scale(ypixels=>400); # 560x400
-
-  $img->scale(xpixels=>400,ypixels=>400); # 560x400
-  $img->scale(xpixels=>400,ypixels=>400,type=>min); # 400x285
-
-  $img->scale(scalefactor=>0.25); 175x125 $img->scale(); # 350x250
-
-if you want to create low quality previews of images you can pass
-C<qtype=E<gt>'preview'> to scale and it will use nearest neighbor
-sampling instead of filtering. It is much faster but also generates
-worse looking images - especially if the original has a lot of sharp
-variations and the scaled image is by more than 3-5 times smaller than
-the original.
-
-If you need to scale images per axis it is best to do it simply by
-calling scaleX and scaleY.  You can pass either 'scalefactor' or
-'pixels' to both functions.
-
-Another way to resize an image size is to crop it.  The parameters
-to crop are the edges of the area that you want in the returned image.
-If a parameter is omited a default is used instead.
-
-  $newimg = $img->crop(left=>50, right=>100, top=>10, bottom=>100); 
-  $newimg = $img->crop(left=>50, top=>10, width=>50, height=>90);
-  $newimg = $img->crop(left=>50, right=>100); # top 
-
-You can also specify width and height parameters which will produce a
-new image cropped from the center of the input image, with the given
-width and height.
-
-  $newimg = $img->crop(width=>50, height=>50);
-
-The width and height parameters take precedence over the left/right
-and top/bottom parameters respectively.
-
-=head2 Copying images
-
-To create a copy of an image use the C<copy()> method.  This is usefull
-if you want to keep an original after doing something that changes the image
-inplace like writing text.
-
-  $img=$orig->copy();
-
-To copy an image to onto another image use the C<paste()> method.
-
-  $dest->paste(left=>40,top=>20,img=>$logo);
-
-That copies the entire C<$logo> image onto the C<$dest> image so that the
-upper left corner of the C<$logo> image is at (40,20).
-
-
-=head2 Flipping images
-
-An inplace horizontal or vertical flip is possible by calling the
-C<flip()> method.  If the original is to be preserved it's possible to
-make a copy first.  The only parameter it takes is the C<dir>
-parameter which can take the values C<h>, C<v>, C<vh> and C<hv>.
-
-  $img->flip(dir=>"h");       # horizontal flip
-  $img->flip(dir=>"vh");      # vertical and horizontal flip
-  $nimg = $img->copy->flip(dir=>"v"); # make a copy and flip it vertically
-
-=head2 Rotating images
-
-Use the rotate() method to rotate an image.  This method will return a
-new, rotated image.
-
-To rotate by an exact amount in degrees or radians, use the 'degrees'
-or 'radians' parameter:
-
-  my $rot20 = $img->rotate(degrees=>20);
-  my $rotpi4 = $img->rotate(radians=>3.14159265/4);
-
-Exact image rotation uses the same underlying transformation engine as
-the matrix_transform() method.
-
-To rotate in steps of 90 degrees, use the 'right' parameter:
-
-  my $rotated = $img->rotate(right=>270);
-
-Rotations are clockwise for positive values.
-
-=head2 Blending Images
-
-To put an image or a part of an image directly
-into another it is best to call the C<paste()> method on the image you
-want to add to.
-
-  $img->paste(img=>$srcimage,left=>30,top=>50);
-
-That will take paste C<$srcimage> into C<$img> with the upper
-left corner at (30,50).  If no values are given for C<left>
-or C<top> they will default to 0.
-
-A more complicated way of blending images is where one image is
-put 'over' the other with a certain amount of opaqueness.  The
-method that does this is rubthrough.
-
-  $img->rubthrough(src=>$srcimage,tx=>30,ty=>50);
-
-That will take the image C<$srcimage> and overlay it with the upper
-left corner at (30,50).  You can rub 2 or 4 channel images onto a 3
-channel image, or a 2 channel image onto a 1 channel image.  The last
-channel is used as an alpha channel.
-
-
-=head2 Filters
-
-A special image method is the filter method. An example is:
-
-  $img->filter(type=>'autolevels');
-
-This will call the autolevels filter.  Here is a list of the filters
-that are always avaliable in Imager.  This list can be obtained by
-running the C<filterlist.perl> script that comes with the module
-source.
-
-  Filter          Arguments
-  autolevels      lsat(0.1) usat(0.1) skew(0)
-  bumpmap         bump elevation(0) lightx lighty st(2)
-  bumpmap_complex bump channel(0) tx(0) ty(0) Lx(0.2) Ly(0.4)
-                  Lz(-1) cd(1.0) cs(40.0) n(1.3) Ia(0 0 0) Il(255 255 255)
-                  Is(255 255 255)
-  contrast        intensity
-  conv            coef
-  fountain        xa ya xb yb ftype(linear) repeat(none) combine(none)
-                  super_sample(none) ssample_param(4) segments(see below)
-  gaussian        stddev
-  gradgen         xo yo colors dist
-  hardinvert
-  mosaic          size(20)
-  noise           amount(3) subtype(0)
-  postlevels      levels(10)
-  radnoise        xo(100) yo(100) ascale(17.0) rscale(0.02)
-  turbnoise       xo(0.0) yo(0.0) scale(10.0)
-  unsharpmask     stddev(2.0) scale(1.0)
-  watermark       wmark pixdiff(10) tx(0) ty(0)
-
-The default values are in parenthesis.  All parameters must have some
-value but if a parameter has a default value it may be omitted when
-calling the filter function.
-
-The filters are:
-
-=over
-
-=item autolevels
-
-scales the value of each channel so that the values in the image will
-cover the whole possible range for the channel.  I<lsat> and I<usat>
-truncate the range by the specified fraction at the top and bottom of
-the range respectivly..
-
-=item bumpmap
-
-uses the channel I<elevation> image I<bump> as a bumpmap on your
-image, with the light at (I<lightx>, I<lightty>), with a shadow length
-of I<st>.
-
-=item bumpmap_complex
-
-uses the channel I<channel> image I<bump> as a bumpmap on your image.
-If Lz<0 the three L parameters are considered to be the direction of
-the light.  If Lz>0 the L parameters are considered to be the light
-position.  I<Ia> is the ambient colour, I<Il> is the light colour,
-I<Is> is the color of specular highlights.  I<cd> is the diffuse
-coefficient and I<cs> is the specular coefficient.  I<n> is the
-shininess of the surface.
-
-=item contrast
-
-scales each channel by I<intensity>.  Values of I<intensity> < 1.0
-will reduce the contrast.
-
-=item conv
-
-performs 2 1-dimensional convolutions on the image using the values
-from I<coef>.  I<coef> should be have an odd length.
-
-=item fountain
-
-renders a fountain fill, similar to the gradient tool in most paint
-software.  The default fill is a linear fill from opaque black to
-opaque white.  The points A(xa, ya) and B(xb, yb) control the way the
-fill is performed, depending on the ftype parameter:
-
-=over
-
-=item linear
-
-the fill ramps from A through to B.
-
-=item bilinear
-
-the fill ramps in both directions from A, where AB defines the length
-of the gradient.
-
-=item radial
-
-A is the center of a circle, and B is a point on it's circumference.
-The fill ramps from the center out to the circumference.
-
-=item radial_square
-
-A is the center of a square and B is the center of one of it's sides.
-This can be used to rotate the square.  The fill ramps out to the
-edges of the square.
-
-=item revolution
-
-A is the centre of a circle and B is a point on it's circumference.  B
-marks the 0 and 360 point on the circle, with the fill ramping
-clockwise.
-
-=item conical
-
-A is the center of a circle and B is a point on it's circumference.  B
-marks the 0 and point on the circle, with the fill ramping in both
-directions to meet opposite.
-
-=back
-
-The I<repeat> option controls how the fill is repeated for some
-I<ftype>s after it leaves the AB range:
-
-=over
-
-=item none
-
-no repeats, points outside of each range are treated as if they were
-on the extreme end of that range.
-
-=item sawtooth
-
-the fill simply repeats in the positive direction
-
-=item triangle
-
-the fill repeats in reverse and then forward and so on, in the
-positive direction
-
-=item saw_both
-
-the fill repeats in both the positive and negative directions (only
-meaningful for a linear fill).
-
-=item tri_both
-
-as for triangle, but in the negative direction too (only meaningful
-for a linear fill).
-
-=back
-
-By default the fill simply overwrites the whole image (unless you have
-parts of the range 0 through 1 that aren't covered by a segment), if
-any segments of your fill have any transparency, you can set the
-I<combine> option to 'normal' to have the fill combined with the
-existing pixels.  See the description of I<combine> in L<Imager/Fill>.
-
-If your fill has sharp edges, for example between steps if you use
-repeat set to 'triangle', you may see some aliased or ragged edges.
-You can enable super-sampling which will take extra samples within the
-pixel in an attempt anti-alias the fill.
-
-The possible values for the super_sample option are:
-
-=over
-
-=item none
-
-no super-sampling is done
-
-=item grid
-
-a square grid of points are sampled.  The number of points sampled is
-the square of ceil(0.5 + sqrt(ssample_param)).
-
-=item random
-
-a random set of points within the pixel are sampled.  This looks
-pretty bad for low ssample_param values.  
-
-=item circle
-
-the points on the radius of a circle within the pixel are sampled.
-This seems to produce the best results, but is fairly slow (for now).
-
-=back
-
-You can control the level of sampling by setting the ssample_param
-option.  This is roughly the number of points sampled, but depends on
-the type of sampling.
-
-The segments option is an arrayref of segments.  You really should use
-the Imager::Fountain class to build your fountain fill.  Each segment
-is an array ref containing:
-
-=over
-
-=item start
-
-a floating point number between 0 and 1, the start of the range of fill parameters covered by this segment.
-
-=item middle
-
-a floating point number between start and end which can be used to
-push the color range towards one end of the segment.
-
-=item end
-
-a floating point number between 0 and 1, the end of the range of fill
-parameters covered by this segment.  This should be greater than
-start.
-
-=item c0 
-
-=item c1
-
-The colors at each end of the segment.  These can be either
-Imager::Color or Imager::Color::Float objects.
-
-=item segment type
-
-The type of segment, this controls the way the fill parameter varies
-over the segment. 0 for linear, 1 for curved (unimplemented), 2 for
-sine, 3 for sphere increasing, 4 for sphere decreasing.
-
-=item color type
-
-The way the color varies within the segment, 0 for simple RGB, 1 for
-hue increasing and 2 for hue decreasing.
-
-=back
-
-Don't forgot to use Imager::Fountain instead of building your own.
-Really.  It even loads GIMP gradient files.
-
-=item gaussian
-
-performs a gaussian blur of the image, using I<stddev> as the standard
-deviation of the curve used to combine pixels, larger values give
-bigger blurs.  For a definition of Gaussian Blur, see:
-
-  http://www.maths.abdn.ac.uk/~igc/tch/mx4002/notes/node99.html
-
-=item gradgen
-
-renders a gradient, with the given I<colors> at the corresponding
-points (x,y) in I<xo> and I<yo>.  You can specify the way distance is
-measured for color blendeing by setting I<dist> to 0 for Euclidean, 1
-for Euclidean squared, and 2 for Manhattan distance.
-
-=item hardinvert
-
-inverts the image, black to white, white to black.  All channels are
-inverted, including the alpha channel if any.
-
-=item mosaic
-
-produces averaged tiles of the given I<size>.
-
-=item noise
-
-adds noise of the given I<amount> to the image.  If I<subtype> is
-zero, the noise is even to each channel, otherwise noise is added to
-each channel independently.
-
-=item radnoise
-
-renders radiant Perlin turbulent noise.  The centre of the noise is at
-(I<xo>, I<yo>), I<ascale> controls the angular scale of the noise ,
-and I<rscale> the radial scale, higher numbers give more detail.
-
-=item postlevels
-
-alters the image to have only I<levels> distinct level in each
-channel.
-
-=item turbnoise
-
-renders Perlin turbulent noise.  (I<xo>, I<yo>) controls the origin of
-the noise, and I<scale> the scale of the noise, with lower numbers
-giving more detail.
-
-=item unsharpmask
-
-performs an unsharp mask on the image.  This is the result of
-subtracting a gaussian blurred version of the image from the original.
-I<stddev> controls the stddev parameter of the gaussian blur.  Each
-output pixel is: in + I<scale> * (in - blurred).
-
-=item watermark
-
-applies I<wmark> as a watermark on the image with strength I<pixdiff>,
-with an origin at (I<tx>, I<ty>)
-
-=back
-
-A demonstration of most of the filters can be found at:
-
-  http://www.develop-help.com/imager/filters.html
-
-(This is a slow link.)
-
-=head2 Color transformations
-
-You can use the convert method to transform the color space of an
-image using a matrix.  For ease of use some presets are provided.
-
-The convert method can be used to:
-
-=over 4
-
-=item *
-
-convert an RGB or RGBA image to grayscale.
-
-=item *
-
-convert a grayscale image to RGB.
-
-=item *
-
-extract a single channel from an image.
-
-=item *
-
-set a given channel to a particular value (or from another channel)
-
-=back
-
-The currently defined presets are:
-
-=over
-
-=item gray
-
-=item grey
-
-converts an RGBA image into a grayscale image with alpha channel, or
-an RGB image into a grayscale image without an alpha channel.
-
-This weights the RGB channels at 22.2%, 70.7% and 7.1% respectively.
-
-=item noalpha
-
-removes the alpha channel from a 2 or 4 channel image.  An identity
-for other images.
-
-=item red
-
-=item channel0
-
-extracts the first channel of the image into a single channel image
-
-=item green
-
-=item channel1
-
-extracts the second channel of the image into a single channel image
-
-=item blue
-
-=item channel2
-
-extracts the third channel of the image into a single channel image
-
-=item alpha
-
-extracts the alpha channel of the image into a single channel image.
-
-If the image has 1 or 3 channels (assumed to be grayscale of RGB) then
-the resulting image will be all white.
-
-=item rgb
-
-converts a grayscale image to RGB, preserving the alpha channel if any
-
-=item addalpha
-
-adds an alpha channel to a grayscale or RGB image.  Preserves an
-existing alpha channel for a 2 or 4 channel image.
-
-=back
-
-For example, to convert an RGB image into a greyscale image:
-
-  $new = $img->convert(preset=>'grey'); # or gray
-
-or to convert a grayscale image to an RGB image:
-
-  $new = $img->convert(preset=>'rgb');
-
-The presets aren't necessary simple constants in the code, some are
-generated based on the number of channels in the input image.
-
-If you want to perform some other colour transformation, you can use
-the 'matrix' parameter.
-
-For each output pixel the following matrix multiplication is done:
-
-     channel[0]       [ [ $c00, $c01, ...  ]        inchannel[0]
-   [     ...      ] =          ...              x [     ...        ]
-     channel[n-1]       [ $cn0, ...,  $cnn ] ]      inchannel[max]
-                                                          1
-
-So if you want to swap the red and green channels on a 3 channel image:
-
-  $new = $img->convert(matrix=>[ [ 0, 1, 0 ],
-                                 [ 1, 0, 0 ],
-                                 [ 0, 0, 1 ] ]);
-
-or to convert a 3 channel image to greyscale using equal weightings:
-
-  $new = $img->convert(matrix=>[ [ 0.333, 0.333, 0.334 ] ])
-
-=head2 Color Mappings
-
-You can use the map method to map the values of each channel of an
-image independently using a list of lookup tables.  It's important to
-realize that the modification is made inplace.  The function simply
-returns the input image again or undef on failure.
-
-Each channel is mapped independently through a lookup table with 256
-entries.  The elements in the table should not be less than 0 and not
-greater than 255.  If they are out of the 0..255 range they are
-clamped to the range.  If a table does not contain 256 entries it is
-silently ignored.
-
-Single channels can mapped by specifying their name and the mapping
-table.  The channel names are C<red>, C<green>, C<blue>, C<alpha>.
-
-  @map = map { int( $_/2 } 0..255;
-  $img->map( red=>\@map );
-
-It is also possible to specify a single map that is applied to all
-channels, alpha channel included.  For example this applies a gamma
-correction with a gamma of 1.4 to the input image.
-
-  $gamma = 1.4;
-  @map = map { int( 0.5 + 255*($_/255)**$gamma ) } 0..255;
-  $img->map(all=> \@map);
-
-The C<all> map is used as a default channel, if no other map is
-specified for a channel then the C<all> map is used instead.  If we
-had not wanted to apply gamma to the alpha channel we would have used:
-
-  $img->map(all=> \@map, alpha=>[]);
-
-Since C<[]> contains fewer than 256 element the gamma channel is
-unaffected.
-
-It is also possible to simply specify an array of maps that are
-applied to the images in the rgba order.  For example to apply
-maps to the C<red> and C<blue> channels one would use:
-
-  $img->map(maps=>[\@redmap, [], \@bluemap]);
-
-
-
-=head2 Transformations
-
-Another special image method is transform.  It can be used to generate
-warps and rotations and such features.  It can be given the operations
-in postfix notation or the module Affix::Infix2Postfix can be used.
-Look in the test case t/t55trans.t for an example.
-
-transform() needs expressions (or opcodes) that determine the source
-pixel for each target pixel.  Source expressions are infix expressions
-using any of the +, -, *, / or ** binary operators, the - unary
-operator, ( and ) for grouping and the sin() and cos() functions.  The
-target pixel is input as the variables x and y.
-
-You specify the x and y expressions as xexpr and yexpr respectively.
-You can also specify opcodes directly, but that's magic deep enough
-that you can look at the source code.
-
-You can still use the transform() function, but the transform2()
-function is just as fast and is more likely to be enhanced and
-maintained.
-
-Later versions of Imager also support a transform2() class method
-which allows you perform a more general set of operations, rather than
-just specifying a spatial transformation as with the transform()
-method, you can also perform colour transformations, image synthesis
-and image combinations.
-
-transform2() takes an reference to an options hash, and a list of
-images to operate one (this list may be empty):
-
-  my %opts;
-  my @imgs;
-  ...
-  my $img = Imager::transform2(\%opts, @imgs)
-      or die "transform2 failed: $Imager::ERRSTR";
-
-The options hash may define a transformation function, and optionally:
-
-=over 4
-
-=item *
-
-width - the width of the image in pixels.  If this isn't supplied the
-width of the first input image is used.  If there are no input images
-an error occurs.
-
-=item *
-
-height - the height of the image in pixels.  If this isn't supplied
-the height of the first input image is used.  If there are no input
-images an error occurs.
-
-=item *
-
-constants - a reference to hash of constants to define for the
-expression engine.  Some extra constants are defined by Imager
-
-=back
-
-The tranformation function is specified using either the expr or
-rpnexpr member of the options.
-
-=over 4
-
-=item Infix expressions
-
-You can supply infix expressions to transform 2 with the expr keyword.
-
-$opts{expr} = 'return getp1(w-x, h-y)'
-
-The 'expression' supplied follows this general grammar:
-
-   ( identifier '=' expr ';' )* 'return' expr
-
-This allows you to simplify your expressions using variables.
-
-A more complex example might be:
-
-$opts{expr} = 'pix = getp1(x,y); return if(value(pix)>0.8,pix*0.8,pix)'
-
-Currently to use infix expressions you must have the Parse::RecDescent
-module installed (available from CPAN).  There is also what might be a
-significant delay the first time you run the infix expression parser
-due to the compilation of the expression grammar.
-
-=item Postfix expressions
-
-You can supply postfix or reverse-polish notation expressions to
-transform2() through the rpnexpr keyword.
-
-The parser for rpnexpr emulates a stack machine, so operators will
-expect to see their parameters on top of the stack.  A stack machine
-isn't actually used during the image transformation itself.
-
-You can store the value at the top of the stack in a variable called
-foo using !foo and retrieve that value again using @foo.  The !foo
-notation will pop the value from the stack.
-
-An example equivalent to the infix expression above:
-
- $opts{rpnexpr} = 'x y getp1 !pix @pix value 0.8 gt @pix 0.8 * @pix ifp'
-
-=back
-
-transform2() has a fairly rich range of operators.
-
-=over 4
-
-=item +, *, -, /, %, **
-
-multiplication, addition, subtraction, division, remainder and
-exponentiation.  Multiplication, addition and subtraction can be used
-on colour values too - though you need to be careful - adding 2 white
-values together and multiplying by 0.5 will give you grey, not white.
-
-Division by zero (or a small number) just results in a large number.
-Modulo zero (or a small number) results in zero.
-
-=item sin(N), cos(N), atan2(y,x)
-
-Some basic trig functions.  They work in radians, so you can't just
-use the hue values.
-
-=item distance(x1, y1, x2, y2)
-
-Find the distance between two points.  This is handy (along with
-atan2()) for producing circular effects.
-
-=item sqrt(n)
-
-Find the square root.  I haven't had much use for this since adding
-the distance() function.
-
-=item abs(n)
-
-Find the absolute value.
-
-=item getp1(x,y), getp2(x,y), getp3(x, y)
-
-Get the pixel at position (x,y) from the first, second or third image
-respectively.  I may add a getpn() function at some point, but this
-prevents static checking of the instructions against the number of
-images actually passed in.
-
-=item value(c), hue(c), sat(c), hsv(h,s,v)
-
-Separates a colour value into it's value (brightness), hue (colour)
-and saturation elements.  Use hsv() to put them back together (after
-suitable manipulation).
-
-=item red(c), green(c), blue(c), rgb(r,g,b)
-
-Separates a colour value into it's red, green and blue colours.  Use
-rgb(r,g,b) to put it back together.
-
-=item int(n)
-
-Convert a value to an integer.  Uses a C int cast, so it may break on
-large values.
-
-=item if(cond,ntrue,nfalse), if(cond,ctrue,cfalse)
-
-A simple (and inefficient) if function.
-
-=item <=,<,==,>=,>,!=
-
-Relational operators (typically used with if()).  Since we're working
-with floating point values the equalities are 'near equalities' - an
-epsilon value is used.
-
-=item &&, ||, not(n)
-
-Basic logical operators.
-
-=back
-
-A few examples:
-
-=over 4
-
-=item rpnexpr=>'x 25 % 15 * y 35 % 10 * getp1 !pat x y getp1 !pix @pix sat 0.7 gt @pat @pix ifp'
-
-tiles a smaller version of the input image over itself where the
-colour has a saturation over 0.7.
-
-=item rpnexpr=>'x 25 % 15 * y 35 % 10 * getp1 !pat y 360 / !rat x y getp1 1 @rat - pmult @pat @rat pmult padd'
-
-tiles the input image over itself so that at the top of the image the
-full-size image is at full strength and at the bottom the tiling is
-most visible.
-
-=item rpnexpr=>'x y getp1 !pix @pix value 0.96 gt @pix sat 0.1 lt and 128 128 255 rgb @pix ifp'
-
-replace pixels that are white or almost white with a palish blue
-
-=item rpnexpr=>'x 35 % 10 * y 45 % 8 * getp1 !pat x y getp1 !pix @pix sat 0.2 lt @pix value 0.9 gt and @pix @pat @pix value 2 / 0.5 + pmult ifp'
-
-Tiles the input image overitself where the image isn't white or almost
-white.
-
-=item rpnexpr=>'x y 160 180 distance !d y 180 - x 160 - atan2 !a @d 10 / @a + 3.1416 2 * % !a2 @a2 180 * 3.1416 / 1 @a2 sin 1 + 2 / hsv'
-
-Produces a spiral.
-
-=item rpnexpr=>'x y 160 180 distance !d y 180 - x 160 - atan2 !a @d 10 / @a + 3.1416 2 * % !a2 @a 180 * 3.1416 / 1 @a2 sin 1 + 2 / hsv'
-
-A spiral built on top of a colour wheel.
-
-=back
-
-For details on expression parsing see L<Imager::Expr>.  For details on
-the virtual machine used to transform the images, see
-L<Imager::regmach.pod>.
-
-=head2 Matrix Transformations
-
-Rather than having to write code in a little language, you can use a
-matrix to perform transformations, using the matrix_transform()
-method:
-
-  my $im2 = $im->matrix_transform(matrix=>[ -1, 0, $im->getwidth-1,
-                                            0,  1, 0,
-                                            0,  0, 1 ]);
-
-By default the output image will be the same size as the input image,
-but you can supply the xsize and ysize parameters to change the size.
-
-Rather than building matrices by hand you can use the Imager::Matrix2d
-module to build the matrices.  This class has methods to allow you to
-scale, shear, rotate, translate and reflect, and you can combine these
-with an overloaded multiplication operator.
-
-WARNING: the matrix you provide in the matrix operator transforms the
-co-ordinates within the B<destination> image to the co-ordinates
-within the I<source> image.  This can be confusing.
-
-Since Imager has 3 different fairly general ways of transforming an
-image spatially, this method also has a yatf() alias.  Yet Another
-Transformation Function.
-
-=head2 Masked Images
-
-Masked images let you control which pixels are modified in an
-underlying image.  Where the first channel is completely black in the
-mask image, writes to the underlying image are ignored.
-
-For example, given a base image called $img:
-
-  my $mask = Imager->new(xsize=>$img->getwidth, ysize=>getheight,
-                         channels=>1);
-  # ... draw something on the mask
-  my $maskedimg = $img->masked(mask=>$mask);
-
-You can specifiy the region of the underlying image that is masked
-using the left, top, right and bottom options.
-
-If you just want a subset of the image, without masking, just specify
-the region without specifying a mask.
-
-=head2 Plugins
-
-It is possible to add filters to the module without recompiling the
-module itself.  This is done by using DSOs (Dynamic shared object)
-avaliable on most systems.  This way you can maintain our own filters
-and not have to get me to add it, or worse patch every new version of
-the Module.  Modules can be loaded AND UNLOADED at runtime.  This
-means that you can have a server/daemon thingy that can do something
-like:
-
-  load_plugin("dynfilt/dyntest.so")  || die "unable to load plugin\n";
-  %hsh=(a=>35,b=>200,type=>lin_stretch);
-  $img->filter(%hsh);
-  unload_plugin("dynfilt/dyntest.so") || die "unable to load plugin\n";
-  $img->write(type=>'pnm',file=>'testout/t60.jpg')
-    || die "error in write()\n";
-
-Someone decides that the filter is not working as it should -
-dyntest.c modified and recompiled.
-
-  load_plugin("dynfilt/dyntest.so") || die "unable to load plugin\n";
-  $img->filter(%hsh);
-
-An example plugin comes with the module - Please send feedback to
-addi@umich.edu if you test this.
-
-Note: This seems to test ok on the following systems:
-Linux, Solaris, HPUX, OpenBSD, FreeBSD, TRU64/OSF1, AIX.
-If you test this on other systems please let me know.
-
-=head2 Tags
-
-Image tags contain meta-data about the image, ie. information not
-stored as pixels of the image.
-
-At the perl level each tag has a name or code and a value, which is an
-integer or an arbitrary string.  An image can contain more than one
-tag with the same name or code.
-
-You can retrieve tags from an image using the tags() method, you can
-get all of the tags in an image, as a list of array references, with
-the code or name of the tag followed by the value of the tag:
-
-  my @alltags = $img->tags;
-
-or you can get all tags that have a given name:
-
-  my @namedtags = $img->tags(name=>$name);
-
-or a given code:
-
-  my @tags = $img->tags(code=>$code);
-
-You can add tags using the addtag() method, either by name:
-
-  my $index = $img->addtag(name=>$name, value=>$value);
-
-or by code:
-
-  my $index = $img->addtag(code=>$code, value=>$value);
-
-You can remove tags with the deltag() method, either by index:
-
-  $img->deltag(index=>$index);
-
-or by name:
-
-  $img->deltag(name=>$name);
-
-or by code:
-
-  $img->deltag(code=>$code);
-
-In each case deltag() returns the number of tags deleted.
-
-When you read a GIF image using read_multi(), each image can include
-the following tags:
-
-=over
-
-=item gif_left
-
-the offset of the image from the left of the "screen" ("Image Left
-Position")
-
-=item gif_top
-
-the offset of the image from the top of the "screen" ("Image Top Position")
-
-=item gif_interlace
-
-non-zero if the image was interlaced ("Interlace Flag")
-
-=item gif_screen_width
-
-=item gif_screen_height
-
-the size of the logical screen ("Logical Screen Width", 
-"Logical Screen Height")
-
-=item gif_local_map
-
-Non-zero if this image had a local color map.
-
-=item gif_background
-
-The index in the global colormap of the logical screen's background
-color.  This is only set if the current image uses the global
-colormap.
-
-=item gif_trans_index
-
-The index of the color in the colormap used for transparency.  If the
-image has a transparency then it is returned as a 4 channel image with
-the alpha set to zero in this palette entry. ("Transparent Color Index")
-
-=item gif_delay
-
-The delay until the next frame is displayed, in 1/100 of a second. 
-("Delay Time").
-
-=item gif_user_input
-
-whether or not a user input is expected before continuing (view dependent) 
-("User Input Flag").
-
-=item gif_disposal
-
-how the next frame is displayed ("Disposal Method")
-
-=item gif_loop
-
-the number of loops from the Netscape Loop extension.  This may be zero.
-
-=item gif_comment
-
-the first block of the first gif comment before each image.
-
-=back
-
-Where applicable, the ("name") is the name of that field from the GIF89 
-standard.
-
-The following tags are set in a TIFF image when read, and can be set
-to control output:
-
-=over
-
-=item tiff_resolutionunit
-
-The value of the ResolutionUnit tag.  This is ignored on writing if
-the i_aspect_only tag is non-zero.
-
-=back
-
-The following tags are set when a Windows BMP file is read:
-
-=over
-
-=item bmp_compression
-
-The type of compression, if any.
-
-=item bmp_important_colors
-
-The number of important colors as defined by the writer of the image.
-
-=back
-
-Some standard tags will be implemented as time goes by:
-
-=over
-
-=item i_xres
-
-=item i_yres
-
-The spatial resolution of the image in pixels per inch.  If the image
-format uses a different scale, eg. pixels per meter, then this value
-is converted.  A floating point number stored as a string.
-
-=item i_aspect_only
-
-If this is non-zero then the values in i_xres and i_yres are treated
-as a ratio only.  If the image format does not support aspect ratios
-then this is scaled so the smaller value is 72dpi.
-
-=back
+If you're into IRC, you can typically find the developers in #Imager
+on irc.rhizomatic.net.  As with any IRC channel, the participants
+could be occupied or asleep, so please be patient.
 
 =head1 BUGS
 
-box, arc, circle do not support antialiasing yet.  arc, is only filled
-as of yet.  Some routines do not return $self where they should.  This
-affects code like this, C<$img-E<gt>box()-E<gt>arc()> where an object
-is expected.
-
-When saving Gif images the program does NOT try to shave of extra
-colors if it is possible.  If you specify 128 colors and there are
-only 2 colors used - it will have a 128 colortable anyway.
+Bugs are listed individually for relevant pod pages.
 
 =head1 AUTHOR
 
-Arnar M. Hrafnkelsson, addi@umich.edu, and recently lots of assistance
-from Tony Cook.  See the README for a complete list.
+Arnar M. Hrafnkelsson (addi@imager.perl.org) and Tony Cook
+(tony@imager.perl.org) See the README for a complete list.
 
 =head1 SEE ALSO
 
-perl(1), Imager::Color(3), Imager::Font(3), Imager::Matrix2d(3),
-Affix::Infix2Postfix(3), Parse::RecDescent(3) 
+perl(1), Imager::ImageTypes(3), Imager::Files(3), Imager::Draw(3),
+Imager::Color(3), Imager::Fill(3), Imager::Font(3),
+Imager::Transformations(3), Imager::Engines(3), Imager::Filters(3),
+Imager::Expr(3), Imager::Matrix2d(3), Imager::Fountain(3)
+
+Affix::Infix2Postfix(3), Parse::RecDescent(3)
 http://www.eecs.umich.edu/~addi/perl/Imager/
 
 =cut
+
+
+
+

@@ -546,6 +546,100 @@ Revision history for Perl extension Imager.
 
 0.39    Released: Nov 2 2001.
 
+0.40  pre1
+        - anti-aliased polygon fill
+        - add general fill to polygon fill
+        - make color values smarter for the drawing functions
+        - implemented reading and writing the TIFF text tags
+        - added prototypes for some of the derivative tags functions
+        - read paletted tiff images into Imager paletted images
+        - on partial tiff image reads, set the i_incomplete tag
+        - tiff reading now uses the error stack
+        - use the error stack value from reading bmp files
+        - fix an error message in bmp.c
+        - added has_chars() method to Imager::Font::FreeType2
+        - freetype 2 bounding box function didn't know UTF8 (doh!)
+        - write paletted images as paletted to tiff
+	- initialize counter for packing 4 bit data
+        - don't allocate hashboxes as locals since it overflows the 
+	  stack by default in Darwin
+        - applied T1 afm patch from Claes Jacobsson
+        - split IM_INCPATH and IM_LIBPATH with $Config{path_sep}, so they
+          work on Windows
+        - Added memory pools for easy cleanup of temp buffers
+        - Added read support for sgi .rgb files.
+        - io_new_fd() now creates a FDSEEK io object
+        - implemented i_readgif_wiol()
+        - Imager->read() now uses i_readgif_wiol();
+        - extend callback iolayers at C and Perl levels
+        - implemented i_writegif_wiol()
+        - split out Perl iolayer initialization into private methods
+        - add tests for each type of iolayer in t50basicoo.t
+        - read/write multi-image tiff files
+        - tests in t50basicoo.t for multi-image/file
+        - ASCII PBM files were reading white as dark gray (255 vs 1)
+        - modify the Freetype2 font code to pick it's own encoding
+          rather than using whatever strange translation FT2 happens to 
+          pick
+        - modify the FT1 font code to use the first encoding as a default
+          if we don't find a unicode encoding
+        - use the glyph bbox to calculate the glyph bitmaps for rendering
+          with FT1 rather than the global ascender/descender.  This helps
+          with fonts that have broken metrics.
+	- fix calculation of descender for FT2, it was calculating the
+	  minimum decent rather than the maximum for the characters in 
+	  the string
+	- didn't set default for bounding_box() utf8 parameter (caused a
+	  warning when calling bounding_box() on a FT2 font with no utf8
+	  parameter)
+	- Added lib/Imager/Draw.pod documentation of primitives.
+	- Added lib/Imager/Transformations.pod, some docs of simple transforms.
+	- Added lib/Imager/ImageTypes.pod, draft of ImageType pod.
+	- Added lib/Imager/Filters.pod, draft of Filters pod.
+	- Added lib/Imager/Engines.pod, draft of Engines pod.
+        - added getpixel() and setpixel() methods
+        - added Artur's OSX dlload() emulation, with minor changes
+        - modified _color() to work around a 5.6.0 bug
+        - replaced old gif options with tags
+        - we now log which memory block is being freed before giving 
+          an error on it being re-freed
+        - fixed stupid bug in deleting tags
+	- fixed minor pod errors involving &gt;
+
+0.40pre2
+        - make t1log optional, defaulting to off.  You can enable the log
+          with Imager::init(t1log=>1) (Ticket #369)
+        - quote a few hash key strings to prevent warnings on 5.004
+        - modify quantization code to handle 1 channel images 
+          correctly (Ticket #365)
+        - make channel pointer to i_gsamp() const int * so we can pass
+          const arrays
+        - handle the presence of the default broken giflib better,
+          by giving them some more prose about the problem, and skipping
+          all but the first test that fails with the broken giflib
+        - i_box_cfill() went into an infinite loop on fountain fills
+          or fills on images with more than 8-bits/sample
+        - hide more of our Darwin dlload emulation to prevent runtime
+          symbol conflicts
+        - use INT2PTR() and PTR2IV() macros instead of direct casts to
+          prevent pointer vs int size warnings on 64-bit builds of perl.
+        - add our own INT2PTR and PTR2IV definitions when perl doesn't
+          supply them
+        - difference() method
+        - hide (with static) or rename many symbols that could possibly
+          cause conflicts with other libraries or perl
+        - Fix runaway cache problem for freetype1 font cache.
+        - Added version logging when log is started.
+
+0.40
+        - difference() wasn't setting an alpha channel when the input
+          image didn't have one
+        - improve crop() documentation, see
+          http://perlmonks.org/index.pl?lastnode_id=155767&node_id=155428
+        - handle the first "buggy giflib" test more portably.  Previously
+          it used fork() which caused problems on systems that didn't have
+          a real fork().
+
 =================================================================
 
         For latest versions check the Imager-devel pages:

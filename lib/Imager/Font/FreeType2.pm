@@ -59,7 +59,8 @@ sub _bounding_box {
   my $self = shift;
   my %input = @_;
 
-  return i_ft2_bbox($self->{id}, $input{size}, $input{sizew}, $input{string});
+  return i_ft2_bbox($self->{id}, $input{size}, $input{sizew}, $input{string}, 
+		    $input{utf8});
 }
 
 sub dpi {
@@ -100,6 +101,17 @@ sub _transform {
 
 sub utf8 {
   return 1;
+}
+
+# check if the font has the characters in the given string
+sub has_chars {
+  my ($self, %hsh) = @_;
+
+  unless (defined $hsh{string} && length $hsh{string}) {
+    $Imager::ERRSTR = "No string supplied to \$font->has_chars()";
+    return;
+  }
+  return i_ft2_has_chars($self->{id}, $hsh{string}, $hsh{'utf8'} || 0);
 }
 
 1;

@@ -146,16 +146,17 @@ sub bounding_box {
   }
   $input{size} ||= $self->{size};
   $input{sizew} = _first($input{sizew}, $self->{sizew}, 0);
+  $input{utf8} = _first($input{utf8}, $self->{utf8}, 0);
 
   my @box = $self->_bounding_box(%input);
 
-  if(exists $input{'x'} and exists $input{'y'}) {
+  if(@box && exists $input{'x'} and exists $input{'y'}) {
     my($gdescent, $gascent)=@box[1,3];
     $box[1]=$input{'y'}-$gascent;      # top = base - ascent (Y is down)
     $box[3]=$input{'y'}-$gdescent;     # bottom = base - descent (Y is down, descent is negative)
     $box[0]+=$input{'x'};
     $box[2]+=$input{'x'};
-  } elsif ($input{'canon'}) {
+  } elsif (@box && $input{'canon'}) {
     $box[3]-=$box[1];    # make it cannoical (ie (0,0) - (width, height))
     $box[2]-=$box[0];
   }
@@ -467,6 +468,18 @@ Not all font types support transformations, these will return false.
 It's possible that a driver will disable hinting if you use a
 transformation, to prevent discontinuities in the transformations.
 See the end of the test script t/t38ft2font.t for an example.
+
+=item has_chars(string=>$text)
+
+Checks if the characters in $text are defined by the font.
+
+In a list context returns a list of true or false value corresponding
+to the characters in $text, true if the character is defined, false if
+not.  In scalar context returns a string of NUL or non-NUL
+characters.  Supports UTF8 where the font driver supports UTF8.
+
+Not all fonts support this method (use $font->can("has_chars") to
+check.)
 
 =item logo
 

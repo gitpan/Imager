@@ -354,7 +354,7 @@ i_readpnm_wiol(io_glue *ig, int length) {
     for(y=0;y<height;y++) for(x=0; x<width; x++) {
       for(ch=0; ch<channels; ch++) {
 	int t;
-	if (gnum(&buf, &t)) val.channel[ch] = t;
+	if (gnum(&buf, &t)) val.channel[ch] = t * mult;
 	else {
 	  mm_log((1,"i_readpnm: gnum() returned false in data\n"));
 	  return im;
@@ -439,6 +439,7 @@ i_writeppm_wiol(i_img *im, io_glue *ig) {
         while (y < im->ysize && rc >= 0) {
           i_gsamp(im, 0, im->xsize, y, data, rgb_chan, 3);
           rc = ig->writecb(ig, data, im->xsize * 3);
+          ++y;
         }
         myfree(data);
       }
@@ -477,6 +478,7 @@ i_writeppm_wiol(i_img *im, io_glue *ig) {
         while (y < im->ysize && rc >= 0) {
           i_gsamp(im, 0, im->xsize, y, data, &chan, 1);
           rc = ig->writecb(ig, data, im->xsize);
+          ++y;
         }
         myfree(data);
       }
@@ -496,6 +498,7 @@ i_writeppm_wiol(i_img *im, io_glue *ig) {
     mm_log((1,"i_writeppm: ppm/pgm is 1 or 3 channel only (current image is %d)\n",im->channels));
     return(0);
   }
+  ig->closecb(ig);
 
   return(1);
 }

@@ -203,6 +203,8 @@ myfree_file_line(void *p, char *file, int line) {
     malloc_pointers[i].ptr = NULL;
     match++;
   }
+
+  mm_log((1, "myfree_file_line: freeing address %p (real %p)\n", pp, pp-UNDRRNVAL));
   
   if (match != 1) {
     mm_log((1, "myfree_file_line: INCONSISTENT REFCOUNT %d at %s (%i)\n", match, file, line));
@@ -210,7 +212,6 @@ myfree_file_line(void *p, char *file, int line) {
 		exit(255);
   }
   
-  mm_log((1, "myfree_file_line: freeing address %p (real %p)\n", pp, pp-UNDRRNVAL));
   
   free(pp-UNDRRNVAL);
 }
@@ -260,6 +261,37 @@ myrealloc(void *block, size_t size) {
 
 
 
+/* memory pool implementation */
+
+void
+i_mempool_init(i_mempool *mp) {
+  mp->alloc = 10;
+  mp->used  = 0;
+  mp->p = mymalloc(sizeof(void*)*mp->alloc);
+}
+
+void
+i_mempool_extend(i_mempool *mp) {
+  mp->p = myrealloc(mp->p, mp->alloc * 2);
+  mp->alloc *=2;
+}
+
+void *
+i_mempool_alloc(i_mempool *mp, size_t size) {
+  if (mp->used == mp->alloc) i_mempool_extend(mp);
+  mp->p[mp->used] = mymalloc(size);
+  mp->used++;
+  return mp->p[mp->used-1];
+}
+
+
+void
+i_mempool_destroy(i_mempool *mp) {
+  unsigned int i;
+  for(i=0; i<mp->used; i++) myfree(mp->p[i]);
+  myfree(mp->p);
+}
+
 
 
 /* Should these really be here? */
@@ -268,12 +300,12 @@ myrealloc(void *block, size_t size) {
 #undef max
 
 int
-min(int a,int b) {
+i_min(int a,int b) {
   if (a<b) return a; else return b;
 }
 
 int
-max(int a,int b) {
+i_max(int a,int b) {
   if (a>b) return a; else return b;
 }
 

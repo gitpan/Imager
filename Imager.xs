@@ -19,6 +19,16 @@ typedef i_color* Imager__Color;
 typedef i_fcolor* Imager__Color__Float;
 typedef i_img*   Imager__ImgRaw;
 
+/* later perls define this macro to prevent warning when converting
+from IV to pointer types */
+
+#ifndef INT2PTR
+#define INT2PTR(type,value) (type)(value)
+#endif
+
+#ifndef PTR2IV
+#define PTR2IV(p) INT2PTR(IV,p)
+#endif
 
 #ifdef HAVE_LIBTT
 typedef TT_Fonthandle* Imager__Font__TT;
@@ -28,13 +38,89 @@ typedef TT_Fonthandle* Imager__Font__TT;
 typedef FT2_Fonthandle* Imager__Font__FT2;
 #endif
 
+/* These functions are all shared - then comes platform dependant code */
+static int getstr(void *hv_t,char *key,char **store) {
+  SV** svpp;
+  HV* hv=(HV*)hv_t;
+
+  mm_log((1,"getstr(hv_t 0x%X, key %s, store 0x%X)\n",hv_t,key,store));
+
+  if ( !hv_exists(hv,key,strlen(key)) ) return 0;
+
+  svpp=hv_fetch(hv, key, strlen(key), 0);
+  *store=SvPV(*svpp, PL_na );
+
+  return 1;
+}
+
+static int getint(void *hv_t,char *key,int *store) {
+  SV** svpp;
+  HV* hv=(HV*)hv_t;  
+
+  mm_log((1,"getint(hv_t 0x%X, key %s, store 0x%X)\n",hv_t,key,store));
+
+  if ( !hv_exists(hv,key,strlen(key)) ) return 0;
+
+  svpp=hv_fetch(hv, key, strlen(key), 0);
+  *store=(int)SvIV(*svpp);
+  return 1;
+}
+
+static int getdouble(void *hv_t,char* key,double *store) {
+  SV** svpp;
+  HV* hv=(HV*)hv_t;
+
+  mm_log((1,"getdouble(hv_t 0x%X, key %s, store 0x%X)\n",hv_t,key,store));
+
+  if ( !hv_exists(hv,key,strlen(key)) ) return 0;
+  svpp=hv_fetch(hv, key, strlen(key), 0);
+  *store=(float)SvNV(*svpp);
+  return 1;
+}
+
+static int getvoid(void *hv_t,char* key,void **store) {
+  SV** svpp;
+  HV* hv=(HV*)hv_t;
+
+  mm_log((1,"getvoid(hv_t 0x%X, key %s, store 0x%X)\n",hv_t,key,store));
+
+  if ( !hv_exists(hv,key,strlen(key)) ) return 0;
+
+  svpp=hv_fetch(hv, key, strlen(key), 0);
+  *store = INT2PTR(void*, SvIV(*svpp));
+
+  return 1;
+}
+
+static int getobj(void *hv_t,char *key,char *type,void **store) {
+  SV** svpp;
+  HV* hv=(HV*)hv_t;
+
+  mm_log((1,"getobj(hv_t 0x%X, key %s,type %s, store 0x%X)\n",hv_t,key,type,store));
+
+  if ( !hv_exists(hv,key,strlen(key)) ) return 0;
+
+  svpp=hv_fetch(hv, key, strlen(key), 0);
+
+  if (sv_derived_from(*svpp,type)) {
+    IV tmp = SvIV((SV*)SvRV(*svpp));
+    *store = INT2PTR(void*, tmp);
+  } else {
+    mm_log((1,"getobj: key exists in hash but is not of correct type"));
+    return 0;
+  }
+
+  return 1;
+}
+
+UTIL_table_t i_UTIL_table={getstr,getint,getdouble,getvoid,getobj};
 
 void my_SvREFCNT_dec(void *p) {
   SvREFCNT_dec((SV*)p);
 }
 
 
-void
+static void
 log_entry(char *string, int level) {
   mm_log((level, string));
 }
@@ -130,6 +216,297 @@ static int write_callback(char *userdata, char const *data, int size) {
   return success;
 }
 
+#define CBDATA_BUFSIZE 8192
+
+struct cbdata {
+  /* the SVs we use to call back to Perl */
+  SV *writecb;
+  SV *readcb;
+  SV *seekcb;
+  SV *closecb;
+
+  /* we need to remember whether the buffer contains write data or 
+     read data
+   */
+  int reading;
+  int writing;
+
+  /* how far we've read into the buffer (not used for writing) */
+  int where;
+
+  /* the amount of space used/data available in the buffer */
+  int used;
+
+  /* the maximum amount to fill the buffer before flushing
+     If any write is larger than this then the buffer is flushed and 
+     the full write is performed.  The write is _not_ split into 
+     maxwrite sized calls
+   */
+  int maxlength;
+
+  char buffer[CBDATA_BUFSIZE];
+};
+
+/* 
+
+call_writer(cbd, buf, size)
+
+Low-level function to call the perl writer callback.
+
+*/
+
+static ssize_t call_writer(struct cbdata *cbd, void const *buf, size_t size) {
+  int count;
+  int success;
+  SV *sv;
+  dSP;
+
+  if (!SvOK(cbd->writecb))
+    return -1;
+
+  ENTER;
+  SAVETMPS;
+  EXTEND(SP, 1);
+  PUSHMARK(SP);
+  PUSHs(sv_2mortal(newSVpv((char *)buf, size)));
+  PUTBACK;
+
+  count = perl_call_sv(cbd->writecb, G_SCALAR);
+
+  SPAGAIN;
+  if (count != 1)
+    croak("Result of perl_call_sv(..., G_SCALAR) != 1");
+
+  sv = POPs;
+  success = SvTRUE(sv);
+
+
+  PUTBACK;
+  FREETMPS;
+  LEAVE;
+
+  return success ? size : 0;
+}
+
+static ssize_t call_reader(struct cbdata *cbd, void *buf, size_t size, 
+                           size_t maxread) {
+  int count;
+  int result;
+  SV *data;
+  dSP;
+
+  if (!SvOK(cbd->readcb))
+    return -1;
+
+  ENTER;
+  SAVETMPS;
+  EXTEND(SP, 2);
+  PUSHMARK(SP);
+  PUSHs(sv_2mortal(newSViv(size)));
+  PUSHs(sv_2mortal(newSViv(maxread)));
+  PUTBACK;
+
+  count = perl_call_sv(cbd->readcb, G_SCALAR);
+
+  SPAGAIN;
+
+  if (count != 1)
+    croak("Result of perl_call_sv(..., G_SCALAR) != 1");
+
+  data = POPs;
+
+  if (SvOK(data)) {
+    STRLEN len;
+    char *ptr = SvPV(data, len);
+    if (len > maxread)
+      croak("Too much data returned in reader callback");
+    
+    memcpy(buf, ptr, len);
+    result = len;
+  }
+  else {
+    result = -1;
+  }
+
+  PUTBACK;
+  FREETMPS;
+  LEAVE;
+
+  return result;
+}
+
+static ssize_t write_flush(struct cbdata *cbd) {
+  ssize_t result;
+
+  result = call_writer(cbd, cbd->buffer, cbd->used);
+  cbd->used = 0;
+  return result;
+}
+
+static off_t io_seeker(void *p, off_t offset, int whence) {
+  struct cbdata *cbd = p;
+  int count;
+  off_t result;
+  dSP;
+
+  if (!SvOK(cbd->seekcb))
+    return -1;
+
+  if (cbd->writing) {
+    if (cbd->used && write_flush(cbd) <= 0)
+      return -1;
+    cbd->writing = 0;
+  }
+  if (whence == SEEK_CUR && cbd->reading && cbd->where != cbd->used) {
+    offset -= cbd->where - cbd->used;
+  }
+  cbd->reading = 0;
+  cbd->where = cbd->used = 0;
+  
+  ENTER;
+  SAVETMPS;
+  EXTEND(SP, 2);
+  PUSHMARK(SP);
+  PUSHs(sv_2mortal(newSViv(offset)));
+  PUSHs(sv_2mortal(newSViv(whence)));
+  PUTBACK;
+
+  count = perl_call_sv(cbd->seekcb, G_SCALAR);
+
+  SPAGAIN;
+
+  if (count != 1)
+    croak("Result of perl_call_sv(..., G_SCALAR) != 1");
+
+  result = POPi;
+
+  PUTBACK;
+  FREETMPS;
+  LEAVE;
+
+  return result;
+}
+
+static ssize_t io_writer(void *p, void const *data, size_t size) {
+  struct cbdata *cbd = p;
+
+  /*printf("io_writer(%p, %p, %u)\n", p, data, size);*/
+  if (!cbd->writing) {
+    if (cbd->reading && cbd->where < cbd->used) {
+      /* we read past the place where the caller expected us to be
+         so adjust our position a bit */
+        *(char *)0 = 0;
+      if (io_seeker(p, cbd->where - cbd->used, SEEK_CUR) < 0) {
+        return -1;
+      }
+      cbd->reading = 0;
+    }
+    cbd->where = cbd->used = 0;
+  }
+  cbd->writing = 1;
+  if (cbd->used && cbd->used + size > cbd->maxlength) {
+    if (write_flush(cbd) <= 0) {
+      return 0;
+    }
+    cbd->used = 0;
+  }
+  if (cbd->used+size <= cbd->maxlength) {
+    memcpy(cbd->buffer + cbd->used, data, size);
+    cbd->used += size;
+    return size;
+  }
+  /* it doesn't fit - just pass it up */
+  return call_writer(cbd, data, size);
+}
+
+static ssize_t io_reader(void *p, void *data, size_t size) {
+  struct cbdata *cbd = p;
+  ssize_t total;
+  char *out = data; /* so we can do pointer arithmetic */
+  int i;
+
+  if (cbd->writing) {
+    if (write_flush(cbd) <= 0)
+      return 0;
+    cbd->writing = 0;
+  }
+
+  cbd->reading = 1;
+  if (size <= cbd->used - cbd->where) {
+    /* simplest case */
+    memcpy(data, cbd->buffer+cbd->where, size);
+    cbd->where += size;
+    return size;
+  }
+  total = 0;
+  memcpy(out, cbd->buffer + cbd->where, cbd->used - cbd->where);
+  total += cbd->used - cbd->where;
+  size  -= cbd->used - cbd->where;
+  out   += cbd->used - cbd->where;
+  if (size < sizeof(cbd->buffer)) {
+    int did_read;
+    int copy_size;
+    while (size
+	   && (did_read = call_reader(cbd, cbd->buffer, size, 
+				    sizeof(cbd->buffer))) > 0) {
+      cbd->where = 0;
+      cbd->used  = did_read;
+
+      copy_size = i_min(size, cbd->used);
+      memcpy(out, cbd->buffer, copy_size);
+      cbd->where += copy_size;
+      out   += copy_size;
+      total += copy_size;
+      size  -= copy_size;
+    }
+  }
+  else {
+    /* just read the rest - too big for our buffer*/
+    int did_read;
+    while ((did_read = call_reader(cbd, out, size, size)) > 0) {
+      size  -= did_read;
+      total += did_read;
+      out   += did_read;
+    }
+  }
+
+  return total;
+}
+
+static void io_closer(void *p) {
+  struct cbdata *cbd = p;
+
+  if (cbd->writing && cbd->used > 0) {
+    write_flush(cbd);
+    cbd->writing = 0;
+  }
+
+  if (SvOK(cbd->closecb)) {
+    dSP;
+
+    ENTER;
+    SAVETMPS;
+    PUSHMARK(SP);
+    PUTBACK;
+
+    perl_call_sv(cbd->closecb, G_VOID);
+
+    SPAGAIN;
+    PUTBACK;
+    FREETMPS;
+    LEAVE;
+  }
+}
+
+static void io_destroyer(void *p) {
+  struct cbdata *cbd = p;
+
+  SvREFCNT_dec(cbd->writecb);
+  SvREFCNT_dec(cbd->readcb);
+  SvREFCNT_dec(cbd->seekcb);
+  SvREFCNT_dec(cbd->closecb);
+}
+
 struct value_name {
   char *name;
   int value;
@@ -156,6 +533,7 @@ static struct value_name make_color_names[] =
   { "none", mc_none, },
   { "webmap", mc_web_map, },
   { "addi", mc_addi, },
+  { "mediancut", mc_median_cut, },
 };
 
 static struct value_name translate_names[] =
@@ -285,7 +663,7 @@ static void handle_quant_opts(i_quantize *quant, HV *hv)
     for (i = 0; i < quant->mc_count; ++i) {
       SV **sv1 = av_fetch(av, i, 0);
       if (sv1 && *sv1 && SvROK(*sv1) && sv_derived_from(*sv1, "Imager::Color")) {
-	i_color *col = (i_color *)SvIV((SV*)SvRV(*sv1));
+	i_color *col = INT2PTR(i_color *, SvIV((SV*)SvRV(*sv1)));
 	quant->mc_colors[i] = *col;
       }
     }
@@ -353,6 +731,7 @@ static void cleanup_quant_opts(i_quantize *quant) {
     myfree(quant->ed_map);
 }
 
+#if 0
 /* look through the hash for options to add to opts */
 static void handle_gif_opts(i_gif_opts *opts, HV *hv)
 {
@@ -394,7 +773,7 @@ static void handle_gif_opts(i_gif_opts *opts, HV *hv)
   }
   sv = hv_fetch(hv, "gif_tran_color", 14, 0);
   if (sv && *sv && SvROK(*sv) && sv_derived_from(*sv, "Imager::Color")) {
-    i_color *col = (i_color *)SvIV((SV *)SvRV(*sv));
+    i_color *col = INT2PTR(i_color *, SvIV((SV *)SvRV(*sv)));
     opts->tran_color = *col;
   }
   sv = hv_fetch(hv, "gif_positions", 13, 0);
@@ -434,6 +813,8 @@ static void cleanup_gif_opts(i_gif_opts *opts) {
     myfree(opts->positions);
 }
 
+#endif
+
 /* copies the color map from the hv into the colors member of the HV */
 static void copy_colors_back(HV *hv, i_quantize *quant) {
   SV **sv;
@@ -465,7 +846,8 @@ static void copy_colors_back(HV *hv, i_quantize *quant) {
 }
 
 /* loads the segments of a fountain fill into an array */
-i_fountain_seg *load_fount_segs(AV *asegs, int *count) {
+static i_fountain_seg *
+load_fount_segs(AV *asegs, int *count) {
   /* Each element of segs must contain:
      [ start, middle, end, c0, c1, segtype, colortrans ]
      start, middle, end are doubles from 0 to 1
@@ -515,10 +897,10 @@ i_fountain_seg *load_fount_segs(AV *asegs, int *count) {
         croak("i_fountain: segs must contain colors in elements 3 and 4");
       }
       if (sv_derived_from(*sv3, "Imager::Color::Float")) {
-        segs[i].c[j] = *(i_fcolor *)SvIV((SV *)SvRV(*sv3));
+        segs[i].c[j] = *INT2PTR(i_fcolor *, SvIV((SV *)SvRV(*sv3)));
       }
       else {
-        i_color c = *(i_color *)SvIV((SV *)SvRV(*sv3));
+        i_color c = *INT2PTR(i_color *, SvIV((SV *)SvRV(*sv3)));
         int ch;
         for (ch = 0; ch < MAXCHANNELS; ++ch) {
           segs[i].c[j].channel[ch] = c.channel[ch] / 255.0;
@@ -553,6 +935,10 @@ i_fountain_seg *load_fount_segs(AV *asegs, int *count) {
 */
 #define IFILL_DESTROY(fill) i_fill_destroy(fill);
 typedef i_fill_t* Imager__FillHandle;
+
+/* the m_init_log() function was called init_log(), renamed to reduce
+    potential naming conflicts */
+#define init_log m_init_log
 
 MODULE = Imager		PACKAGE = Imager::Color	PREFIX = ICL_
 
@@ -717,7 +1103,34 @@ io_new_buffer(data)
 	  RETVAL = io_new_buffer(data, length, my_SvREFCNT_dec, ST(0));
         OUTPUT:
           RETVAL
-	
+
+Imager::IO
+io_new_cb(writecb, readcb, seekcb, closecb, maxwrite = CBDATA_BUFSIZE)
+        SV *writecb;
+        SV *readcb;
+        SV *seekcb;
+        SV *closecb;
+        int maxwrite;
+      PREINIT:
+        struct cbdata *cbd;
+      CODE:
+        cbd = mymalloc(sizeof(struct cbdata));
+        SvREFCNT_inc(writecb);
+        cbd->writecb = writecb;
+        SvREFCNT_inc(readcb);
+        cbd->readcb = readcb;
+        SvREFCNT_inc(seekcb);
+        cbd->seekcb = seekcb;
+        SvREFCNT_inc(closecb);
+        cbd->closecb = closecb;
+        cbd->reading = cbd->writing = cbd->where = cbd->used = 0;
+        if (maxwrite > CBDATA_BUFSIZE)
+          maxwrite = CBDATA_BUFSIZE;
+        cbd->maxlength = maxwrite;
+        RETVAL = io_new_cb(cbd, io_reader, io_writer, io_seeker, io_closer, 
+                           io_destroyer);
+      OUTPUT:
+        RETVAL
 
 void
 io_slurp(ig)
@@ -779,7 +1192,7 @@ i_img_empty_ch(im,x,y,ch)
 	       int     ch
 
 void
-init_log(name,level)
+m_init_log(name,level)
 	      char*    name
 	       int     level
 
@@ -978,6 +1391,39 @@ i_poly_aa(im,xc,yc,val)
 	       y[i]=(double)SvNV(sv2);
 	     }
              i_poly_aa(im,len,x,y,val);
+             myfree(x);
+             myfree(y);
+
+void
+i_poly_aa_cfill(im,xc,yc,fill)
+    Imager::ImgRaw     im
+     Imager::FillHandle     fill
+	     PREINIT:
+	     double   *x,*y;
+	     int       len;
+	     AV       *av1;
+	     AV       *av2;
+	     SV       *sv1;
+	     SV       *sv2;
+	     int i;
+	     PPCODE:
+	     if (!SvROK(ST(1))) croak("Imager: Parameter 1 to i_poly_aa_cfill must be a reference to an array\n");
+	     if (SvTYPE(SvRV(ST(1))) != SVt_PVAV) croak("Imager: Parameter 1 to i_poly_aa_cfill must be a reference to an array\n");
+	     if (!SvROK(ST(2))) croak("Imager: Parameter 1 to i_poly_aa_cfill must be a reference to an array\n");
+	     if (SvTYPE(SvRV(ST(2))) != SVt_PVAV) croak("Imager: Parameter 1 to i_poly_aa_cfill must be a reference to an array\n");
+	     av1=(AV*)SvRV(ST(1));
+	     av2=(AV*)SvRV(ST(2));
+	     if (av_len(av1) != av_len(av2)) croak("Imager: x and y arrays to i_poly_aa_cfill must be equal length\n");
+	     len=av_len(av1)+1;
+	     x=mymalloc( len*sizeof(double) );
+	     y=mymalloc( len*sizeof(double) );
+	     for(i=0;i<len;i++) {
+	       sv1=(*(av_fetch(av1,i,0)));
+	       sv2=(*(av_fetch(av2,i,0)));
+	       x[i]=(double)SvNV(sv1);
+	       y[i]=(double)SvNV(sv2);
+	     }
+             i_poly_aa_cfill(im,len,x,y,fill);
              myfree(x);
              myfree(y);
 
@@ -1210,7 +1656,8 @@ i_img_diff(im1,im2)
 
 
 undef_int	  
-i_init_fonts()
+i_init_fonts(t1log=0)
+    int t1log
 
 #ifdef HAVE_LIBT1
 
@@ -1219,7 +1666,7 @@ i_t1_set_aa(st)
       	       int     st
 
 int
-i_t1_new(pfb,afm=NULL)
+i_t1_new(pfb,afm)
        	      char*    pfb
        	      char*    afm
 
@@ -1392,6 +1839,26 @@ i_readtiff_wiol(ig, length)
         Imager::IO     ig
 	       int     length
 
+void
+i_readtiff_multi_wiol(ig, length)
+        Imager::IO     ig
+	       int     length
+      PREINIT:
+        i_img **imgs;
+        int count;
+        int i;
+      PPCODE:
+        imgs = i_readtiff_multi_wiol(ig, length, &count);
+        if (imgs) {
+          EXTEND(SP, count);
+          for (i = 0; i < count; ++i) {
+            SV *sv = sv_newmortal();
+            sv_setref_pv(sv, "Imager::ImgRaw", (void *)imgs[i]);
+            PUSHs(sv);
+          }
+          myfree(imgs);
+        }
+
 
 undef_int
 i_writetiff_wiol(im, ig)
@@ -1399,16 +1866,96 @@ i_writetiff_wiol(im, ig)
         Imager::IO     ig
 
 undef_int
+i_writetiff_multi_wiol(ig, ...)
+        Imager::IO     ig
+      PREINIT:
+        int i;
+        int img_count;
+        i_img **imgs;
+      CODE:
+        if (items < 2)
+          croak("Usage: i_writetiff_multi_wiol(ig, images...)");
+        img_count = items - 1;
+        RETVAL = 1;
+	if (img_count < 1) {
+	  RETVAL = 0;
+	  i_clear_error();
+	  i_push_error(0, "You need to specify images to save");
+	}
+	else {
+          imgs = mymalloc(sizeof(i_img *) * img_count);
+          for (i = 0; i < img_count; ++i) {
+	    SV *sv = ST(1+i);
+	    imgs[i] = NULL;
+	    if (SvROK(sv) && sv_derived_from(sv, "Imager::ImgRaw")) {
+	      imgs[i] = INT2PTR(i_img *, SvIV((SV*)SvRV(sv)));
+	    }
+	    else {
+	      i_clear_error();
+	      i_push_error(0, "Only images can be saved");
+              myfree(imgs);
+	      RETVAL = 0;
+	      break;
+            }
+	  }
+          if (RETVAL) {
+	    RETVAL = i_writetiff_multi_wiol(ig, imgs, img_count);
+          }
+	  myfree(imgs);
+	}
+      OUTPUT:
+        RETVAL
+
+undef_int
 i_writetiff_wiol_faxable(im, ig, fine)
     Imager::ImgRaw     im
         Imager::IO     ig
 	       int     fine
 
+undef_int
+i_writetiff_multi_wiol_faxable(ig, fine, ...)
+        Imager::IO     ig
+        int fine
+      PREINIT:
+        int i;
+        int img_count;
+        i_img **imgs;
+      CODE:
+        if (items < 3)
+          croak("Usage: i_writetiff_multi_wiol_faxable(ig, fine, images...)");
+        img_count = items - 2;
+        RETVAL = 1;
+	if (img_count < 1) {
+	  RETVAL = 0;
+	  i_clear_error();
+	  i_push_error(0, "You need to specify images to save");
+	}
+	else {
+          imgs = mymalloc(sizeof(i_img *) * img_count);
+          for (i = 0; i < img_count; ++i) {
+	    SV *sv = ST(2+i);
+	    imgs[i] = NULL;
+	    if (SvROK(sv) && sv_derived_from(sv, "Imager::ImgRaw")) {
+	      imgs[i] = INT2PTR(i_img *, SvIV((SV*)SvRV(sv)));
+	    }
+	    else {
+	      i_clear_error();
+	      i_push_error(0, "Only images can be saved");
+              myfree(imgs);
+	      RETVAL = 0;
+	      break;
+            }
+	  }
+          if (RETVAL) {
+	    RETVAL = i_writetiff_multi_wiol_faxable(ig, imgs, img_count, fine);
+          }
+	  myfree(imgs);
+	}
+      OUTPUT:
+        RETVAL
+
 
 #endif /* HAVE_LIBTIFF */
-
-
-
 
 
 #ifdef HAVE_LIBPNG
@@ -1485,7 +2032,6 @@ i_writegif_gen(fd, ...)
       PROTOTYPE: $$@
       PREINIT:
 	i_quantize quant;
-	i_gif_opts opts;
 	i_img **imgs = NULL;
 	int img_count;
 	int i;
@@ -1498,9 +2044,7 @@ i_writegif_gen(fd, ...)
 	hv = (HV *)SvRV(ST(1));
 	memset(&quant, 0, sizeof(quant));
 	quant.mc_size = 256;
-	memset(&opts, 0, sizeof(opts));
 	handle_quant_opts(&quant, hv);
-	handle_gif_opts(&opts, hv);
 	img_count = items - 2;
 	RETVAL = 1;
 	if (img_count < 1) {
@@ -1514,7 +2058,7 @@ i_writegif_gen(fd, ...)
 	    SV *sv = ST(2+i);
 	    imgs[i] = NULL;
 	    if (SvROK(sv) && sv_derived_from(sv, "Imager::ImgRaw")) {
-	      imgs[i] = (i_img *)SvIV((SV*)SvRV(sv));
+	      imgs[i] = INT2PTR(i_img *, SvIV((SV*)SvRV(sv)));
 	    }
 	    else {
 	      i_clear_error();
@@ -1524,7 +2068,7 @@ i_writegif_gen(fd, ...)
             }
 	  }
           if (RETVAL) {
-	    RETVAL = i_writegif_gen(&quant, fd, imgs, img_count, &opts);
+	    RETVAL = i_writegif_gen(&quant, fd, imgs, img_count);
           }
 	  myfree(imgs);
           if (RETVAL) {
@@ -1534,7 +2078,6 @@ i_writegif_gen(fd, ...)
         ST(0) = sv_newmortal();
         if (RETVAL == 0) ST(0)=&PL_sv_undef;
         else sv_setiv(ST(0), (IV)RETVAL);
-	cleanup_gif_opts(&opts);
 	cleanup_quant_opts(&quant);
 
 
@@ -1543,7 +2086,6 @@ i_writegif_callback(cb, maxbuffer,...)
 	int maxbuffer;
       PREINIT:
 	i_quantize quant;
-	i_gif_opts opts;
 	i_img **imgs = NULL;
 	int img_count;
 	int i;
@@ -1557,9 +2099,7 @@ i_writegif_callback(cb, maxbuffer,...)
 	hv = (HV *)SvRV(ST(2));
 	memset(&quant, 0, sizeof(quant));
 	quant.mc_size = 256;
-	memset(&opts, 0, sizeof(opts));
 	handle_quant_opts(&quant, hv);
-	handle_gif_opts(&opts, hv);
 	img_count = items - 3;
 	RETVAL = 1;
 	if (img_count < 1) {
@@ -1571,7 +2111,7 @@ i_writegif_callback(cb, maxbuffer,...)
 	    SV *sv = ST(3+i);
 	    imgs[i] = NULL;
 	    if (SvROK(sv) && sv_derived_from(sv, "Imager::ImgRaw")) {
-	      imgs[i] = (i_img *)SvIV((SV*)SvRV(sv));
+	      imgs[i] = INT2PTR(i_img *, SvIV((SV*)SvRV(sv)));
 	    }
 	    else {
 	      RETVAL = 0;
@@ -1580,7 +2120,7 @@ i_writegif_callback(cb, maxbuffer,...)
 	  }
           if (RETVAL) {
 	    wd.sv = ST(0);
-	    RETVAL = i_writegif_callback(&quant, write_callback, (char *)&wd, maxbuffer, imgs, img_count, &opts);
+	    RETVAL = i_writegif_callback(&quant, write_callback, (char *)&wd, maxbuffer, imgs, img_count);
           }
 	  myfree(imgs);
           if (RETVAL) {
@@ -1590,7 +2130,55 @@ i_writegif_callback(cb, maxbuffer,...)
 	ST(0) = sv_newmortal();
 	if (RETVAL == 0) ST(0)=&PL_sv_undef;
 	else sv_setiv(ST(0), (IV)RETVAL);
-	cleanup_gif_opts(&opts);
+	cleanup_quant_opts(&quant);
+
+undef_int
+i_writegif_wiol(ig, opts,...)
+	Imager::IO ig
+      PREINIT:
+	i_quantize quant;
+	i_img **imgs = NULL;
+	int img_count;
+	int i;
+	HV *hv;
+      CODE:
+	if (items < 3)
+	    croak("Usage: i_writegif_wiol(IO,hashref, images...)");
+	if (!SvROK(ST(1)) || ! SvTYPE(SvRV(ST(1))))
+	    croak("i_writegif_callback: Second argument must be a hash ref");
+	hv = (HV *)SvRV(ST(1));
+	memset(&quant, 0, sizeof(quant));
+	quant.mc_size = 256;
+	handle_quant_opts(&quant, hv);
+	img_count = items - 2;
+	RETVAL = 1;
+	if (img_count < 1) {
+	  RETVAL = 0;
+	}
+	else {
+          imgs = mymalloc(sizeof(i_img *) * img_count);
+          for (i = 0; i < img_count; ++i) {
+	    SV *sv = ST(2+i);
+	    imgs[i] = NULL;
+	    if (SvROK(sv) && sv_derived_from(sv, "Imager::ImgRaw")) {
+	      imgs[i] = INT2PTR(i_img *, SvIV((SV*)SvRV(sv)));
+	    }
+	    else {
+	      RETVAL = 0;
+	      break;
+            }
+	  }
+          if (RETVAL) {
+	    RETVAL = i_writegif_wiol(ig, &quant, imgs, img_count);
+          }
+	  myfree(imgs);
+          if (RETVAL) {
+	    copy_colors_back(hv, &quant);
+          }
+	}
+	ST(0) = sv_newmortal();
+	if (RETVAL == 0) ST(0)=&PL_sv_undef;
+	else sv_setiv(ST(0), (IV)RETVAL);
 	cleanup_quant_opts(&quant);
 
 void
@@ -1641,9 +2229,53 @@ i_readgif(fd)
             PUSHs(newRV_noinc((SV*)ct));
         }
 
+void
+i_readgif_wiol(ig)
+     Imager::IO         ig
+	      PREINIT:
+	        int*    colour_table;
+	        int     colours, q, w;
+	      i_img*    rimg;
+                 SV*    temp[3];
+                 AV*    ct; 
+                 SV*    r;
+	       PPCODE:
+ 	       colour_table = NULL;
+               colours = 0;
 
+	if(GIMME_V == G_ARRAY) {
+            rimg = i_readgif_wiol(ig,&colour_table,&colours);
+        } else {
+            /* don't waste time with colours if they aren't wanted */
+            rimg = i_readgif_wiol(ig,NULL,NULL);
+        }
+	
+	if (colour_table == NULL) {
+            EXTEND(SP,1);
+            r=sv_newmortal();
+            sv_setref_pv(r, "Imager::ImgRaw", (void*)rimg);
+            PUSHs(r);
+	} else {
+            /* the following creates an [[r,g,b], [r, g, b], [r, g, b]...] */
+            /* I don't know if I have the reference counts right or not :( */
+            /* Neither do I :-) */
+            /* No Idea here either */
 
+            ct=newAV();
+            av_extend(ct, colours);
+            for(q=0; q<colours; q++) {
+                for(w=0; w<3; w++)
+                    temp[w]=sv_2mortal(newSViv(colour_table[q*3 + w]));
+                av_store(ct, q, (SV*)newRV_noinc((SV*)av_make(3, temp)));
+            }
+            myfree(colour_table);
 
+            EXTEND(SP,2);
+            r = sv_newmortal();
+            sv_setref_pv(r, "Imager::ImgRaw", (void*)rimg);
+            PUSHs(r);
+            PUSHs(newRV_noinc((SV*)ct));
+        }
 
 void
 i_readgif_scalar(...)
@@ -1805,6 +2437,26 @@ i_readgif_multi_callback(cb)
           myfree(imgs);
         }
 
+void
+i_readgif_multi_wiol(ig)
+        Imager::IO ig
+      PREINIT:
+        i_img **imgs;
+        int count;
+        int i;
+      PPCODE:
+        imgs = i_readgif_multi_wiol(ig, &count);
+        if (imgs) {
+          EXTEND(SP, count);
+          for (i = 0; i < count; ++i) {
+            SV *sv = sv_newmortal();
+            sv_setref_pv(sv, "Imager::ImgRaw", (void *)imgs[i]);
+            PUSHs(sv);
+          }
+          myfree(imgs);
+        }
+
+
 #endif
 
 
@@ -1867,6 +2519,31 @@ Imager::ImgRaw
 i_readtga_wiol(ig, length)
         Imager::IO     ig
                int     length
+
+
+undef_int
+i_writergb_wiol(im,ig, wierdpack, compress, idstring)
+    Imager::ImgRaw     im
+        Imager::IO     ig
+               int     wierdpack
+               int     compress
+              char*    idstring
+            PREINIT:
+                SV* sv1;
+                int rc;
+                int idlen;
+	       CODE:
+                idlen  = SvCUR(ST(4));
+                RETVAL = i_writergb_wiol(im, ig, wierdpack, compress, idstring, idlen);
+                OUTPUT:
+                RETVAL
+
+
+Imager::ImgRaw
+i_readrgb_wiol(ig, length)
+        Imager::IO     ig
+               int     length
+
 
 
 Imager::ImgRaw
@@ -1990,7 +2667,7 @@ i_transform2(width,height,ops,n_regs,c_regs,in_imgs)
 		   croak("Parameter 5 must contain only images");
 	         }
                  tmp = SvIV((SV*)SvRV(sv1));
-	         in_imgs[i] = (i_img*)tmp;
+	         in_imgs[i] = INT2PTR(i_img*, tmp);
 	       }
 	     }
              else {
@@ -2170,13 +2847,18 @@ i_gradgen(im, ...)
 	    free(axx); free(ayy); free(ac);
             croak("i_gradgen: Element of fourth argument is not derived from Imager::Color");
 	  }
-	  ival[i] = *(i_color *)SvIV((SV *)SvRV(sv));
+	  ival[i] = *INT2PTR(i_color *, SvIV((SV *)SvRV(sv)));
 	}
         i_gradgen(im, num, xo, yo, ival, dmeasure);
         myfree(xo);
         myfree(yo);
         myfree(ival);
 
+Imager::ImgRaw
+i_diff_image(im, im2, mindist=0)
+    Imager::ImgRaw     im
+    Imager::ImgRaw     im2
+               int     mindist
 
 void
 i_fountain(im, xa, ya, xb, yb, type, repeat, combine, super_sample, ssample_param, segs)
@@ -2299,7 +2981,7 @@ i_nearest_color(im, ...)
 	    free(axx); free(ayy); free(ac);
             croak("i_nearest_color: Element of fourth argument is not derived from Imager::Color");
 	  }
-	  ival[i] = *(i_color *)SvIV((SV *)SvRV(sv));
+	  ival[i] = *INT2PTR(i_color *, SvIV((SV *)SvRV(sv)));
 	}
         i_nearest_color(im, num, xo, yo, ival, dmeasure);
 
@@ -2332,11 +3014,11 @@ DSO_open(filename)
                if (rc!=NULL) {
                  if (evstr!=NULL) {
                    EXTEND(SP,2); 
-                   PUSHs(sv_2mortal(newSViv((IV)rc)));
+                   PUSHs(sv_2mortal(newSViv(PTR2IV(rc))));
                    PUSHs(sv_2mortal(newSVpvn(evstr, strlen(evstr))));
                  } else {
                    EXTEND(SP,1);
-                   PUSHs(sv_2mortal(newSViv((IV)rc)));
+                   PUSHs(sv_2mortal(newSViv(PTR2IV(rc))));
                  }
                }
 
@@ -2505,7 +3187,7 @@ i_addcolors(im, ...)
           if (sv_isobject(ST(i+1)) 
               && sv_derived_from(ST(i+1), "Imager::Color")) {
             IV tmp = SvIV((SV *)SvRV(ST(i+1)));
-            colors[i] = *(i_color *)tmp;
+            colors[i] = *INT2PTR(i_color *, tmp);
           }
           else {
             myfree(colors);
@@ -2539,7 +3221,7 @@ i_setcolors(im, index, ...)
           if (sv_isobject(ST(i+2)) 
               && sv_derived_from(ST(i+2), "Imager::Color")) {
             IV tmp = SvIV((SV *)SvRV(ST(i+2)));
-            colors[i] = *(i_color *)tmp;
+            colors[i] = *INT2PTR(i_color *, tmp);
           }
           else {
             myfree(colors);
@@ -2688,7 +3370,7 @@ i_img_masked_new(targ, mask, x, y, w, h)
               || !sv_derived_from(ST(1), "Imager::ImgRaw")) {
             croak("i_img_masked_new: parameter 2 must undef or an image");
           }
-          mask = (i_img *)SvIV((SV *)SvRV(ST(1)));
+          mask = INT2PTR(i_img *, SvIV((SV *)SvRV(ST(1))));
         }
         else
           mask = NULL;
@@ -2711,7 +3393,7 @@ i_plin(im, l, y, ...)
             if (sv_isobject(ST(i+3)) 
                 && sv_derived_from(ST(i+3), "Imager::Color")) {
               IV tmp = SvIV((SV *)SvRV(ST(i+3)));
-              work[i] = *(i_color *)tmp;
+              work[i] = *INT2PTR(i_color *, tmp);
             }
             else {
               myfree(work);
@@ -2788,7 +3470,7 @@ i_plinf(im, l, y, ...)
             if (sv_isobject(ST(i+3)) 
                 && sv_derived_from(ST(i+3), "Imager::Color::Float")) {
               IV tmp = SvIV((SV *)SvRV(ST(i+3)));
-              work[i] = *(i_fcolor *)tmp;
+              work[i] = *INT2PTR(i_fcolor *, tmp);
             }
             else {
               myfree(work);
@@ -3141,16 +3823,21 @@ i_ft2_settransform(font, matrix)
         RETVAL
 
 void
-i_ft2_bbox(font, cheight, cwidth, text)
+i_ft2_bbox(font, cheight, cwidth, text, utf8)
         Imager::Font::FT2 font
         double cheight
         double cwidth
         char *text
+	int utf8
       PREINIT:
         int bbox[6];
         int i;
       PPCODE:
-        if (i_ft2_bbox(font, cheight, cwidth, text, strlen(text), bbox)) {
+#ifdef SvUTF8
+        if (SvUTF8(ST(3)))
+          utf8 = 1;
+#endif
+        if (i_ft2_bbox(font, cheight, cwidth, text, strlen(text), bbox, utf8)) {
           EXTEND(SP, 6);
           for (i = 0; i < 6; ++i)
             PUSHs(sv_2mortal(newSViv(bbox[i])));
@@ -3248,7 +3935,37 @@ ft2_transform_box(font, x0, x1, x2, x3)
           PUSHs(sv_2mortal(newSViv(box[1])));
           PUSHs(sv_2mortal(newSViv(box[2])));
           PUSHs(sv_2mortal(newSViv(box[3])));
-        
+
+void
+i_ft2_has_chars(handle, text, utf8)
+        Imager::Font::FT2 handle
+        int utf8
+      PREINIT:
+        char *text;
+        STRLEN len;
+        char *work;
+        int count;
+        int i;
+      PPCODE:
+#ifdef SvUTF8
+        if (SvUTF8(ST(7)))
+          utf8 = 1;
+#endif
+        text = SvPV(ST(1), len);
+        work = mymalloc(len);
+        count = i_ft2_has_chars(handle, text, len, utf8, work);
+        if (GIMME_V == G_ARRAY) {
+          EXTEND(SP, count);
+          for (i = 0; i < count; ++i) {
+            PUSHs(sv_2mortal(newSViv(work[i])));
+          }
+        }
+        else {
+          EXTEND(SP, 1);
+          PUSHs(sv_2mortal(newSVpv(work, count)));
+        }
+        myfree(work);
+
 #endif
 
 MODULE = Imager         PACKAGE = Imager::FillHandle PREFIX=IFILL_

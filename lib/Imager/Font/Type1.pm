@@ -37,7 +37,20 @@ sub new {
   unless ($hsh{file} =~ m!^/! || $hsh{file} =~ m!^\./!) {
     $hsh{file} = './' . $hsh{file};
   }
-  my $id = Imager::i_t1_new($hsh{file});
+
+  if($hsh{afm}) {
+	  unless (-e $hsh{afm}) {
+	    $Imager::ERRSTR = "Afm file $hsh{afm} not found";
+	    return;
+	  }
+	  unless ($hsh{afm} =~ m!^/! || $hsh{afm} =~ m!^\./!) {
+	    $hsh{file} = './' . $hsh{file};
+	  }
+  } else {
+	  $hsh{afm} = 0;
+  }
+
+  my $id = Imager::i_t1_new($hsh{file},$hsh{afm});
   unless ($id >= 0) { # the low-level code may miss some error handling
     $Imager::ERRSTR = "Could not load font ($id)";
     return;
@@ -94,6 +107,11 @@ See Imager::Font to see how to use this type.
 
 This class provides low-level functions that require the caller to
 perform data validation
+
+By default Imager no longer creates the F<t1lib.log> log file.  You
+can re-enable that by calling Imager::init() with the C<t1log> option:
+
+  Imager::init(t1log=>1);
 
 =head1 AUTHOR
 

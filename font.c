@@ -66,15 +66,15 @@ Initialize font rendering libraries if they are avaliable.
 */
 
 undef_int 
-i_init_fonts() {
+i_init_fonts(int t1log) {
   mm_log((1,"Initializing fonts\n"));
 
 #ifdef HAVE_LIBT1
-  init_t1();
+  i_init_t1(t1log);
 #endif
   
 #ifdef HAVE_LIBTT
-  init_tt();
+  i_init_tt();
 #endif
 
 #ifdef HAVE_FT2
@@ -93,7 +93,7 @@ i_init_fonts() {
 
 
 /* 
-=item i_init_t1()
+=item i_init_t1(t1log)
 
 Initializes the t1lib font rendering engine.
 
@@ -101,9 +101,13 @@ Initializes the t1lib font rendering engine.
 */
 
 undef_int
-init_t1() {
+i_init_t1(int t1log) {
+  int init_flags = IGNORE_CONFIGFILE|IGNORE_FONTDATABASE;
   mm_log((1,"init_t1()\n"));
-  if ((T1_InitLib(LOGFILE|IGNORE_CONFIGFILE|IGNORE_FONTDATABASE) == NULL)){
+  
+  if (t1log)
+    init_flags |= LOGFILE;
+  if ((T1_InitLib(init_flags) == NULL)){
     mm_log((1,"Initialization of t1lib failed\n"));
     return(1);
   }
@@ -426,7 +430,7 @@ Initializes the freetype font rendering engine
 */
 
 undef_int
-init_tt() {
+i_init_tt() {
   TT_Error  error;
   mm_log((1,"init_tt()\n"));
   error = TT_Init_FreeType( &engine );
@@ -482,7 +486,15 @@ i_tt_get_instance( TT_Fonthandle *handle, int points, int smooth ) {
   
   if ( USTRCT(handle->instanceh[idx].instance) ) {
     mm_log((1,"i_tt_get_instance: freeing lru item from cache %d\n",idx));
+    /* Free cached glyphs */
+
+    for(i=0;i<256;i++)
+      if ( USTRCT(handle->instanceh[idx].glyphs[i]) )
+	TT_Done_Glyph( handle->instanceh[idx].glyphs[i] );
+
+    for(i=0;i<256;i++) USTRCT(handle->instanceh[idx].glyphs[i])=NULL;    
     TT_Done_Instance( handle->instanceh[idx].instance ); /* Free instance if needed */
+    
   }
   
   /* create and initialize instance */
@@ -557,9 +569,14 @@ i_tt_new(char *fontname) {
   for ( i = 0; i < n; i++ ) {
     TT_Get_CharMap_ID( handle->face, i, &platform, &encoding );
     if ( (platform == 3 && encoding == 1 ) || (platform == 0 && encoding == 0 ) ) {
+      mm_log((2,"i_tt_new - found char map platform %u encoding %u\n", platform, encoding));
       TT_Get_CharMap( handle->face, i, &(handle->char_map) );
       break;
     }
+  }
+  if (!USTRCT(handle->char_map) && n != 0) {
+    /* just use the first one */
+    TT_Get_CharMap( handle->face, 0, &(handle->char_map));
   }
 
   /* Zero the pointsizes - and ordering */
@@ -877,7 +894,7 @@ i_tt_render_all_glyphs( TT_Fonthandle *handle, int inst, TT_Raster_Map *bit, TT_
   */
 
   x=-cords[0]; /* FIXME: If you font is antialiased this should be expanded by one to allow for aa expansion and the allocation too - do before passing here */
-  y=-cords[1];
+  y=-cords[4];
   
   for ( i = 0; i < len; i++ ) {
     j = txt[i];
@@ -1016,7 +1033,7 @@ i_tt_rasterize( TT_Fonthandle *handle, TT_Raster_Map *bit, int cords[6], float p
   i_tt_bbox_inst( handle, inst, txt, len, cords );
   
   width  = cords[2]-cords[0];
-  height = cords[3]-cords[1];
+  height = cords[5]-cords[4];
   
   mm_log((1,"i_tt_rasterize: width=%d, height=%d\n",width, height )); 
   
@@ -1065,7 +1082,7 @@ i_tt_cp( TT_Fonthandle *handle, i_img *im, int xb, int yb, int channel, float po
   
   if (! i_tt_rasterize( handle, &bit, cords, points, txt, len, smooth ) ) return 0;
   
-  ascent=cords[3];
+  ascent=cords[5];
   st_offset=cords[0];
 
   i_tt_dump_raster_map_channel( im, &bit, xb-st_offset , yb-ascent, channel, smooth );
@@ -1100,7 +1117,7 @@ i_tt_text( TT_Fonthandle *handle, i_img *im, int xb, int yb, i_color *cl, float 
   
   if (! i_tt_rasterize( handle, &bit, cords, points, txt, len, smooth ) ) return 0;
   
-  ascent=cords[3];
+  ascent=cords[5];
   st_offset=cords[0];
 
   i_tt_dump_raster_map2( im, &bit, xb+st_offset, yb-ascent, cl, smooth ); 

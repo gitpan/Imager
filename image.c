@@ -38,7 +38,7 @@ Some of these functions are internal.
 #define minmax(a,b,i) ( ((a>=i)?a: ( (b<=i)?b:i   )) )
 
 /* Hack around an obscure linker bug on solaris - probably due to builtin gcc thingies */
-void fake(void) { ceil(1); }
+static void fake(void) { ceil(1); }
 
 static int i_ppix_d(i_img *im, int x, int y, i_color *val);
 static int i_gpix_d(i_img *im, int x, int y, i_color *val);
@@ -48,8 +48,10 @@ static int i_ppixf_d(i_img *im, int x, int y, i_fcolor *val);
 static int i_gpixf_d(i_img *im, int x, int y, i_fcolor *val);
 static int i_glinf_d(i_img *im, int l, int r, int y, i_fcolor *vals);
 static int i_plinf_d(i_img *im, int l, int r, int y, i_fcolor *vals);
-static int i_gsamp_d(i_img *im, int l, int r, int y, i_sample_t *samps, int *chans, int chan_count);
-static int i_gsampf_d(i_img *im, int l, int r, int y, i_fsample_t *samps, int *chans, int chan_count);
+static int i_gsamp_d(i_img *im, int l, int r, int y, i_sample_t *samps, const int *chans, int chan_count);
+static int i_gsampf_d(i_img *im, int l, int r, int y, i_fsample_t *samps, const int *chans, int chan_count);
+/*static int i_psamp_d(i_img *im, int l, int r, int y, i_sample_t *samps, int *chans, int chan_count);
+  static int i_psampf_d(i_img *im, int l, int r, int y, i_fsample_t *samps, int *chans, int chan_count);*/
 
 /* 
 =item ICL_new_internal(r, g, b, a)
@@ -482,50 +484,6 @@ Get the number of channels in I<im>.
 int
 i_img_getchannels(i_img *im) { return im->channels; }
 
-
-/*
-=item i_ppix(im, x, y, col)
-
-Sets the pixel at (I<x>,I<y>) in I<im> to I<col>.
-
-Returns true if the pixel could be set, false if x or y is out of
-range.
-
-=cut
-*/
-int
-(i_ppix)(i_img *im, int x, int y, i_color *val) { return im->i_f_ppix(im, x, y, val); }
-
-/*
-=item i_gpix(im, x, y, &col)
-
-Get the pixel at (I<x>,I<y>) in I<im> into I<col>.
-
-Returns true if the pixel could be retrieved, false otherwise.
-
-=cut
-*/
-int
-(i_gpix)(i_img *im, int x, int y, i_color *val) { return im->i_f_gpix(im, x, y, val); }
-
-/*
-=item i_ppix_pch(im, x, y, ch)
-
-Get the value from the channel I<ch> for pixel (I<x>,I<y>) from I<im>
-scaled to [0,1].
-
-Returns zero if x or y is out of range.
-
-Warning: this ignores the vptr interface for images.
-
-=cut
-*/
-float
-i_gpix_pch(i_img *im,int x,int y,int ch) {
-  /* FIXME */
-  if (x>-1 && x<im->xsize && y>-1 && y<im->ysize) return ((float)im->idata[(x+y*im->xsize)*im->channels+ch]/255);
-  else return 0;
-}
 
 
 /*
@@ -1114,6 +1072,32 @@ i_img *i_sametype(i_img *src, int xsize, int ysize) {
 }
 
 /*
+=item i_sametype_chans(i_img *im, int xsize, int ysize, int channels)
+
+Returns an image of the same type (sample size).
+
+For paletted images the equivalent direct type is returned.
+
+=cut
+*/
+
+i_img *i_sametype_chans(i_img *src, int xsize, int ysize, int channels) {
+  if (src->bits == 8) {
+    return i_img_empty_ch(NULL, xsize, ysize, channels);
+  }
+  else if (src->bits == i_16_bits) {
+    return i_img_16_new(xsize, ysize, channels);
+  }
+  else if (src->bits == i_double_bits) {
+    return i_img_double_new(xsize, ysize, channels);
+  }
+  else {
+    i_push_error(0, "Unknown image bits");
+    return NULL;
+  }
+}
+
+/*
 =item i_transform(im, opx, opxl, opy, opyl, parm, parmlen)
 
 Spatially transforms I<im> returning a new image.
@@ -1154,8 +1138,8 @@ i_transform(i_img *im, int *opx,int opxl,int *opy,int opyl,double parm[],int par
     parm[1]=(double)ny;
 
     /*     fprintf(stderr,"(%d,%d) ->",nx,ny);  */
-    rx=op_run(opx,opxl,parm,parmlen);
-    ry=op_run(opy,opyl,parm,parmlen);
+    rx=i_op_run(opx,opxl,parm,parmlen);
+    ry=i_op_run(opy,opyl,parm,parmlen);
     /*    fprintf(stderr,"(%f,%f)\n",rx,ry); */
     i_gpix(im,rx,ry,&val);
     i_ppix(new_img,nx,ny,&val);
@@ -1283,13 +1267,6 @@ i_count_colors(i_img *im,int maxc) {
   return colorcnt;
 }
 
-
-symbol_table_t symbol_table={i_has_format,ICL_set_internal,ICL_info,
-			     i_img_new,i_img_empty,i_img_empty_ch,i_img_exorcise,
-			     i_img_info,i_img_setmask,i_img_getmask,i_ppix,i_gpix,
-			     i_box,i_draw,i_arc,i_copyto,i_copyto_trans,i_rubthru};
-
-
 /*
 =back
 
@@ -1342,7 +1319,7 @@ i_gpix_d(i_img *im, int x, int y, i_color *val) {
   int ch;
   if (x>-1 && x<im->xsize && y>-1 && y<im->ysize) {
     for(ch=0;ch<im->channels;ch++) 
-    	val->channel[ch]=im->idata[(x+y*im->xsize)*im->channels+ch];
+      val->channel[ch]=im->idata[(x+y*im->xsize)*im->channels+ch];
     return 0;
   }
   for(ch=0;ch<im->channels;ch++) val->channel[ch] = 0;
@@ -1557,7 +1534,7 @@ Returns the number of samples read (which should be (r-l) * bits_set(chan_mask)
 static
 int
 i_gsamp_d(i_img *im, int l, int r, int y, i_sample_t *samps, 
-              int *chans, int chan_count) {
+              const int *chans, int chan_count) {
   int ch, count, i, w;
   unsigned char *data;
 
@@ -1615,7 +1592,7 @@ Returns the number of samples read (which should be (r-l) * bits_set(chan_mask)
 static
 int
 i_gsampf_d(i_img *im, int l, int r, int y, i_fsample_t *samps, 
-               int *chans, int chan_count) {
+           const int *chans, int chan_count) {
   int ch, count, i, w;
   unsigned char *data;
   for (ch = 0; ch < chan_count; ++ch) {
@@ -1777,7 +1754,7 @@ int i_glinf_fp(i_img *im, int l, int r, int y, i_fcolor *pix) {
 =cut
 */
 int i_gsampf_fp(i_img *im, int l, int r, int y, i_fsample_t *samp, 
-                int *chans, int chan_count) {
+                int const *chans, int chan_count) {
   i_sample_t *work;
 
   if (y >= 0 && y < im->ysize && l < im->xsize && l >= 0) {
@@ -1920,7 +1897,7 @@ i_gen_reader(i_gen_read_data *gci, char *buf, int length) {
       gci->cpos = 0;
       gci->length = did_read;
 
-      copy_size = min(length, gci->length);
+      copy_size = i_min(length, gci->length);
       memcpy(buf, gci->buffer, copy_size);
       gci->cpos += copy_size;
       buf += copy_size;
@@ -1963,13 +1940,13 @@ i_gen_read_data_new(i_read_callback_t cb, char *userdata) {
 }
 
 /*
-=item free_gen_read_data(i_gen_read_data *)
+=item i_free_gen_read_data(i_gen_read_data *)
 
 Cleans up.
 
 =cut
 */
-void free_gen_read_data(i_gen_read_data *self) {
+void i_free_gen_read_data(i_gen_read_data *self) {
   myfree(self);
 }
 
@@ -2013,7 +1990,7 @@ int size)
 
 Allocates and initializes the data structure used by i_gen_writer.
 
-This should be released with L<image.c/free_gen_write_data>
+This should be released with L<image.c/i_free_gen_write_data>
 
 =cut
 */
@@ -2023,7 +2000,7 @@ i_gen_write_data *i_gen_write_data_new(i_write_callback_t cb,
   i_gen_write_data *self = mymalloc(sizeof(i_gen_write_data));
   self->cb = cb;
   self->userdata = userdata;
-  self->maxlength = min(max_length, sizeof(self->buffer));
+  self->maxlength = i_min(max_length, sizeof(self->buffer));
   if (self->maxlength < 0)
     self->maxlength = sizeof(self->buffer);
   self->filledto = 0;
@@ -2032,7 +2009,7 @@ i_gen_write_data *i_gen_write_data_new(i_write_callback_t cb,
 }
 
 /*
-=item free_gen_write_data(i_gen_write_data *info, int flush)
+=item i_free_gen_write_data(i_gen_write_data *info, int flush)
 
 Cleans up the write buffer.
 
@@ -2046,7 +2023,7 @@ ie. if it fails.
 =cut
 */
 
-int free_gen_write_data(i_gen_write_data *info, int flush)
+int i_free_gen_write_data(i_gen_write_data *info, int flush)
 {
   int result = !flush || 
     info->filledto == 0 ||
