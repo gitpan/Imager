@@ -8,6 +8,7 @@
 #define getINT(k,s) (util_table->getint(INP,k,s))
 #define getDOUBLE(k,s) (util_table->getdouble(INP,k,s))
 #define getVOID(k,s) (util_table->getvoid(INP,k,(void**)s))
+#define getOBJ(k,t,s) (util_table->getobj(INP,k,t,(void**)s))
 
 #define i_color_set(cl,r,g,b,a) (symbol_table->i_color_set(cl,r,g,b,a))
 #define i_color_info(cl) (symbol_table->i_color_info(cl))

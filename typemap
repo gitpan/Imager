@@ -1,5 +1,7 @@
-i_img *			T_PTR_NULL
+#i_img *			T_PTR_NULL
 Imager::Color           T_PTROBJ
+Imager::ImgRaw          T_PTROBJ
+Imager::TTHandle	T_PTROBJ
 const char *		T_PV
 float			T_FLOAT
 float*			T_ARRAY

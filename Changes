@@ -188,6 +188,32 @@ Revision history for Perl extension Imager.
 	when passing files to read or save from the filename.
 	Also all of the tests except dynamic loading now pass on OS/2.
 
+0.32    NO TIME YET ** Now in beta10 **
+          - Added the getcolorcount method.  Fixed interlace handling
+	on png images.  Fixed the missing channel count in crop()
+	method. Rewrote most of t1lib database stuff - created color
+	and font classes.  T1 stuff is mostly done - TT things were
+	rewritten too and now include most of what is needed for
+	pixmap caching.  Added documentation for fonts.  Comments have
+	been added to some of the relevant c-routines.  Added a copy()
+	function in Imager.xs and a corresponding method name.
+	Changed the underlying data type for the raw XS images from
+	pointers to objects - this will hopefully catch the most
+	basic errors and keep the segfaulting down.  This means that
+	all of the underlying XS calls for readjpeg, readgif, readpng 
+	and readraw do not take the first parameter any more.  
+	Made fixes to keep it not spewing warning on 5.004 perl.	
+
+	**** If you had any code that didn't use the OO interface ****
+	****         It will probably not work any longer         ****
+	
+
+
+
+	For latest status check the Imager-devel pages:
+	http://www.eecs.umich.edu/~addi/perl/Imager/devel/
+
+
 
 ===================================================
 

@@ -10,6 +10,8 @@
 
 #ifdef IMAGER_DEBUG_MALLOC
 
+#include <stdlib.h>
+
 #define MAXMAL 1024
 #define MAXDESC 65
 
@@ -22,7 +24,7 @@ typedef struct {
 malloc_entry malloc_pointers[MAXMAL];
 static int malloc_need_init=1;
 
-#define mymalloc(x) (mymalloc_file_line(x,__FILE__,__LINE__))
+/* #define mymalloc(x) (mymalloc_file_line(x,__FILE__,__LINE__)) */
 
 void
 malloc_state() {
@@ -44,17 +46,19 @@ mymalloc_file_line(int size,char* file,int line) {
   if (malloc_need_init) {
     for(i=0;i<MAXMAL;i++) malloc_pointers[i].point=NULL;
     malloc_need_init=0;
+    atexit(malloc_state);
   }
   
-  if ((buf=malloc(size))==NULL) { mm_log((1,"Unable to malloc.\n")); exit(3); }
+  if ((buf=malloc(size))==NULL) { mm_log((1,"Unable to allocate %i for %s (%i)\n", size, file, line)); exit(3); }
 
   for(i=0;i<MAXMAL;i++) if (malloc_pointers[i].point==NULL) {
     malloc_pointers[i].point=buf;
     malloc_pointers[i].size=size;
     sprintf(malloc_pointers[i].comm,"%s (%d)",file,line);
+    mm_log((2,"pointer %i %i bytes allocated for %s (%d)\n", i, size, file, line));
     return buf; 
   }
-  mm_log((0,"more than %d segments malloced\n",MAXMAL));
+  mm_log((0,"more than %d segments allocated at %s (%d)\n",MAXMAL, file, line));
   exit(255);
   return NULL;
 }
@@ -84,10 +88,14 @@ mymalloc_comm(int size,char *comm) {
 
 
 void
-myfree(void *p) {
+myfree_file_line(void *p, char *file, int line) {
   int i;
   free(p);
-  for(i=0;i<MAXMAL;i++) if (malloc_pointers[i].point==p) malloc_pointers[i].point=NULL;
+  for(i=0;i<MAXMAL;i++) 
+    if (malloc_pointers[i].point==p) {
+        mm_log((1,"pointer %i (%s) freed at %s (%i)\n", i, malloc_pointers[i].comm, file, line));
+        malloc_pointers[i].point=NULL;
+    }
 }
 
 #else 

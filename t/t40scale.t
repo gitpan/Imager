@@ -9,7 +9,8 @@
 BEGIN { $| = 1; print "1..6\n"; }
 END {print "not ok 1\n" unless $loaded;}
 
-use Imager;
+use Imager qw(:all);
+
 $loaded = 1;
 
 Imager::init('log'=>'testout/t40scale.log');

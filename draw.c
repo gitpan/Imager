@@ -260,7 +260,7 @@ i_bezier_multi(i_img *im,int l,double *x,double *y,i_color *val) {
 
   /*  for(k=0;k<l;k++) printf("bzcoef: %d -> %f\n",k,bzcoef[k]); */
   i=0;
-  for(t=0;t<=1;t+=0.025) {
+  for(t=0;t<=1;t+=0.005) {
     cx=cy=0;
     itr=t/(1-t);
     ccoef=pow(1-t,n);
@@ -296,18 +296,40 @@ struct p_line  {
   double miny,maxy;
 };
 
+struct p_slice {
+  int n;
+  double x;
+};
 
 int
-p_compy(void *p1, void *p2) {
-  /* p_compy(const struct p_point *p1, const struct p_point *p2) { */
-  struct p_point *pp1,*pp2;
-  pp1=p1;
-  pp2=p2;
-  if (pp1->y > pp2->y) return 1;
-  if (pp1->y < pp2->y) return -1;
+p_compy(const struct p_point *p1, const struct p_point *p2) {
+  if (p1->y > p2->y) return 1;
+  if (p1->y < p2->y) return -1;
   return 0;
 }
 
+int
+p_compx(const struct p_slice *p1, const struct p_slice *p2) {
+  if (p1->x > p2->x) return 1;
+  if (p1->x < p2->x) return -1;
+  return 0;
+}
+
+double
+p_eval_aty(struct p_line *l,double y) {
+  double x,t;
+  t=l->y2-l->y1;
+  if (abs(t) < 0.000001) return (l->x1+l->x2)/2.0;
+  return ( (y-l->y1)*l->x2 + (l->y2-y)*l->x1 )/t;
+}
+
+double
+p_eval_coverage(struct p_line *l,int lc,int x,int y) {
+  
+
+
+
+}
 
 
 
@@ -327,23 +349,19 @@ p_compy(void *p1, void *p2) {
 */
 
 
-double
-p_eval_aty(struct p_line *l,double y) {
-  double x;
-  
-  
-}
 
 
 void
 i_poly_aa(i_img *im,int l,double *x,double *y,i_color *val) {
-  int i,s,cy,miny,maxy;
-  double comp=0.01;
+  int i,k,s,cy,miny,maxy,cidx,cl,clc,tx,minx,maxx;
+  double comp=0.01,tp,bp,cc;
   struct p_point *pset;
   struct p_line *lset;
+  struct p_slice *tllist;
   
   if ( (pset=mymalloc(sizeof(struct p_point)*l)) == NULL) { m_fatal(2,"malloc failed\n"); return; }
   if ( (lset=mymalloc(sizeof(struct p_line)*l)) == NULL) { m_fatal(2,"malloc failed\n"); return; }
+  if ( (tllist=mymalloc(sizeof(struct p_slice)*l)) == NULL) { m_fatal(2,"malloc failed\n"); return; }
 
   for(i=0;i<l;i++) {
     pset[i].n=i;
@@ -359,9 +377,9 @@ i_poly_aa(i_img *im,int l,double *x,double *y,i_color *val) {
     lset[i].maxy=max(lset[i].y1,lset[i].y2);
   }
 
-  qsort(pset,l,sizeof(struct p_point),p_compy);
+  qsort(pset,l,sizeof(struct p_point),(int(*)(const void *,const void *))p_compy);
 
-  printf("POST point list\n");
+  printf("post point list\n");
   for(i=0;i<l;i++) {
     printf("%d [ %d ] %f %f\n",i,pset[i].n,pset[i].x,pset[i].y);
   }
@@ -370,16 +388,59 @@ i_poly_aa(i_img *im,int l,double *x,double *y,i_color *val) {
   for(i=0;i<l;i++) {
     printf("%d [ %d ] (%.2f , %.2f) -> (%.2f , %.2f) yspan ( %.2f , %.2f )\n",i,lset[i].n,lset[i].x1,lset[i].y1,lset[i].x2,lset[i].y2,lset[i].miny,lset[i].maxy);
   }
-  
-  miny=pset[0].y;
-  maxy=ceil(pset[i-1].y);
-  for(cy=miny;cy<=maxy;cy++) {
+
+  printf("main thing\n");
+
+  for(i=0;i<l-1;i++) {
+    cc=(pset[i].y+pset[i+1].y)/2.0;
+    printf("current slice is: %.2f to %.2f ( %.2f )\n",pset[i].y,pset[i+1].y,cc);
+    clc=0;
+    for(k=0;k<l;k++) {
+      printf("checking line: %d [ %d ] (%.2f , %.2f) -> (%.2f , %.2f) yspan ( %.2f , %.2f )",
+	     k,lset[k].n,lset[k].x1,lset[k].y1,lset[k].x2,lset[k].y2,lset[k].miny,lset[k].maxy);
+      if (cc > lset[k].miny && cc < lset[k].maxy) {
+	printf(" INSIDE\n"); 
+	tllist[clc].x=p_eval_aty(&lset[k],cc);
+	tllist[clc++].n=k;
+      } else printf("OUTSIDE\n");
+    }
+
+    /* at this point a table of pixels that need special care should be generated
+       from the line list - it should be ordered so that only one needs to 
+       be checked - options: rendering to a list then order - or rendering in the right order
+       might be possible to do nicely with the following heuristic:
+        1. Draw leftmost pixel for this line
+	2. If preceeding pixel was occupied check next one else go to 1 again. 
+    */
+
+    printf("lines in interval:");
+    for(k=0;k<clc;k++) printf("  %d (%.2f)",tllist[k].n,tllist[k].x);
+    printf("\n");
     
+    /* evaluate the lines in the middle of the slice */
 
-
-
+    printf("Sort lines left to right within interval\n");
+    qsort(tllist,clc,sizeof(struct p_slice),(int(*)(const void *,const void *))p_compx);
+    
+    printf("sort output:");
+    for(k=0;k<clc;k++) printf(" %d",tllist[k].n);
+    printf("\n");
+    
+    miny=pset[i].y;
+    maxy=ceil(pset[i+1].y);
+    cidx=0;
+    /* iterate over scanlines */
+    for(cy=miny;cy<=maxy;cy++) {
+      /* iterate over image lines */
+      for(k=0;k<clc-1;k+=2) {
+	minx=p_eval_aty(&lset[tllist[k].n],cy);
+	maxx=p_eval_aty(&lset[tllist[k+1].n],cy);
+	printf("line %d: painting  %d - %d\n",cy,minx,maxx);
+	for(tx=minx;tx<=maxx;tx++) i_ppix(im,tx,cy,val);
+      }
+      
+    }
+    
   }
-
-
   
 }

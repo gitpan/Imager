@@ -6,6 +6,15 @@
 
 #define minmax(a,b,i) ( ((a>=i)?a: ( (b<=i)?b:i   )) )
 
+/* i_color_set:: Overwrite a color with new values.
+
+   cl - pointer to color object
+   r - red   compnent (range: 0 - 255)
+   g - green compnent (range: 0 - 255)
+   b - blue  compnent (range: 0 - 255)
+   a - alpha compnent (range: 0 - 255)
+*/
+
 i_color *
 i_color_set(i_color *cl,unsigned char r,unsigned char g,unsigned char b,unsigned char a) {
   mm_log((1,"i_set_i_color(cl* 0x%x,r %d,g %d,b %d,a %d)\n",cl,r,g,b,a));
@@ -19,6 +28,15 @@ i_color_set(i_color *cl,unsigned char r,unsigned char g,unsigned char b,unsigned
   mm_log((1,"(0x%x) <- i_set_color\n",cl));
   return cl;
 }
+
+/* i_color_new:: Return a color object with values passed to it.
+
+   cl - pointer to color object
+   r - red   compnent (range: 0 - 255)
+   g - green compnent (range: 0 - 255)
+   b - blue  compnent (range: 0 - 255)
+   a - alpha compnent (range: 0 - 255)
+*/
 
 i_color *
 i_color_new(unsigned char r,unsigned char g,unsigned char b,unsigned char a) {
@@ -35,6 +53,13 @@ i_color_new(unsigned char r,unsigned char g,unsigned char b,unsigned char a) {
   return cl;
 }
 
+/* i_color_add:: Add src to dst inplace - dst is modified.
+
+   dst - pointer to destination color object
+   src - pointer to color object that is added
+   ch - number of channels
+*/
+
 i_color_add(i_color *dst,i_color *src,int ch) {
   int tmp,i;
   for(i=0;i<ch;i++) {
@@ -43,17 +68,58 @@ i_color_add(i_color *dst,i_color *src,int ch) {
   }
 }
 
+/* i_color_info:: Dump color information to log - strictly for debugging.
+
+   cl - pointer to color object
+*/
+
 void
 i_color_info(i_color *cl) {
   mm_log((1,"i_color_info(cl* 0x%x)\n",cl));
   mm_log((1,"i_color_info: (%d,%d,%d,%d)\n",cl->rgba.r,cl->rgba.g,cl->rgba.b,cl->rgba.a));
 }
 
+/* ICL_DESTROY:: Destroy ancillary data for Color object.
+
+   cl - pointer to color object
+*/
+
 void
 ICL_DESTROY(i_color *cl) {
   mm_log((1,"ICL_DESTROY(cl* 0x%x)\n",cl));
   myfree(cl);
 }
+
+/* ICL_DESTROY:: Destroy ancillary data for Color object.
+
+   cl - pointer to color object
+*/
+
+
+i_img *
+IIM_new(int x,int y,int ch) {
+  i_img *im;
+  mm_log((1,"IIM_new(%d,y %d,ch %d)\n",im,x,y,ch));
+
+  im=i_img_empty_ch(NULL,x,y,ch);
+  
+  mm_log((1,"(0x%x) <- IIM_new\n",im));
+  return im;
+}
+
+
+void
+IIM_DESTROY(i_img *im) {
+  mm_log((1,"IIM_DESTROY(im* 0x%x)\n",im));
+  /*   myfree(cl); */
+}
+
+
+
+/* i_img_new:: Create new image reference - notice that this isn't an object yet and
+   this should be fixed asap.
+
+*/
 
 
 i_img *
@@ -79,6 +145,14 @@ i_img_new() {
   return im;
 }
 
+/* i_img_empty:: Re-new image reference (assumes 3 channels)
+
+   im - Image pointer
+   x - xsize of destination image
+   y - ysize of destination image
+
+*/
+
 i_img *
 i_img_empty(i_img *im,int x,int y) {
   mm_log((1,"i_img_empty(*im 0x%x,x %d,y %d)\n",im,x,y));
@@ -102,6 +176,14 @@ i_img_empty(i_img *im,int x,int y) {
   return im;
 }
 
+/* i_img_empty_ch:: Re-new image reference 
+
+   im - Image pointer
+   x - xsize of destination image
+   y - ysize of destination image
+   ch - number of channels
+
+*/
 
 i_img *
 i_img_empty_ch(i_img *im,int x,int y,int ch) {
@@ -126,7 +208,11 @@ i_img_empty_ch(i_img *im,int x,int y,int ch) {
   return im;
 }
 
+/* i_img_exorcise:: Free image data.
 
+   im - Image pointer
+
+*/
 
 void
 i_img_exorcise(i_img *im) {
@@ -142,6 +228,10 @@ i_img_exorcise(i_img *im) {
   im->ext_data=NULL;
 }
 
+/* i_img_destroy:: Destroy image and free data via exorcise.
+
+   im - Image pointer
+*/
 
 void
 i_img_destroy(i_img *im) {
@@ -149,6 +239,13 @@ i_img_destroy(i_img *im) {
   i_img_exorcise(im);
   if (im) { myfree(im); }
 }
+
+/* i_img_info:: Return image information
+
+   im - Image pointer
+   info - pointer to array to return data
+*/
+
 
 void
 i_img_info(i_img *im,int *info) {
@@ -269,6 +366,23 @@ i_copyto(i_img *im,i_img *src,int x1,int y1,int x2,int y2,int tx,int ty) {
     ttx++;
     }
     tty++;
+  }
+}
+
+void
+i_copy(i_img *im,i_img *src) {
+  i_color pv;
+  int x,y,y1,x1;
+
+  mm_log((1,"i_copy(im* 0x%x,src 0x%x)\n",im,src));
+
+  x1=src->xsize;
+  y1=src->ysize;
+  i_img_empty_ch(im,x1,y1,src->channels);
+  
+  for(y=0;y<y1;y++) for(x=0;x<x1;x++) {
+    i_gpix(src,x,y,&pv);
+    i_ppix(im,x,y,&pv);
   }
 }
 
@@ -447,12 +561,6 @@ i_scale_nn(i_img *im, float scx, float scy) {
 
 
 
-
-
-
-
-
-
 i_img*
 i_transform(i_img *im, int *opx,int opxl,int *opy,int opyl,double parm[],int parmlen) {
   double rx,ry;
@@ -509,6 +617,7 @@ i_img_diff(i_img *im1,i_img *im2) {
     for(ch=0;ch<chb;ch++) tdiff+=(val1.channel[ch]-val2.channel[ch])*(val1.channel[ch]-val2.channel[ch]);
   }
   mm_log((1,"i_img_diff <- (%.2f)\n",tdiff));
+  return tdiff;
 }
 
 /* just a tiny demo of haar wavelets */
@@ -561,6 +670,33 @@ i_haar(i_img *im) {
 
   i_img_destroy(new_img);
   return new_img2;
+}
+
+/* returns number of colors or -1 
+   to indicate that it was more than max colors */
+
+int
+i_count_colors(i_img *im,int maxc) {
+  struct octt *ct;
+  int x,y;
+  int xsize,ysize,channels;
+  i_color val;
+  int colorcnt;
+
+  mm_log((1,"i_count_colors(im 0x%08X,maxc %d)\n"));
+
+  xsize=im->xsize; 
+  ysize=im->ysize;
+  ct=octt_new();
+ 
+  colorcnt=0;
+  for(x=0;x<xsize;x++) for(y=0;y<ysize;y++) {
+    i_gpix(im,x,y,&val);
+    colorcnt+=octt_add(ct,val.rgb.r,val.rgb.g,val.rgb.b);
+    if (colorcnt > maxc) { octt_delete(ct); return -1; }
+  }
+  octt_delete(ct);
+  return colorcnt;
 }
 
 

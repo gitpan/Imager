@@ -488,6 +488,3 @@ mindist(int boxnum,cvec *cv) {
   return mr+mg+mb;
 }
 
-
-
-

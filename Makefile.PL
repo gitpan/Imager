@@ -7,8 +7,8 @@ $lext=$Config{'so'};
 
 
 #
-# IM_INCPATH      colon seperated list of paths to extra include files
-# IM_LIBPATH      colon seperated list of paths to extra library files
+# IM_INCPATH      colon seperated list of paths to extra include paths
+# IM_LIBPATH      colon seperated list of paths to extra library paths
 #
 # IM_VERBOSE      turns on verbose mode for the library finding and such
 # IM_MANUAL       to manually select which libraries are used and which not
@@ -49,27 +49,27 @@ EOF
 <STDIN>;
 
 for $frm(sort { $formats{$b}{order} <=> $formats{$a}{order} } keys %formats) {
-  SWX:
-    if ($formats{$frm}{docs}) { print "\n",$formats{$frm}{docs},"\n\n"; }
-    print "Enable $frm support: ";
-    $gz=<STDIN>;
-    chomp($gz);
-    if ($gz =~ m/^[yn]$/) {
-	if ($gz eq 'n') {
-	    delete $formats{$frm};
-	}
-    } else { goto SWX; }
+ SWX:
+  if ($formats{$frm}{docs}) { print "\n",$formats{$frm}{docs},"\n\n"; }
+  print "Enable $frm support: ";
+  $gz=<STDIN>;
+  chomp($gz);
+  if ($gz =~ m/^[yn]$/) {
+    if ($gz eq 'n') {
+      delete $formats{$frm};
+    }
+  } else { goto SWX; }
 }
 
 AUTOM:
     
 for $frm(keys %formats) {
-    delete $formats{$frm} if !checkformat($frm);	
+  delete $formats{$frm} if !checkformat($frm);	
 }
 
 if ($formats{'gif'} and $formats{'ungif'}) { 
-    print "ungif and gif can not coexist - removing ungif support\n";
-    delete $formats{'ungif'};
+  print "ungif and gif can not coexist - removing ungif support\n";
+  delete $formats{'ungif'};
 }
 
 for $frm(values %formats) {
@@ -177,7 +177,7 @@ sub init {
 @incs=('/usr/include','/usr/local/include',split(/:/,$ENV{'IM_INCPATH'}));
 #@incs=(split(/:/,$ENV{'IM_INCPATH'}) );
 
-@libs=('/usr/lib','/usr/local/lib', split(/:/,$ENV{'IM_LIBPATH'}));
+@libs=(split(/ /,$Config{'libpth'}), split(/:/,$ENV{'IM_LIBPATH'}));
 
 $formats{'jpeg'}={
     order=>'21',

@@ -27,7 +27,6 @@
 
 int CC2C[PNG_COLOR_MASK_PALETTE|PNG_COLOR_MASK_COLOR|PNG_COLOR_MASK_ALPHA];
 
-
 #define PNG_BYTES_TO_CHECK 4
 int check_if_png(char *file_name, FILE **fp) {
    char buf[PNG_BYTES_TO_CHECK];
@@ -52,13 +51,14 @@ int check_if_png(char *file_name, FILE **fp) {
  */
 
 i_img *
-i_readpng(i_img *im,int fd) {
+i_readpng(int fd) {
+  i_img *im;
   png_structp png_ptr;
   png_infop info_ptr;
   png_uint_32 width, height;
   int bit_depth, color_type, interlace_type;
   int number_passes,y;
-  int channels;
+  int channels,pass;
   
   FILE *fp;
   unsigned int sig_read;
@@ -67,14 +67,12 @@ i_readpng(i_img *im,int fd) {
 
   sig_read=0;
 
-
-
   if ((fp = fdopen(fd,"r")) == NULL) {
     mm_log((1,"can't fdopen.\n"));
     exit(1);
   }
 
-  mm_log((1,"i_readpng(0x%x,fd %d)\n",im,fd));
+  mm_log((1,"i_readpng(fd %d)\n",fd));
 
   png_ptr = png_create_read_struct(PNG_LIBPNG_VER_STRING,NULL,NULL,NULL);
   
@@ -88,7 +86,7 @@ i_readpng(i_img *im,int fd) {
   if (info_ptr == NULL) {
     fclose(fp);
     png_destroy_read_struct(&png_ptr, (png_infopp)NULL, (png_infopp)NULL);
-    return;
+    return NULL;
   }
   
   /* Set error handling if you are using the setjmp/longjmp method (this is
@@ -131,7 +129,7 @@ i_readpng(i_img *im,int fd) {
   
   mm_log((1,"channels %d\n",channels));
   
-  im=i_img_empty_ch(im,width,height,channels);
+  im=i_img_empty_ch(NULL,width,height,channels);
 
   /**** Set up the data transformations you want.  Note that these are all
    **** optional.  Only call them if you want/need them.  Many of the
@@ -146,7 +144,7 @@ i_readpng(i_img *im,int fd) {
    * background (not recommended).
    */
   /*  png_set_strip_alpha(png_ptr); */
-
+  
   /* Extract multiple pixels with bit depths of 1, 2, and 4 from a single
    * byte into separate bytes (useful for paletted and grayscale images).
    */
@@ -155,7 +153,7 @@ i_readpng(i_img *im,int fd) {
 
   /* Expand paletted colors into true RGB triplets */
   if (color_type == PNG_COLOR_TYPE_PALETTE) png_set_expand(png_ptr);
-
+  
   /* Expand grayscale images to the full 8 bits from 1, 2, or 4 bits/pixel */
   if (color_type == PNG_COLOR_TYPE_GRAY && bit_depth < 8) png_set_expand(png_ptr);
 
@@ -165,17 +163,21 @@ i_readpng(i_img *im,int fd) {
   if (png_get_valid(png_ptr, info_ptr, PNG_INFO_tRNS)) png_set_expand(png_ptr);
   
   number_passes = png_set_interlace_handling(png_ptr);
+
+  mm_log((1,"number of passes=%d\n",number_passes));
   
   png_read_update_info(png_ptr, info_ptr);
-
-  for (y = 0; y < height; y++) { png_read_row(png_ptr,(png_bytep) &(im->data[channels*width*y]), NULL); }
-
+  mm_log((1,"made it to here 1\n"));
+  for (pass = 0; pass < number_passes; pass++)
+    for (y = 0; y < height; y++) { png_read_row(png_ptr,(png_bytep) &(im->data[channels*width*y]), NULL); }
+  mm_log((1,"made it to here 2\n"));
   /* read rest of file, and get additional chunks in info_ptr - REQUIRED */
-  png_read_end(png_ptr, info_ptr); 
 
+  png_read_end(png_ptr, info_ptr); 
+  mm_log((1,"made it to here 3\n"));
   /* clean up after the read, and free any memory allocated - REQUIRED */
   png_destroy_read_struct(&png_ptr, &info_ptr, (png_infopp)NULL);
-  
+  mm_log((1,"made it to here 4\n"));
   fclose(fp);
   return im;
 }
@@ -208,6 +210,8 @@ i_writepng(i_img *im,int fd) {
   else { cspace=PNG_COLOR_TYPE_GRAY; channels--; }
   
   if (channels) cspace|=PNG_COLOR_MASK_ALPHA;
+  mm_log((1,"cspace=%d\n",cspace));
+
   channels=im->channels;
 
   /* Create and initialize the png_struct with the desired error handler

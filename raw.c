@@ -26,14 +26,16 @@
 
 */
 
-void expandchannels(unsigned char *inbuffer,unsigned char *outbuffer,int chunks,int datachannels,int storechannels) {
+void
+expandchannels(unsigned char *inbuffer,unsigned char *outbuffer,int chunks,int datachannels,int storechannels) {
   int ch,ind,i;
   if (inbuffer==outbuffer) return; /* Check if data is already in expanded format */
   for(ch=0;ch<chunks;ch++) for (i=0;i<storechannels;i++) outbuffer[ch*storechannels+i]=inbuffer[ch*datachannels+i];
 }
 
 i_img *
-i_readraw(i_img* im,int fd,int x,int y,int datachannels,int storechannels,int intrl) {
+i_readraw(int fd,int x,int y,int datachannels,int storechannels,int intrl) {
+  i_img* im;
   int rc,i,k,blocks;
   
   unsigned char *inbuffer;
@@ -42,9 +44,9 @@ i_readraw(i_img* im,int fd,int x,int y,int datachannels,int storechannels,int in
   
   int inbuflen,ilbuflen,exbuflen;
 
-  mm_log((1,"readraw(im 0x%x,fd %d,x %d,y %d,datachannels %d,storechannels %d,intrl %d)\n",im,fd,x,y,datachannels,storechannels,intrl));
+  mm_log((1,"readraw(fd %d,x %d,y %d,datachannels %d,storechannels %d,intrl %d)\n",fd,x,y,datachannels,storechannels,intrl));
   
-  im=i_img_empty_ch(im,x,y,storechannels);
+  im=i_img_empty_ch(NULL,x,y,storechannels);
   
   inbuflen=im->xsize*datachannels;
   ilbuflen=inbuflen;

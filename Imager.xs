@@ -14,13 +14,29 @@ extern "C" {
 #include "dynaload.h"
 
 typedef i_color* Imager__Color;
+typedef i_img* Imager__ImgRaw;
 
+#ifdef HAVE_LIBTT
+typedef TT_Fonthandle* Imager__TTHandle;
+#endif
 
 MODULE = Imager		PACKAGE = Imager::Color	PREFIX = ICL_
 
 void
 ICL_DESTROY(cl)
                Imager::Color    cl
+
+MODULE = Imager		PACKAGE = Imager::ImgRaw	PREFIX = IIM_
+
+Imager::ImgRaw
+IIM_new(x,y,ch)
+               int     x
+	       int     y
+	       int     ch
+
+void
+IIM_DESTROY(im)
+               Imager::ImgRaw    im
 
 
 MODULE = Imager		PACKAGE = Imager
@@ -65,15 +81,18 @@ undef_int
 i_has_format(frmt)
               char*    frmt
 
-i_img*
+Imager::ImgRaw
+i_img_new()
+
+Imager::ImgRaw
 i_img_empty(im,x,y)
-	     i_img*    im
+    Imager::ImgRaw     im
                int     x
 	       int     y
 
-i_img*
+Imager::ImgRaw
 i_img_empty_ch(im,x,y,ch)
-	     i_img*    im
+    Imager::ImgRaw     im
                int     x
 	       int     y
 	       int     ch
@@ -85,15 +104,15 @@ init_log(name,onoff)
 
 void
 i_img_exorcise(im)
-             i_img*    im
+    Imager::ImgRaw     im
 
 void
 i_img_destroy(im)
-             i_img*    im
+    Imager::ImgRaw     im
 
 void
 i_img_info(im)
-             i_img*    im
+    Imager::ImgRaw     im
 	     PREINIT:
 	       int     info[4];
 	     PPCODE:
@@ -107,48 +126,47 @@ i_img_info(im)
 
 void
 i_img_setmask(im,ch_mask)
-             i_img*    im
+    Imager::ImgRaw     im
 	       int     ch_mask
 
 int
 i_img_getmask(im)
-	     i_img*    im
+    Imager::ImgRaw     im
 
 int
 i_img_getchannels(im)
-	     i_img*    im
-
+    Imager::ImgRaw     im
 
 void
 i_draw(im,x1,y1,x2,y2,val)
-	     i_img*    im
+    Imager::ImgRaw     im
 	       int     x1
 	       int     y1
 	       int     x2
 	       int     y2
-	   Imager::Color    val
+     Imager::Color     val
 
 void
 i_line_aa(im,x1,y1,x2,y2,val)
-	     i_img*    im
+    Imager::ImgRaw     im
 	       int     x1
 	       int     y1
 	       int     x2
 	       int     y2
-	   Imager::Color    val
+     Imager::Color     val
 
 void
 i_box(im,x1,y1,x2,y2,val)
-    	     i_img*    im
+    Imager::ImgRaw     im
 	       int     x1
 	       int     y1
 	       int     x2
 	       int     y2
-	   Imager::Color    val
+     Imager::Color     val
 
 void
 i_box_filled(im,x1,y1,x2,y2,val)
-    	     i_img*    im
+    Imager::ImgRaw     im
 	       int     x1
 	       int     y1
 	       int     x2
@@ -157,7 +175,7 @@ i_box_filled(im,x1,y1,x2,y2,val)
 
 void
 i_arc(im,x,y,rad,d1,d2,val)
-       	     i_img*    im
+    Imager::ImgRaw     im
 	       int     x
 	       int     y
              float     rad
@@ -169,7 +187,7 @@ i_arc(im,x,y,rad,d1,d2,val)
 
 void
 i_bezier_multi(im,xc,yc,val)
-    	     i_img*    im
+    Imager::ImgRaw     im
              Imager::Color  val
 	     PREINIT:
 	     double   *x,*y;
@@ -183,8 +201,8 @@ i_bezier_multi(im,xc,yc,val)
 	     i_color_info(val);
 	     if (!SvROK(ST(1))) croak("Imager: Parameter 1 to i_bezier_multi must be a reference to an array\n");
 	     if (SvTYPE(SvRV(ST(1))) != SVt_PVAV) croak("Imager: Parameter 1 to i_bezier_multi must be a reference to an array\n");
-	     if (!SvROK(ST(2))) croak("Imager: Parameter 1 to i_bezier_multi must be a reference to an array\n");
-	     if (SvTYPE(SvRV(ST(2))) != SVt_PVAV) croak("Imager: Parameter 1 to i_bezier_multi must be a reference to an array\n");
+	     if (!SvROK(ST(2))) croak("Imager: Parameter 2 to i_bezier_multi must be a reference to an array\n");
+	     if (SvTYPE(SvRV(ST(2))) != SVt_PVAV) croak("Imager: Parameter 2 to i_bezier_multi must be a reference to an array\n");
 	     av1=(AV*)SvRV(ST(1));
 	     av2=(AV*)SvRV(ST(2));
 	     if (av_len(av1) != av_len(av2)) croak("Imager: x and y arrays to i_bezier_multi must be equal length\n");
@@ -202,7 +220,7 @@ i_bezier_multi(im,xc,yc,val)
 
 void
 i_poly_aa(im,xc,yc,val)
-    	     i_img*    im
+    Imager::ImgRaw     im
              Imager::Color  val
 	     PREINIT:
 	     double   *x,*y;
@@ -236,8 +254,8 @@ i_poly_aa(im,xc,yc,val)
 
 void
 i_copyto(im,src,x1,y1,x2,y2,tx,ty)
-    	     i_img*    im
-    	     i_img*    src
+    Imager::ImgRaw     im
+    Imager::ImgRaw     src
 	       int     x1
 	       int     y1
 	       int     x2
@@ -248,8 +266,8 @@ i_copyto(im,src,x1,y1,x2,y2,tx,ty)
 
 void
 i_copyto_trans(im,src,x1,y1,x2,y2,tx,ty,trans)
-    	     i_img*    im
-    	     i_img*    src
+    Imager::ImgRaw     im
+    Imager::ImgRaw     src
 	       int     x1
 	       int     y1
 	       int     x2
@@ -259,21 +277,27 @@ i_copyto_trans(im,src,x1,y1,x2,y2,tx,ty,trans)
      Imager::Color     trans
 
 void
+i_copy(im,src)
+    Imager::ImgRaw     im
+    Imager::ImgRaw     src
+
+
+void
 i_rubthru(im,src,tx,ty)
-    	     i_img*    im
-    	     i_img*    src
+    Imager::ImgRaw     im
+    Imager::ImgRaw     src
 	       int     tx
 	       int     ty
 
 
 void
 i_gaussian(im,stdev)
-	     i_img*    im
+    Imager::ImgRaw     im
 	     float     stdev
 
 void
 i_conv(im,pcoef)
-	     i_img*    im
+    Imager::ImgRaw     im
 	     PREINIT:
 	     float*    coeff;
 	     int     len;
@@ -282,7 +306,7 @@ i_conv(im,pcoef)
 	     int i;
 	     PPCODE:
 	     if (!SvROK(ST(1))) croak("Imager: Parameter 1 must be a reference to an array\n");
-	     if (SvTYPE(SvRV(ST(1))) != SVt_PVAV) croak("SuperS: Parameter 1 must be a reference to an array\n");
+	     if (SvTYPE(SvRV(ST(1))) != SVt_PVAV) croak("Imager: Parameter 1 must be a reference to an array\n");
 	     av=(AV*)SvRV(ST(1));
 	     len=av_len(av)+1;
 	     coeff=mymalloc( len*sizeof(float) );
@@ -295,8 +319,9 @@ i_conv(im,pcoef)
 	          
 float
 i_img_diff(im1,im2)
-	     i_img*    im1
-	     i_img*    im2
+    Imager::ImgRaw     im1
+    Imager::ImgRaw     im2
+
 
 
 undef_int	  
@@ -308,9 +333,19 @@ void
 i_t1_set_aa(st)
       	       int     st
 
+int
+i_t1_new(pfb,afm=NULL)
+       	      char*    pfb
+       	      char*    afm
+
+int
+i_t1_destroy(font_id)
+       	       int     font_id
+
+
 undef_int
 i_t1_cp(im,xb,yb,channel,fontnum,points,str,len,align)
-       	     i_img*    im
+    Imager::ImgRaw     im
 	       int     xb
 	       int     yb
 	       int     channel
@@ -340,7 +375,7 @@ i_t1_bbox(fontnum,point,str,len)
 
 undef_int
 i_t1_text(im,xb,yb,cl,fontnum,points,str,len,align)
-       	     i_img*    im
+    Imager::ImgRaw     im
 	       int     xb
 	       int     yb
      Imager::Color    cl
@@ -355,49 +390,59 @@ i_t1_text(im,xb,yb,cl,fontnum,points,str,len,align)
 #ifdef HAVE_LIBTT
 
 
+Imager::TTHandle
+i_tt_new(fontname)
+	      char*     fontname
+
+void
+i_tt_destroy(handle)
+     Imager::TTHandle    handle
+
+
 
 undef_int
-i_tt_text(im,xb,yb,cl,fontname,points,str,len,align)
-       	     i_img*    im
+i_tt_text(handle,im,xb,yb,cl,points,str,len,smooth)
+  Imager::TTHandle     handle
+    Imager::ImgRaw     im
 	       int     xb
 	       int     yb
      Imager::Color     cl
-	      char*    fontname
              float     points
 	      char*    str
 	       int     len
-	       int     align
+	       int     smooth
 
 
 undef_int
-i_tt_cp(im,xb,yb,channel,fontname,points,str,len,align)
-       	     i_img*    im
+i_tt_cp(handle,im,xb,yb,channel,points,str,len,smooth)
+  Imager::TTHandle     handle
+    Imager::ImgRaw     im
 	       int     xb
 	       int     yb
 	       int     channel
-	      char*    fontname
              float     points
 	      char*    str
 	       int     len
-	       int     align
+	       int     smooth
 
 
 
-void
-i_tt_bbox(fontname,point,str,len)
-              char*    fontname
+undef_int
+i_tt_bbox(handle,point,str,len)
+  Imager::TTHandle     handle
 	     float     point
 	      char*    str
 	       int     len
 	     PREINIT:
-	       int     cords[4];
+	       int     cords[4],rc;
 	     PPCODE:
-   	       i_tt_bbox(fontname,point,str,len,cords);
-               EXTEND(SP, 4);
-               PUSHs(sv_2mortal(newSViv(cords[0])));
-               PUSHs(sv_2mortal(newSViv(cords[1])));
-               PUSHs(sv_2mortal(newSViv(cords[2])));
-               PUSHs(sv_2mortal(newSViv(cords[3])));
+  	       if (rc=i_tt_bbox(handle,point,str,len,cords)) {
+                 EXTEND(SP, 4);
+                 PUSHs(sv_2mortal(newSViv(cords[0])));
+                 PUSHs(sv_2mortal(newSViv(cords[1])));
+                 PUSHs(sv_2mortal(newSViv(cords[2])));
+                 PUSHs(sv_2mortal(newSViv(cords[3])));
+               }
 
 
 #endif 
@@ -408,44 +453,47 @@ i_tt_bbox(fontname,point,str,len)
 #ifdef HAVE_LIBJPEG
 undef_int
 i_writejpeg(im,fd,qfactor)
-	     i_img*    im
+    Imager::ImgRaw     im
 	       int     fd
 	       int     qfactor
 
 void
-i_readjpeg(im,fd)
-	     i_img*    im
+i_readjpeg(fd)
 	       int     fd
 	     PREINIT:
 	      char*    iptc_itext;
 	       int     tlength;
 	     i_img*    rimg;
+                SV*    r;
 	     PPCODE:
  	      iptc_itext=NULL;
-	      rimg=i_readjpeg(im,fd,&iptc_itext,&tlength);
+	      rimg=i_readjpeg(fd,&iptc_itext,&tlength);
 	      if (iptc_itext == NULL) {
+		    r = sv_newmortal();
 	            EXTEND(SP,1);
-		    PUSHs(sv_2mortal(newSViv((IV)rimg)));
+	            sv_setref_pv(r, "Imager::ImgRaw", (void*)rimg);
+ 		    PUSHs(r);
 	      } else {
-	            EXTEND(SP,1);
-		    PUSHs(sv_2mortal(newSViv((IV)rimg)));
+		    r = sv_newmortal();
+	            EXTEND(SP,2);
+	            sv_setref_pv(r, "Imager::ImgRaw", (void*)rimg);
+ 		    PUSHs(r);
 		    PUSHs(sv_2mortal(newSVpv(iptc_itext,tlength)));
+                    myfree(iptc_itext);
 	      }
-	      if ( (iptc_itext) != NULL) myfree(iptc_itext);
 
 #endif
 
 
 #ifdef HAVE_LIBPNG
 
-i_img*
-i_readpng(im,fd)
-	     i_img*    im
+Imager::ImgRaw
+i_readpng(fd)
 	       int     fd
 
 undef_int
 i_writepng(im,fd)
-	     i_img*    im
+    Imager::ImgRaw     im
 	       int     fd
 
 #endif
@@ -453,10 +501,9 @@ i_writepng(im,fd)
 
 #ifdef HAVE_LIBGIF
 
-
 undef_int
 i_writegif(im,fd,colors,pixdev,fixed)
-	     i_img*    im
+    Imager::ImgRaw     im
 	       int     fd
 	       int     colors
                int     pixdev
@@ -495,35 +542,78 @@ i_writegif(im,fd,colors,pixdev,fixed)
 
 undef_int
 i_writegifmc(im,fd,colors)
-	     i_img*    im
+    Imager::ImgRaw     im
 	       int     fd
 	       int     colors
 
-
-
-i_img*
-i_readgif(im,fd)
-	     i_img*    im
+undef_int
+i_writegifex(im,fd)
+    Imager::ImgRaw     im
 	       int     fd
+
+
+void
+i_readgif(fd)
+	       int     fd
+	    PREINIT:
+	        int*    colour_table;
+	        int     colours, q, w;
+	      i_img*    rimg;
+             SV*    temp[3];
+             AV*    ct; 
+             SV*    r;
+	    PPCODE:
+ 	      colour_table=NULL;
+               colours=0;
+
+        if(GIMME_V == G_ARRAY) {  
+            rimg=i_readgif(fd,&colour_table,&colours);
+        } else {
+            /* don't waste time with colours if they aren't wanted */
+            rimg=i_readgif(fd,NULL,NULL);
+        }
+
+	if (colour_table == NULL) {
+            EXTEND(SP,1);
+            r=sv_newmortal();
+            sv_setref_pv(r, "Imager::ImgRaw", (void*)rimg);
+            PUSHs(r);
+	} else {
+            /* the following creates an [[r,g,b], [r, g, b], [r, g, b]...] */
+            /* I don't know if I have the reference counts right or not :( */
+            /* Neither do I :-) */
+            ct=newAV();
+            av_extend(ct, colours);
+            for(q=0; q<colours; q++) {
+                for(w=0; w<3; w++)
+                    temp[w]=sv_2mortal(newSViv(colour_table[q*3 + w]));
+                av_store(ct, q, (SV*)newRV_noinc((SV*)av_make(3, temp)));
+            }
+            myfree(colour_table);
+            
+            EXTEND(SP,2);
+            r=sv_newmortal();
+            sv_setref_pv(r, "Imager::ImgRaw", (void*)rimg);
+            PUSHs(r);
+            PUSHs(newRV_noinc((SV*)ct));
+        }
 
 #endif
 
 
 
 
-i_img *
-i_readppm(im,fd)
-	     i_img*    im
+Imager::ImgRaw
+i_readppm(fd)
 	       int     fd
 
 undef_int
 i_writeppm(im,fd)
-	     i_img*    im
+    Imager::ImgRaw     im
 	       int     fd
 
-i_img*
-i_readraw(im,fd,x,y,datachannels,storechannels,intrl)
-     	     i_img*    im
+Imager::ImgRaw
+i_readraw(fd,x,y,datachannels,storechannels,intrl)
 	       int     fd
 	       int     x
 	       int     y
@@ -533,30 +623,34 @@ i_readraw(im,fd,x,y,datachannels,storechannels,intrl)
 
 undef_int
 i_writeraw(im,fd)
-	     i_img*    im
+    Imager::ImgRaw     im
 	       int     fd
 
 
-i_img*
+Imager::ImgRaw
 i_scaleaxis(im,Value,Axis)
-       	     i_img*    im
+    Imager::ImgRaw     im
              float     Value
 	       int     Axis
 
-i_img*
+Imager::ImgRaw
 i_scale_nn(im,scx,scy)
-       	     i_img*    im
+    Imager::ImgRaw     im
              float     scx
              float     scy
 
-i_img*
+Imager::ImgRaw
 i_haar(im)
-       	     i_img*    im
+    Imager::ImgRaw     im
 
+int
+i_count_colors(im,maxc)
+    Imager::ImgRaw     im
+               int     maxc
 
-i_img*
+Imager::ImgRaw
 i_transform(im,opx,opy,parm)
-	     i_img*    im
+    Imager::ImgRaw     im
 	     PREINIT:
 	     double* parm;
 	     int*    opx;
@@ -571,9 +665,9 @@ i_transform(im,opx,opy,parm)
 	     if (!SvROK(ST(1))) croak("Imager: Parameter 1 must be a reference to an array\n");
 	     if (!SvROK(ST(2))) croak("Imager: Parameter 2 must be a reference to an array\n");
 	     if (!SvROK(ST(3))) croak("Imager: Parameter 2 must be a reference to an array\n");
-	     if (SvTYPE(SvRV(ST(1))) != SVt_PVAV) croak("SuperS: Parameter 1 must be a reference to an array\n");
-	     if (SvTYPE(SvRV(ST(2))) != SVt_PVAV) croak("SuperS: Parameter 2 must be a reference to an array\n");
-	     if (SvTYPE(SvRV(ST(3))) != SVt_PVAV) croak("SuperS: Parameter 3 must be a reference to an array\n");
+	     if (SvTYPE(SvRV(ST(1))) != SVt_PVAV) croak("Imager: Parameter 1 must be a reference to an array\n");
+	     if (SvTYPE(SvRV(ST(2))) != SVt_PVAV) croak("Imager: Parameter 2 must be a reference to an array\n");
+	     if (SvTYPE(SvRV(ST(3))) != SVt_PVAV) croak("Imager: Parameter 3 must be a reference to an array\n");
 	     av=(AV*)SvRV(ST(1));
 	     opxl=av_len(av)+1;
 	     opx=mymalloc( opxl*sizeof(int) );
@@ -598,73 +692,73 @@ i_transform(im,opx,opy,parm)
 	     RETVAL=i_transform(im,opx,opxl,opy,opyl,parm,parmlen+2);
              ST(0) = sv_newmortal();
              if (RETVAL == 0) ST(0)=&PL_sv_undef;
-             else sv_setiv(ST(0), (IV)RETVAL);	  
+             else sv_setref_pv(ST(0), "Imager::ImgRaw", (void*)RETVAL);
 
 
 void
 i_contrast(im,intensity)
-             i_img*     im
-             float      intensity
+    Imager::ImgRaw     im
+             float     intensity
 
 void
 i_hardinvert(im)
-             i_img*    im
+    Imager::ImgRaw     im
 
 void
 i_noise(im,amount,type)
-             i_img*     im
-             float      amount
-     unsigned char      type
+    Imager::ImgRaw     im
+             float     amount
+     unsigned char     type
 
 void
 i_bumpmap(im,bump,channel,light_x,light_y,strength)
-             i_img*     im
-             i_img*     bump
-             int        channel
-             int        light_x
-             int        light_y
-             int        strength
+    Imager::ImgRaw     im
+    Imager::ImgRaw     bump
+               int     channel
+               int     light_x
+               int     light_y
+               int     strength
 
 void
 i_postlevels(im,levels)
-             i_img*     im
-             int        levels
+    Imager::ImgRaw     im
+             int       levels
 
 void
 i_mosaic(im,size)
-             i_img*     im
-             int        size
+    Imager::ImgRaw     im
+               int     size
 
 void
 i_watermark(im,wmark,tx,ty,pixdiff)
-             i_img*     im
-             i_img*     wmark
-             int        tx
-             int        ty
-             int        pixdiff
+    Imager::ImgRaw     im
+    Imager::ImgRaw     wmark
+               int     tx
+               int     ty
+               int     pixdiff
 
 
 void
 i_autolevels(im,lsat,usat,skew)
-             i_img*     im
-             float      lsat
-             float      usat
-             float      skew
+    Imager::ImgRaw     im
+             float     lsat
+             float     usat
+             float     skew
 
 void
 i_radnoise(im,xo,yo,rscale,ascale)
-             i_img*     im
-             float      xo
-             float      yo
-             float      rscale
-             float      ascale
+    Imager::ImgRaw     im
+             float     xo
+             float     yo
+             float     rscale
+             float     ascale
 
 void
 i_turbnoise(im,xo,yo,scale)
-             i_img*     im
-             float      xo
-             float      yo
-             float      scale
+    Imager::ImgRaw     im
+             float     xo
+             float     yo
+             float     scale
 
 
 

@@ -8,11 +8,12 @@
 
 #ifdef IMAGER_DEBUG_MALLOC
 
-#define mymalloc(x) (mymalloc_file_line(x,__FILE__,__LINE__))
+#define mymalloc(x) (mymalloc_file_line((x), __FILE__, __LINE__))
 void malloc_state();
 void* mymalloc_file_line(int size,char* file,int line);
 void* mymalloc_comm(int size,char *comm);
-void  myfree(void *p);
+#define  myfree(x) (myfree_file_line((x), __FILE__, __LINE__))
+void  myfree_file_line(void *p, char*file, int line);
 
 #else
 

@@ -1,22 +1,2 @@
--- The function pointer idea for getpixel putpixel is neat but it must be checked how
-   'far' that idea should be taken - since all sorts of wierd shit like circular
-   references can happen.
-
--- Unify file IO... probably it would be best to do something similar to streams, or just switch 
-   to streams.
-
--- It would be nice to get the lowest version number of all the libraries the module depends on
-
--- Write Docs for the lowlevel interface
-
--- Write the highlevel (OO) interface to the functions.
-
--- Enhance the font interface and add support for bitmap fonts
-
-==============
-
-	That is all I can think of at the moment as always ideas/fixes to addi@umich.edu
-
-BUGS: 
-Implement color counting - and use to minimize colors in gifs.
-Fix bezier code.
+Look at the development webpages for more information: 
+	http://www.eecs.umich.edu/~addi/perl/Imager/devel/

@@ -162,7 +162,8 @@ APP13_handler (j_decompress_ptr cinfo) {
 }
 
 i_img*
-i_readjpeg(i_img *im,int fd,char** iptc_itext,int *itlength) {
+i_readjpeg(int fd,char** iptc_itext,int *itlength) {
+  i_img *im;
   unsigned char t[2];
 
   struct stat stbuf;
@@ -178,7 +179,7 @@ i_readjpeg(i_img *im,int fd,char** iptc_itext,int *itlength) {
   JSAMPARRAY buffer;		/* Output row buffer */
   int row_stride;		/* physical row width in output buffer */
 
-  mm_log((1,"i_readjpeg(im 0x%x,fd %d,iptc_itext 0x%x)\n",im,fd,iptc_itext));
+  mm_log((1,"i_readjpeg(fd %d,iptc_itext 0x%x)\n",fd,iptc_itext));
 
   iptc_text=iptc_itext;
 
@@ -229,7 +230,7 @@ i_readjpeg(i_img *im,int fd,char** iptc_itext,int *itlength) {
    * In this example, we need to make an output work buffer of the right size.
    */ 
 
-  im=i_img_empty_ch(im,cinfo.output_width,cinfo.output_height,cinfo.output_components);
+  im=i_img_empty_ch(NULL,cinfo.output_width,cinfo.output_height,cinfo.output_components);
 
   /*  fprintf(stderr,"JPEG info:\n  xsize:%d\n  ysize:%d\n  channels:%d.\n",xsize,ysize,channels);*/ 
 

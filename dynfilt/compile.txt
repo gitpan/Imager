@@ -1,1 +1,2 @@
-gcc -o dyntest.so -fPIC -G dyntest.c
+linux - solaris : gcc -o dyntest.so -fPIC -G dyntest.c
+AIX: LD_RUN_PATH="" ld -o dyntest.a -bhalt:4 -bM:SRE -bE:dyntest.exp -b noentry -lc  -L/usr/local/lib  dyntest.o

@@ -15,26 +15,13 @@ $loaded=1;
 
 print "ok 1\n";
 
-Imager::init('log'=>'testout/t70newgif.log');
-
-$green=i_color_new(0,255,0,0);
-$blue=i_color_new(0,0,255,0);
+Imager::init('log'=>'testout/t90cc.log');
 
 $img=Imager->new();
-$img->open(file=>'testimg/scale.ppm',type=>'ppm') || print "failed: ",$img->{ERRSTR},"\n";
+$img->open(file=>'testimg/scale.ppm') || print "failed: ",$img->{ERRSTR},"\n";
 print "ok 2\n";
 
+print "# Less than 10K colors in image\n" if !defined($img->getcolorcount(maxcolors=>10000));
+print "# color count: ".$img->getcolorcount()."\n";
 
-$img->write(file=>'testout/t70newgif.gif',type=>'gif',gifplanes=>1,gifquant=>'lm',lmfixed=>[$green,$blue]) || print "failed: ",$img->{ERRSTR},"\n";
 print "ok 3\n";
-
-
-
-
-
-
-
-
-
-
-

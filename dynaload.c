@@ -36,7 +36,27 @@ int getvoid(void *hv_t,char* key,void **store) {
   return 1;
 }
 
-UTIL_table_t UTIL_table={getint,getdouble,getvoid};
+int getobj(void *hv_t,char *key,char *type,void **store) {
+  SV** svpp;
+  HV* hv=(HV*)hv_t;
+
+  if ( !hv_exists(hv,key,strlen(key)) ) return 0;
+
+  svpp=hv_fetch(hv, key, strlen(key), 0);
+
+  if (sv_derived_from(*svpp,type)) {
+    IV tmp = SvIV((SV*)SvRV(*svpp));
+    *store = (void*) tmp;
+  } else {
+    mm_log((1,"getobj: key exists in hash but is not of correct type"));
+    return 0;
+  }
+
+  return 1;
+}
+
+
+UTIL_table_t UTIL_table={getint,getdouble,getvoid,getobj};
 extern symbol_table_t symbol_table;
 
 /*
@@ -49,7 +69,8 @@ extern symbol_table_t symbol_table;
 
 void
 DSO_call(DSO_handle *handle,int func_index,HV* hv) {
- (handle->function_list[func_index].iptr)((void*)hv);
+  mm_log((1,"DSO_call(handle 0x%X, func_index %d, hv 0x%X)\n",handle,func_index,hv));
+  (handle->function_list[func_index].iptr)((void*)hv);
 }
 
 
@@ -62,22 +83,30 @@ DSO_open(char* file,char** evalstring) {
   int  rc,*iptr, (*fptr)(int);
   func_ptr *function_list;
   DSO_handle *dso_handle;
+  void (*f)(void *s,void *u); /* these will just have to be void for now */
   int i;
 
   *evalstring=NULL;
 
-  
+  mm_log( (1,"DSO_open(file '%s' (0x%08X), evalstring 0x%08X)\n",file,file,evalstring) );
 
   if ( (tt_handle = shl_load(file, BIND_DEFERRED,0L)) == NULL) return NULL; 
-  if ( (shl_findsym(&tt_handle, "evalstr",TYPE_UNDEFINED,(void*)evalstring))) return NULL;
+  if ( (shl_findsym(&tt_handle, I_EVALSTR,TYPE_UNDEFINED,(void*)evalstring))) return NULL;
+
+  /*
   if ( (shl_findsym(&tt_handle, "symbol_table",TYPE_UNDEFINED,(void*)&plugin_symtab))) return NULL;
   if ( (shl_findsym(&tt_handle, "util_table",TYPE_UNDEFINED,&plugin_utiltab))) return NULL;
-
   (*plugin_symtab)=&symbol_table;
   (*plugin_utiltab)=&UTIL_table;
+  */
 
-  if ( (shl_findsym(&tt_handle, "function_list",TYPE_UNDEFINED,(func_ptr*)&function_list))) return NULL;
-
+  if ( (shl_findsym(&tt_handle, I_INSTALL_TABLES ,TYPE_UNDEFINED, &f ))) return NULL; 
+ 
+  mm_log( (1,"Calling install_tables\n") );
+  f(&symbol_table,&UTIL_table);
+  mm_log( (1,"Call ok.\n") ); 
+ 
+  if ( (shl_findsym(&tt_handle, I_FUNCTION_LIST ,TYPE_UNDEFINED,(func_ptr*)&function_list))) return NULL; 
   if ( (dso_handle=(DSO_handle*)malloc(sizeof(DSO_handle))) == NULL) return NULL;
 
   dso_handle->handle=tt_handle; /* needed to close again */
@@ -85,12 +114,14 @@ DSO_open(char* file,char** evalstring) {
   if ( (dso_handle->filename=(char*)malloc(strlen(file))) == NULL) { free(dso_handle); return NULL; }
   strcpy(dso_handle->filename,file);
 
+  mm_log((1,"DSO_open <- (0x%X)\n",dso_handle));
   return (void*)dso_handle;
 }
 
 undef_int
 DSO_close(void *ptr) {
   DSO_handle *handle=(DSO_handle*) ptr;
+  mm_log((1,"DSO_close(ptr 0x%X)\n",ptr));
   return !shl_unload((handle->handle));
 }
 
@@ -147,9 +178,9 @@ DSO_open(char* file,char** evalstring) {
 
   */
 
-
+  f = (void(*)(void *s,void *u))dlsym(d_handle, I_INSTALL_TABLES);
   mm_log( (1,"DSO_open: going to dlsym '%s'\n", I_INSTALL_TABLES ));
-  if ( (f = dlsym(d_handle, I_INSTALL_TABLES)) == NULL) {
+  if ( (f = (void(*)(void *s,void *u))dlsym(d_handle, I_INSTALL_TABLES)) == NULL) {
     mm_log( (1,"DSO_open: dlsym didn't find '%s': %s.\n",I_INSTALL_TABLES,dlerror()) );
     return NULL;
   }
@@ -173,13 +204,16 @@ DSO_open(char* file,char** evalstring) {
   dso_handle->function_list=function_list;
   if ( (dso_handle->filename=(char*)malloc(strlen(file))) == NULL) { free(dso_handle); return NULL; }
   strcpy(dso_handle->filename,file);
-  
+
+  mm_log( (1,"DSO_open <- 0x%X\n",dso_handle) );
   return (void*)dso_handle;
 }
 
 undef_int
 DSO_close(void *ptr) {
-  DSO_handle *handle=(DSO_handle*) ptr;
+  DSO_handle *handle;
+  mm_log((1,"DSO_close(ptr 0x%X)\n",ptr));
+  handle=(DSO_handle*) ptr;
   return !dlclose(handle->handle);
 }
 

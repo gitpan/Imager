@@ -4,7 +4,8 @@
 
 
 i_img *
-i_readppm(i_img *im,int fd) {
+i_readppm(int fd) {
+  i_img* im;
   int type;
   int ic,rc,x,y,ind;
   char buf[256];
@@ -12,11 +13,13 @@ i_readppm(i_img *im,int fd) {
   read(fd,buf,3);
   
   /*  fprintf(stderr,"'%s'\n",buf); */
+
+  mm_log((1,"i_readppm(fd %d)\n",fd));
   
   type=0;
   if (!strncmp(buf,"P6\n",3)) { type=1; mm_log((1,"i_readppm: Type is P6\n")); }
   if (!strncmp(buf,"P3\n",3)) { type=2; mm_log((1,"i_readppm: Type is P3\n")); }
-  if (!type) { mm_log((1,"Format is not ppm\n")); i_img_destroy(im); return NULL; }
+  if (!type) { mm_log((1,"Format is not ppm\n")); return NULL; }
 
   while(rc=myread(fd,buf,1)>0) { 
     if (buf[0] == '#') ic=1;
@@ -39,7 +42,7 @@ i_readppm(i_img *im,int fd) {
   
   while(rc=myread(fd,&buf[0],1)>0) { if (buf[0] == '\n') break; }
   
-  im=i_img_empty(im,x,y);
+  im=i_img_empty(NULL,x,y);
   
   rc=myread(fd,im->data,im->bytes);
   if (rc<0) {

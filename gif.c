@@ -3,6 +3,7 @@
 #include "gifquant.h"
 
 /* Make some variables global, so we could access them faster: */
+
 static int
     ImageNum = 0,
     BackGround = 0,
@@ -20,8 +21,9 @@ static ColorMapObject
 
 
 i_img *
-i_readgif(i_img *im,int fd) {
-  int	i, j, Error, NumFiles, Size, Row, Col, Width, Height, ExtCode, Count, x, OutFileFlag = FALSE;
+i_readgif(int fd, int **colour_table, int *colours) {
+  i_img *im;
+  int i, j, Error, NumFiles, Size, Row, Col, Width, Height, ExtCode, Count, x, OutFileFlag = FALSE;
   GifRecordType RecordType;
   GifByteType *Extension;
   
@@ -34,7 +36,7 @@ i_readgif(i_img *im,int fd) {
 
   /*  unsigned char *Buffer, *BufferP; */
 
-  mm_log((1,"i_readgif(im 0x%x, fd %d)\n",im,fd));
+  mm_log((1,"i_readgif(fd %d, colour_table %p, colours %p)\n", fd, colour_table, colours));
 
   if ((GifFile = DGifOpenFileHandle(fd)) == NULL) {
     m_fatal(0,"i_readgif: Unable to open file\n");
@@ -45,7 +47,29 @@ i_readgif(i_img *im,int fd) {
   ColorMap = (GifFile->Image.ColorMap ? GifFile->Image.ColorMap : GifFile->SColorMap);
   ColorMapSize = ColorMap->ColorCount;
 
-  im=i_img_empty_ch(im,GifFile->SWidth,GifFile->SHeight,3);
+  /* **************************************** */
+  if(colour_table != NULL) {
+    int q;
+    *colour_table=mymalloc(sizeof(int *) * ColorMapSize * 3);
+    if(*colour_table == NULL) 
+        m_fatal(0,"Failed to allocate memory for GIF colour table, aborted."); 
+    
+    memset(*colour_table, 0, sizeof(int *) * ColorMapSize * 3);
+
+    for(q=0; q<ColorMapSize; q++) {
+	    ColorMapEntry = &ColorMap->Colors[q];
+        (*colour_table)[q*3 + 0]=ColorMapEntry->Red;
+        (*colour_table)[q*3 + 1]=ColorMapEntry->Green;
+        (*colour_table)[q*3 + 2]=ColorMapEntry->Blue;
+    }
+  }
+
+  if(colours != NULL) {
+    *colours = ColorMapSize;
+  }
+  
+  /* **************************************** */
+  im=i_img_empty_ch(NULL,GifFile->SWidth,GifFile->SHeight,3);
   
   Size = GifFile->SWidth * sizeof(GifPixelType); 
   
@@ -288,6 +312,94 @@ i_writegifmc(i_img *im,int fd,int colors) {
     return(0);
   }
 
+  free(RedBuffer);
+  if (im->channels == 3) { free(GreenBuffer); free(BlueBuffer); }
+  
+  if ((GifFile = EGifOpenFileHandle(fd)) == NULL) {
+    mm_log((1,"Error in EGifOpenFileHandle, unable to write image.\n"));
+    return(0);
+  }
+  
+  if (EGifPutScreenDesc(GifFile,im->xsize, im->ysize, colors, 0,OutputColorMap) == GIF_ERROR ||
+      EGifPutImageDesc(GifFile,0, 0, im->xsize, im->ysize, FALSE, NULL) == GIF_ERROR) {
+    mm_log((1,"Error in EGifOpenFileHandle, unable to write image.\n"));
+    if (GifFile != NULL) EGifCloseFile(GifFile);
+    return(0);
+  }
+
+  Ptr = OutputBuffer;
+
+  for (y = 0; y < im->ysize; y++) {
+    if (EGifPutLine(GifFile, Ptr, im->xsize) == GIF_ERROR) {
+      mm_log((1,"Error in EGifOpenFileHandle, unable to write image.\n"));
+      if (GifFile != NULL) EGifCloseFile(GifFile);
+      return(0);
+    }
+    
+    Ptr += im->xsize;
+  }
+  
+  if (EGifCloseFile(GifFile) == GIF_ERROR) {
+    mm_log((1,"Error in EGifCloseFile, unable to write image.\n"));
+    return(0);
+  }
+  return(1);
+}
+
+
+undef_int
+i_writegifex(i_img *im,int fd) {
+  int colors, xsize, ysize, channels;
+  int Error, NumFiles, SizeFlag, x,y,ColorMapSize;
+  unsigned long Size;
+
+  struct octt *ct;
+
+  char **FileName = NULL;
+  GifByteType *RedBuffer = NULL, *GreenBuffer = NULL, *BlueBuffer = NULL,*OutputBuffer = NULL;
+  GifByteType *RedP, *GreenP, *BlueP;
+  ColorMapObject *OutputColorMap = NULL;
+  GifFileType *GifFile;
+  GifByteType *Ptr;
+  
+  i_color val,col;
+
+  mm_log((1,"i_writegif(0x%x,fd %d)\n",im,fd));
+  
+  if (!(im->channels==1 || im->channels==3)) { fprintf(stderr,"Unable to write gif, improper colorspace.\n"); exit(3); }
+
+  xsize=im->xsize;
+  ysize=im->ysize;
+  channels=im->channels;
+
+  colors=0;
+  ct=octt_new();
+
+  colors=0;
+  for(x=0;x<xsize;x++) for(y=0;y<ysize;y++) {
+    i_gpix(im,x,y,&val);
+    colors+=octt_add(ct,val.rgb.r,val.rgb.g,val.rgb.b);
+    /*  if (colors > maxc) { octt_delete(ct); } 
+	We'll just bite the bullet */
+  }
+
+  printf("Number of colors is %d\n");
+
+  ColorMapSize = (colors > 256) ? 256 : colors;
+  
+  Size = ((long) im->xsize) * im->ysize * sizeof(GifByteType);
+  
+  if ((OutputColorMap = MakeMapObject(ColorMapSize, NULL)) == NULL)
+    m_fatal(0,"Failed to allocate memory for Output colormap.");
+  if ((OutputBuffer = (GifByteType *) mymalloc(im->xsize * im->ysize * sizeof(GifByteType))) == NULL)
+    m_fatal(0,"Failed to allocate memory for output buffer.");
+  
+  if (QuantizeBuffer(im->xsize, im->ysize, &ColorMapSize, RedBuffer, GreenBuffer, BlueBuffer,
+		     OutputBuffer, OutputColorMap->Colors) == GIF_ERROR) {
+    mm_log((1,"Error in QuantizeBuffer, unable to write image.\n"));
+    return(0);
+  }
+
 
   free(RedBuffer);
   if (im->channels == 3) { free(GreenBuffer); free(BlueBuffer); }
@@ -322,5 +434,6 @@ i_writegifmc(i_img *im,int fd,int colors) {
   }
   return(1);
 }
+
 
 

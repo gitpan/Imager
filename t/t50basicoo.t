@@ -33,7 +33,7 @@ $img = Imager->new();
 for(@all) {
   if (!$hsh{$_}) { next; }
   print "#opening format: $_\n";
-  $img->open(file=>"testout/t10.$_",type=>$_,xsize=>150,ysize=>150) || die "failed: ",$img->{ERRSTR},"\n";
+  $img->read(file=>"testout/t10.$_",type=>$_,xsize=>150,ysize=>150) || die "failed: ",$img->{ERRSTR},"\n";
 }
 
 $img2=$img->crop(width=>50,height=>50);

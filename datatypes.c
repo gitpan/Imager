@@ -13,11 +13,17 @@ octt_new() {
         return t;
 }
 
-void
+
+/* returns 1 if the colors wasn't in the octtree already */
+
+
+int
 octt_add(struct octt *ct,unsigned char r,unsigned char g,unsigned char b) {
   struct octt *c;
   int i,cm;
   int ci,idx[8];
+  int rc;
+  rc=0;
   c=ct;
   /*  printf("[r,g,b]=[%d,%d,%d]\n",r,g,b); */
   ct->cnt++;
@@ -25,12 +31,22 @@ octt_add(struct octt *ct,unsigned char r,unsigned char g,unsigned char b) {
     cm=1<<i;
     ci=((!!(r&cm))<<2)+((!!(g&cm))<<1)+!!(b&cm); 
     /* printf("idx[%d]=%d\n",i,ci); */
-    if (c->t[ci] == NULL) c->t[ci]=octt_new();
+    if (c->t[ci] == NULL) { c->t[ci]=octt_new(); rc=1; }
     c=c->t[ci];
     c->cnt++;
     idx[i]=ci;
   }
+  return rc;
 }
+
+
+void
+octt_delete(struct octt *ct) {
+  int i;
+  for(i=0;i<8;i++) if (ct->t[i] != NULL) octt_delete(ct->t[i]);  /* do not free instance here because it will free itself */
+  free(ct);
+}
+
 
 void
 octt_dump(struct octt *ct) {
@@ -40,34 +56,19 @@ octt_dump(struct octt *ct) {
 	for(i=0;i<8;i++) if (ct->t[i] != NULL) octt_dump(ct->t[i]);
 }
 
+/* note that all calls of octt_count are operating on the same overflow 
+   variable so all calls will know at the same time if an overflow
+   has occured and stops there. */
+
 void
-octt_count(struct octt *ct,int *tot) {
-	int i,c;
-	c=0;
-	for(i=0;i<8;i++) if (ct->t[i]!=NULL) { 
-		octt_count(ct->t[i],tot);
-		c++;
-	}
-	if (!c) (*tot)++;
+octt_count(struct octt *ct,int *tot,int max,int *overflow) {
+  int i,c;
+  c=0;
+  if (!(*overflow)) return;
+  for(i=0;i<8;i++) if (ct->t[i]!=NULL) { 
+    octt_count(ct->t[i],tot,max,overflow);
+    c++;
+  }
+  if (!c) (*tot)++;
+  if ( (*tot) > (*overflow) ) *overflow=0;
 }
-
-/*
-
-int main() {
-int colorcnt;
-struct octt *ct;
-ct=octt_new();
-octt_add(ct,127,52,233);
-octt_add(ct,127,52,233);
-octt_add(ct,122,77,246);
-
-octt_dump(ct);
-colorcnt=0;
-octt_count(ct,&colorcnt);
-printf("colors %d\n",colorcnt);
-}
-
-*/
-
-
-
