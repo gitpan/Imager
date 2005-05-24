@@ -25,7 +25,8 @@ i_conv(i_img *im,float *coeff,int len) {
 
   center=(len-1)/2;
 
-
+  /* don't move the calculation of pc up here, it depends on which pixels
+     are readable */
   for(l=0;l<im->ysize;l++) {
     for(i=0;i<im->xsize;i++) {
       pc=0.0;

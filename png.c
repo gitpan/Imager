@@ -72,8 +72,6 @@ i_writepng_wiol(i_img *im, io_glue *ig) {
   volatile int cspace,channels;
   double xres, yres;
   int aspect_only, have_res;
-  double offx, offy;
-  char offunit[20] = "pixel";
 
   io_glue_commit_types(ig);
   mm_log((1,"i_writepng(im %p ,ig %p)\n", im, ig));
@@ -282,8 +280,8 @@ static void get_png_tags(i_img *im, png_structp png_ptr, png_infop info_ptr) {
   if (png_get_pHYs(png_ptr, info_ptr, &xres, &yres, &unit_type)) {
     mm_log((1,"pHYs (%d, %d) %d\n", xres, yres, unit_type));
     if (unit_type == PNG_RESOLUTION_METER) {
-      i_tags_set_float(&im->tags, "i_xres", 0, xres * 0.0254);
-      i_tags_set_float(&im->tags, "i_yres", 0, yres * 0.0254);
+      i_tags_set_float2(&im->tags, "i_xres", 0, xres * 0.0254, 5);
+      i_tags_set_float2(&im->tags, "i_yres", 0, yres * 0.0254, 5);
     }
     else {
       i_tags_addn(&im->tags, "i_xres", 0, xres);

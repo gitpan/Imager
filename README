@@ -71,7 +71,7 @@ If either fails do take a peek at the file errep.perl.  It's creates a
 file report.txt.  This is some information which will help me discover
 where the problem is so I can try to fix it in future releases.  If
 you find running it ok (just remember - no warranty!) please send the
-report.txt via email to addi@umich.edu .
+report.txt via email to imager@imager.perl.org.
 
 Troubleshooting tips:
 
@@ -139,6 +139,33 @@ include path.
 To see which directories should be in the include path, try:
 
   freetype-config --cflags
+
+
+Macintosh dfont and suitcase font support
+-----------------------------------------
+
+Through Freetype 2.1, Imager can use Macintosh DFON (.dfont) fonts and
+suitcase font files.
+
+If you want to be able to use more than just the first face in the
+font file though, you will need to configure freetype2 with the
+--with-old-mac-fonts option:
+
+  ./configure --with-old-mac-fonts
+
+You can use the index option to get to the other font faces in the
+file:
+
+  # get the second face from $file
+  my $font = Imager::Font->new(file=>$file, index=>1)
+    or die Imager->errstr;
+
+If you're using a suitcase font, you will also need to force the use
+of freetype 2 with the type argument:
+
+  my $font = Imager::Font->new(file=>$suitcase, type=>'ft2', index=>$index)
+    or die Imager->errstr;
+
 
 ========================
 3. External dependencies
@@ -230,10 +257,43 @@ need to select libungif-4.1.2-1 manually in the setup.exe installation
 tool.
 
 If you have any problems with the Win32 support, please email
-tony@develop-help.com (don't forget to use nmake instead of make).
+imager@imager.perl.org (don't forget to use nmake instead of make).
 
+============
+6. Mac OS X
+============
+
+Building Imager under OS X is generally straightforward.  There are
+some exceptions though:
+
+a) you may find to need to ranlib library files in place after you've 
+   installed them, for example:
+
+     ranlib /usr/local/lib/libgif.a
+
+b) the version of GCC enabled by default on OS X 10.4 generates
+   incorrect code for some functions.  To work around this run:
+
+     gcc_select 3
+
+   before building Imager and:
+
+     gcc_select 4
+
+   after building Imager.
+
+   This problem exhibits itself as test failures in t/t20fill.t
+
+c) if you want to build GCC 4.0 from scratch and use that you will
+   need to adjust the command-line supplied during the link stage, so
+   that there is some other option before the -bundle option.
+
+   For example:
+
+     perl Makefile.PL LDDLFLAGS="`perl -MConfig -e 'print "-g $Config{lddlflags}"'`"
+   
 =======================
-6. General information
+7. General information
 =======================
 
 The Imager module homepage is currently at:
@@ -246,9 +306,12 @@ have to use the source. The test scripts might also be a good idea.
 By activating the the #init_log lines in the test script you can get
 rather verbose debugging output from the C code.
 
+You can report bugs by pointing your browser at:
+
+  https://rt.cpan.org/NoAuth/ReportBug.html?Queue=Imager
 
 ========================
-7. Thanks
+8. Thanks
 ========================
 
 Thanks go to:

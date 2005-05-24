@@ -97,7 +97,7 @@ gnext(mbuf *mb) {
 
 
 /*
-=item gnext(mbuf *mb)
+=item gpeek(mbuf *mb)
 
 Fetches a character but does NOT advance.  Returns a pointer to
 the byte or NULL on failure (internal).
@@ -153,7 +153,7 @@ skip_spaces(mbuf *mb) {
 
 
 /*
-=item skip_spaces(mb)
+=item skip_comment(mb)
 
 Advances in stream over whitespace and a comment if one is found. (internal)
 
@@ -236,24 +236,8 @@ i_readpnm_wiol(io_glue *ig, int length) {
 
   i_clear_error();
 
-  /*  char *pp; */
-
   mm_log((1,"i_readpnm(ig %p, length %d)\n", ig, length));
 
-  /*
-  pp = mymalloc(20);
-  
-  pp[-1]= 'c';
-  pp[-2]= 'c';
-  
-  bndcheck_all();
-
-  myfree(pp);
-
-  mm_log((1, "Hack is exiting\n"));
-
-*/
-  
   io_glue_commit_types(ig);
   init_buf(&buf, ig);
 
@@ -425,7 +409,6 @@ undef_int
 i_writeppm_wiol(i_img *im, io_glue *ig) {
   char header[255];
   int rc;
-  writep write_func;
 
   mm_log((1,"i_writeppm(im %p, ig %p)\n", im, ig));
   i_clear_error();
@@ -450,8 +433,6 @@ i_writeppm_wiol(i_img *im, io_glue *ig) {
       unsigned char *data = mymalloc(3 * im->xsize);
       if (data != NULL) {
         int y = 0;
-        int x, ch;
-        unsigned char *p;
         static int rgb_chan[3] = { 0, 1, 2 };
 
         rc = 0;
@@ -489,9 +470,7 @@ i_writeppm_wiol(i_img *im, io_glue *ig) {
       unsigned char *data = mymalloc(im->xsize);
       if (data != NULL) {
         int y = 0;
-        int x, ch;
         int chan = 0;
-        unsigned char *p;
 
         rc = 0;
         while (y < im->ysize && rc >= 0) {

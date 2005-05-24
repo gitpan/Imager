@@ -6,6 +6,7 @@
 #ifdef _MSC_VER
 #include <io.h>
 #endif
+#include <string.h>
 
 #define IOL_DEB(x)
 
@@ -218,7 +219,6 @@ static
 ssize_t 
 buffer_read(io_glue *ig, void *buf, size_t count) {
   io_ex_buffer *ieb = ig->exdata;
-  char        *cbuf = buf;
 
   IOL_DEB( printf("buffer_read: fd = %d, ier->cpos = %ld, buf = %p, count = %d\n", fd, (long) ier->cpos, buf, count) );
 

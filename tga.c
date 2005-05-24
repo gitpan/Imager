@@ -38,7 +38,7 @@ Some of these functions are internal.
 
 
 typedef struct {
-  char  idlength;
+  unsigned char  idlength;
   char  colourmaptype;
   char  datatypecode;
   short int colourmaporigin;
@@ -320,14 +320,14 @@ tga_header_unpack(tga_header *header, unsigned char headbuf[18]) {
 }
 
 
-
+/* this function should never produce diagnostics to stdout, maybe to the logfile */
 int
 tga_header_verify(unsigned char headbuf[18]) {
   tga_header header;
   tga_header_unpack(&header, headbuf);
   switch (header.datatypecode) { 
   default:
-		printf("bad typecode!\n");
+    /*printf("bad typecode!\n");*/
     return 0;
   case 0:
   case 1:  /* Uncompressed, color-mapped images */ 
@@ -341,7 +341,7 @@ tga_header_verify(unsigned char headbuf[18]) {
 
   switch (header.colourmaptype) { 
   default:
-		printf("bad colourmaptype!\n");
+    /*printf("bad colourmaptype!\n");*/
     return 0;
   case 0:
   case 1:
@@ -464,7 +464,7 @@ destination is compressed.
 static
 int
 tga_dest_write(tga_dest *s, unsigned char *buf, size_t pixels) {
-  int cp = 0, j, k;
+  int cp = 0;
 
   if (!s->compressed) {
     if (s->ig->writecb(s->ig, buf, pixels*s->bytepp) != pixels*s->bytepp) return 0;
@@ -598,7 +598,7 @@ Returns NULL on error.
 i_img *
 i_readtga_wiol(io_glue *ig, int length) {
   i_img* img = NULL;
-  int x, y, i;
+  int x, y;
   int width, height, channels;
   int mapped;
   char *idstring = NULL;
@@ -607,7 +607,6 @@ i_readtga_wiol(io_glue *ig, int length) {
   tga_header header;
   unsigned char headbuf[18];
   unsigned char *databuf;
-  unsigned char *reorderbuf;
 
   i_color *linebuf = NULL;
   i_clear_error();
@@ -696,7 +695,6 @@ i_readtga_wiol(io_glue *ig, int length) {
   
   mapped = 1;
   switch (header.datatypecode) {
-    int tbpp;
   case 2:  /* Uncompressed, rgb images          */
   case 10: /* Compressed,   rgb images          */
     mapped = 0;
@@ -785,7 +783,6 @@ Writes an image in targa format.  Returns 0 on error.
 
 undef_int
 i_writetga_wiol(i_img *img, io_glue *ig, int wierdpack, int compress, char *idstring, size_t idlen) {
-  static int rgb_chan[] = { 2, 1, 0, 3 };
   tga_header header;
   tga_dest dest;
   unsigned char headbuf[18];
@@ -836,7 +833,6 @@ i_writetga_wiol(i_img *img, io_glue *ig, int wierdpack, int compress, char *idst
 
   io_glue_commit_types(ig);
   
-  header.idlength;
   header.idlength = idlen;
   header.colourmaptype   = mapped ? 1 : 0;
   header.datatypecode    = mapped ? 1 : img->channels == 1 ? 3 : 2;
@@ -875,8 +871,6 @@ i_writetga_wiol(i_img *img, io_glue *ig, int wierdpack, int compress, char *idst
   mm_log((1, "dest.bytepp = %d\n", dest.bytepp));
 
   if (img->type == i_palette_type) {
-    int i;
-    int bytepp = bpp_to_bytes(bitspp);
     if (!tga_palette_write(ig, img, bitspp, i_colorcount(img))) return 0;
     
     if (!img->virtual && !dest.compressed) {

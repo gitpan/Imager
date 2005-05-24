@@ -2,6 +2,7 @@ Changes
 Imager.pm
 Imager.xs
 MANIFEST
+META.yml        Module meta-data
 Makefile.PL
 README
 bigtest.perl	Library selection tester
@@ -40,6 +41,7 @@ fontfiles/ExistenceTest.afm     please edit ExistenceTest.sfd in CVS
 fontfiles/ExistenceTest.pfb     to change these files, edited and
 fontfiles/ExistenceTest.ttf     generated using pfaedit
 fontfiles/ImUgly.ttf
+fontfiles/MMOne.pfb		multiple master test font
 fontfiles/NameTest.ttf          test glyph_names() - see t38ft2font.t
 fontfiles/dcr10.afm
 fontfiles/dcr10.pfb
@@ -60,6 +62,7 @@ jpeg.c
 lib/Imager/Color.pm
 lib/Imager/Color/Float.pm
 lib/Imager/Color/Table.pm
+lib/Imager/Cookbook.pm
 lib/Imager/Draw.pod
 lib/Imager/Engines.pod
 lib/Imager/Expr.pm
@@ -100,9 +103,20 @@ regmach.h
 regops.perl
 rgb.c           Reading and writing SGI rgb files
 rotate.c
+samples/README
+samples/anaglyph.pl
+samples/interleave.pl
+samples/samp-form.cgi
+samples/samp-image.cgi
+samples/samp-scale.cgi  Demonstrate image upload via a HTML form
+samples/samp-scale.html Form for samp-scale.cgi
+samples/samp-tags.cgi   Demonstrate image upload via a HTML form
+samples/samp-tags.html  Form for samp-tags.cgi
 spot.perl	For making an ordered dither matrix from a spot function
 stackmach.c
 stackmach.h
+t/Test/Builder.pm
+t/Test/More.pm
 t/t00basic.t
 t/t01introvert.t
 t/t020masked.t
@@ -111,6 +125,7 @@ t/t022double.t          Test double/sample images
 t/t023palette.t		Test paletted images
 t/t05error.t
 t/t07iolayer.t
+t/t1000files.t          Format independent file tests
 t/t101jpeg.t
 t/t102png.t
 t/t103raw.t
@@ -169,6 +184,7 @@ testimg/badused1.bmp    1-bit/pixel, out of range colors used value
 testimg/badused4a.bmp   4-bit/pixel, badly out of range used value (SEGV test)
 testimg/badused4b.bmp   4-bit/pixel, just out of range used value (SEGV test)
 testimg/bandw.gif
+testimg/base.jpg	Base JPEG test image
 testimg/comp4.bmp       Compressed 4-bit/pixel BMP
 testimg/comp4.tif       4-bit/pixel paletted TIFF
 testimg/comp4bad.tif    corrupted 4-bit/pixel paletted TIFF
@@ -178,12 +194,14 @@ testimg/expected.gif
 testimg/gimpgrad        A GIMP gradient file
 testimg/junk.ppm
 testimg/loccmap.gif
+testimg/longid.tga      Test TGA with a long id string
 testimg/maxval.ppm	For ppm file maxval handling
 testimg/maxval_0.ppm
 testimg/maxval_256.ppm
 testimg/maxval_4095_asc.ppm
 testimg/maxval_65536.ppm
 testimg/maxval_asc.ppm
+testimg/newgimpgrad.ggr Test GIMP Gradient file (newer type)
 testimg/nocmap.gif
 testimg/palette.png
 testimg/palette_out.png
@@ -201,6 +219,7 @@ testimg/short8.bmp      8-bit/pixel, data missing from EOF
 testimg/short8rle.bmp   8-bit/pixel compressed, data missing from EOF
 testimg/simple.pbm
 testimg/test_gimp_pal   A simple GIMP palette file
+testimg/tiffwarn.tif	Generates a warning while being read
 testimg/trimgdesc.gif
 testimg/trmiddesc.gif
 testimg/winrgb2.bmp  1-bit bmp base

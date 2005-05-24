@@ -23,7 +23,7 @@ my %drivers =
    ft2=>{
          class=>'Imager::Font::FreeType2',
          module=>'Imager/Font/FreeType2.pm',
-         files=>'.*\.(pfa|pfb|otf|ttf|fon|fnt)$',
+         files=>'.*\.(pfa|pfb|otf|ttf|fon|fnt|dfont|pcf(\.gz)?)$',
         },
    ifs=>{
          class=>'Imager::Font::Image',
@@ -325,7 +325,9 @@ Imager::Font - Font handling for Imager.
    $pos_width,
    $global_ascent,
    $descent,
-   $ascent) = $font->bounding_box(string=>"Foo");
+   $ascent,
+   $advance_width,
+   $right_bearing) = $font->bounding_box(string=>"Foo");
 
   $logo = $font->logo(text   => "Slartibartfast Enterprises",
 		      size   => 40,
@@ -366,6 +368,7 @@ this:
 This creates a font object to pass to functions that take a font argument.
 
   $font = Imager::Font->new(file  => 'denmark.ttf',
+                            index => 0,
 			    color => $blue,
 			    size  => 30,
 			    aa    => 1);
@@ -381,13 +384,17 @@ you can tell it explicitly by using the C<type> parameter:
   $t1font = Imager::Font->new(file => 'fruitcase', type => 't1');
   $ttfont = Imager::Font->new(file => 'arglebarf', type => 'tt');
 
+The C<index> parameter is used to select a single face from a font
+file containing more than one face, for example, from a Macintosh font
+suitcase or a .dfont file.
+
 If any of the C<color>, C<size> or C<aa> parameters are omitted when
 calling C<Imager::Font->new()> the they take the following values:
-
 
   color => Imager::Color->new(255, 0, 0, 0);  # this default should be changed
   size  => 15
   aa    => 0
+  index => 0
 
 To use Win32 fonts supply the facename of the font:
 
@@ -409,7 +416,8 @@ Returns the bounding box for the specified string.  Example:
       $global_ascent,
       $descent,
       $ascent,
-      $advance_width) = $font->bounding_box(string => "A Fool");
+      $advance_width,
+      $right_bearing) = $font->bounding_box(string => "A Fool");
 
   my $bbox_object = $font->bounding_box(string => "A Fool");
 
@@ -446,6 +454,12 @@ the distance from the start point that the next string output should
 start at, this is often the same as C<$pos_width>, but can be
 different if the final character overlaps the right side of its
 character cell.
+
+=item C<$right_bearing>
+
+The distance from the right side of the final glyph to the end of the
+advance width.  If the final glyph overflows the advance width this
+value is negative.
 
 =back
 
@@ -521,7 +535,12 @@ The start point for rendering the text.  See the align parameter.
 =item align
 
 If non-zero the point supplied in (x,y) will be on the base-line, if
-zero then (x,y) will be at the top-left of the first character.
+zero then (x,y) will be at the top-left of the string.
+
+ie. if drawing the string "yA" and align is 0 the point (x,y) will
+aligned with the top of the A.  If align is 1 (the default) it will be
+aligned with the baseline of the font, typically bottom of the A,
+depending on the font used.
 
 =item channel
 
@@ -722,6 +741,54 @@ included.
 
 =back
 
+=head1 MULTIPLE MASTER FONTS
+
+The Freetype 2 driver supports multiple master fonts:
+
+=over
+
+=item is_mm()
+
+Test if the font is a multiple master font.
+
+=item mm_axes()
+
+Returns a list of the axes that can be changes in the font.  Each
+entry is an array reference which contains:
+
+=over
+
+=item 1.
+
+Name of the axis.
+
+=item 2.
+
+minimum value for this axis.
+
+=item 3.
+
+maximum value for this axis
+
+=back
+
+=item set_mm_coords(coords=>\@values)
+
+Blends an interpolated design from the master fonts.  @values must
+contain as many values as there are axes in the font.
+
+=back
+
+For example, to select the minimum value in each axis:
+
+  my @axes = $font->mm_axes;
+  my @coords = map $_->[1], @axes;
+  $font->set_mm_coords(coords=>\@coords);
+
+It's possible other drivers will support multiple master fonts in the
+future, check if your selected font object supports the is_mm() method
+using the can() method.
+
 =head1 UTF8
 
 There are 2 ways of rendering Unicode characters with Imager:
@@ -810,6 +877,15 @@ list.
 =head1 BUGS
 
 You need to modify this class to add new font types.
+
+The $pos_width member returned by the bounding_box() method has
+historically returned different values from different drivers.  The
+Freetype 1.x and 2.x, and the Win32 drivers return the max of the
+advance width and the right edge of the right-most glyph.  The Type 1
+driver always returns the right edge of the right-most glyph.
+
+The newer advance_width and right_bearing values allow access to any
+of the above.
 
 =head1 SEE ALSO
 

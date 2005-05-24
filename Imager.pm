@@ -147,7 +147,7 @@ BEGIN {
   require Exporter;
   require DynaLoader;
 
-  $VERSION = '0.44';
+  $VERSION = '0.44_01';
   @ISA = qw(Exporter DynaLoader);
   bootstrap Imager $VERSION;
 }
@@ -221,11 +221,19 @@ BEGIN {
 		       callsub => sub { my %hsh=@_; i_conv($hsh{image},$hsh{coef}); }
 		      };
 
-  $filters{gradgen} ={
-		       callseq => ['image', 'xo', 'yo', 'colors', 'dist'],
-		       defaults => { },
-		       callsub => sub { my %hsh=@_; i_gradgen($hsh{image}, $hsh{xo}, $hsh{yo}, $hsh{colors}, $hsh{dist}); }
-		      };
+  $filters{gradgen} =
+    {
+     callseq => ['image', 'xo', 'yo', 'colors', 'dist'],
+     defaults => { dist => 0 },
+     callsub => 
+     sub { 
+       my %hsh=@_;
+       my @colors = @{$hsh{colors}};
+       $_ = _color($_)
+         for @colors;
+       i_gradgen($hsh{image}, $hsh{xo}, $hsh{yo}, \@colors, $hsh{dist});
+     }
+    };
 
   $filters{nearest_color} ={
 			    callseq => ['image', 'xo', 'yo', 'colors', 'dist'],
@@ -346,9 +354,19 @@ BEGIN {
      callsub  => 
      sub {
        my %hsh = @_;
+
+       # make sure the segments are specified with colors
+       my @segments;
+       for my $segment (@{$hsh{segments}}) {
+         my @new_segment = @$segment;
+         
+         $_ = _color($_) or die $Imager::ERRSTR."\n" for @new_segment[3,4];
+         push @segments, \@new_segment;
+       }
+
        i_fountain($hsh{image}, $hsh{xa}, $hsh{ya}, $hsh{xb}, $hsh{yb},
                   $hsh{ftype}, $hsh{repeat}, $hsh{combine}, $hsh{super_sample},
-                  $hsh{ssample_param}, $hsh{segments});
+                  $hsh{ssample_param}, \@segments);
      },
     };
   $filters{unsharpmask} =
@@ -542,6 +560,12 @@ sub copy {
   my $self = shift;
   unless ($self->{IMG}) { $self->{ERRSTR}='empty input image'; return undef; }
 
+  unless (defined wantarray) {
+    my @caller = caller;
+    warn "copy() called in void context - copy() returns the copied image at $caller[1] line $caller[2]\n";
+    return;
+  }
+
   my $newcopy=Imager->new();
   $newcopy->{IMG}=i_img_new();
   i_copy($newcopy->{IMG},$self->{IMG});
@@ -573,8 +597,13 @@ sub paste {
 sub crop {
   my $self=shift;
   unless ($self->{IMG}) { $self->{ERRSTR}='empty input image'; return undef; }
-
   
+  unless (defined wantarray) {
+    my @caller = caller;
+    warn "crop() called in void context - crop() returns the cropped image at $caller[1] line $caller[2]\n";
+    return;
+  }
+
   my %hsh=@_;
 
   my ($w, $h, $l, $r, $b, $t) =
@@ -745,6 +774,12 @@ sub to_paletted {
     $opts = shift;
   }
 
+  unless (defined wantarray) {
+    my @caller = caller;
+    warn "to_paletted() called in void context - to_paletted() returns the converted image at $caller[1] line $caller[2]\n";
+    return;
+  }
+
   my $result = Imager->new;
   $result->{IMG} = i_img_to_pal($self->{IMG}, $opts);
 
@@ -763,6 +798,12 @@ sub to_paletted {
 sub to_rgb8 {
   my $self = shift;
   my $result;
+
+  unless (defined wantarray) {
+    my @caller = caller;
+    warn "to_rgb8() called in void context - to_rgb8() returns the cropped image at $caller[1] line $caller[2]\n";
+    return;
+  }
 
   if ($self->{IMG}) {
     $result = Imager->new;
@@ -1081,21 +1122,20 @@ sub read {
     undef($self->{IMG});
   }
 
-  # FIXME: Find the format here if not specified
-  # yes the code isn't here yet - next week maybe?
-  # Next week?  Are you high or something?  That comment
-  # has been there for half a year dude.
-  # Look, i just work here, ok?
-
   my ($IO, $fh) = $self->_get_reader_io(\%input) or return;
 
   unless ($input{'type'}) {
-		$input{'type'} = i_test_format_probe($IO, -1);
-	}
+    $input{'type'} = i_test_format_probe($IO, -1);
+  }
 
   unless ($input{'type'}) {
 	  $self->_set_error('type parameter missing and not possible to guess from extension'); 
     return undef;
+  }
+
+  unless ($formats{$input{'type'}}) {
+    $self->_set_error("format '$input{'type'}' not supported");
+    return;
   }
 
   # Setup data source
@@ -1583,7 +1623,14 @@ sub filter {
     }
   }
 
-  &{$filters{$input{'type'}}{callsub}}(%hsh);
+  eval {
+    local $SIG{__DIE__}; # we don't want this processed by confess, etc
+    &{$filters{$input{'type'}}{callsub}}(%hsh);
+  };
+  if ($@) {
+    chomp($self->{ERRSTR} = $@);
+    return;
+  }
 
   my @b=keys %hsh;
 
@@ -1637,6 +1684,12 @@ sub scaleX {
   my $self=shift;
   my %opts=(scalefactor=>0.5,@_);
 
+  unless (defined wantarray) {
+    my @caller = caller;
+    warn "scaleX() called in void context - scaleX() returns the scaled image at $caller[1] line $caller[2]\n";
+    return;
+  }
+
   unless ($self->{IMG}) { $self->{ERRSTR}='empty input image'; return undef; }
 
   my $img = Imager->new();
@@ -1655,6 +1708,12 @@ sub scaleX {
 sub scaleY {
   my $self=shift;
   my %opts=(scalefactor=>0.5,@_);
+
+  unless (defined wantarray) {
+    my @caller = caller;
+    warn "scaleY() called in void context - scaleY() returns the scaled image at $caller[1] line $caller[2]\n";
+    return;
+  }
 
   unless ($self->{IMG}) { $self->{ERRSTR}='empty input image'; return undef; }
 
@@ -1861,6 +1920,13 @@ sub flip {
 sub rotate {
   my $self = shift;
   my %opts = @_;
+
+  unless (defined wantarray) {
+    my @caller = caller;
+    warn "rotate() called in void context - rotate() returns the rotated image at $caller[1] line $caller[2]\n";
+    return;
+  }
+
   if (defined $opts{right}) {
     my $degrees = $opts{right};
     if ($degrees < 0) {
@@ -1912,6 +1978,12 @@ sub rotate {
 sub matrix_transform {
   my $self = shift;
   my %opts = @_;
+
+  unless (defined wantarray) {
+    my @caller = caller;
+    warn "copy() called in void context - copy() returns the copied image at $caller[1] line $caller[2]\n";
+    return;
+  }
 
   if ($opts{matrix}) {
     my $xsize = $opts{xsize} || $self->getwidth;
@@ -2327,6 +2399,12 @@ sub convert {
   my ($self, %opts) = @_;
   my $matrix;
 
+  unless (defined wantarray) {
+    my @caller = caller;
+    warn "convert() called in void context - convert() returns the converted image at $caller[1] line $caller[2]\n";
+    return;
+  }
+
   # the user can either specify a matrix or preset
   # the matrix overrides the preset
   if (!exists($opts{matrix})) {
@@ -2694,8 +2772,8 @@ Imager - Perl extension for Generating 24 bit Images
   my $format;
 
   my $img = Imager->new();
-  # see Imager::Files for information on the open() method
-  $img->open(file=>$file) or die $img->errstr();
+  # see Imager::Files for information on the read() method
+  $img->read(file=>$file) or die $img->errstr();
 
   $file =~ s/\.[^.]*$//;
 
@@ -2736,6 +2814,10 @@ render text and more.
 
 Imager - This document - Synopsis Example, Table of Contents and
 Overview.
+
+=item *
+
+L<Imager::Cookbook> - how to do various things with Imager.
 
 =item *
 
@@ -2803,7 +2885,7 @@ An Image object is created with C<$img = Imager-E<gt>new()>.
 Examples:
 
   $img=Imager->new();                         # create empty image
-  $img->open(file=>'lena.png',type=>'png') or # read image from file
+  $img->read(file=>'lena.png',type=>'png') or # read image from file
      die $img->errstr();                      # give an explanation
                                               # if something failed
 
@@ -2891,15 +2973,18 @@ matrix_transform() - L<Imager::Engines/"Matrix Transformations">
 
 new() - L<Imager::ImageTypes>
 
+open() - L<Imager::Files> - an alias for read()
+
 paste() - L<Imager::Transformations/paste> - draw an image onto an image
 
 polygon() - L<Imager::Draw/polygon>
 
 polyline() - L<Imager::Draw/polyline>
 
-read() - L<Imager::Files>
+read() - L<Imager::Files> - read a single image from an image file
 
-read_multi() - L<Imager::Files>
+read_multi() - L<Imager::Files> - read multiple images from an image
+file
 
 rotate() - L<Imager::Transformations/rotate>
 
@@ -2907,6 +2992,10 @@ rubthrough() - L<Imager::Transformations/rubthrough> - draw an image onto an
 image and use the alpha channel
 
 scale() - L<Imager::Transformations/scale>
+
+scaleX() - L<Imager::Transformations/scaleX>
+
+scaleY() - L<Imager::Transformations/scaleY>
 
 setcolors() - L<Imager::ImageTypes> - set palette colors in a paletted image
 
@@ -2929,9 +3018,136 @@ type() -  L<Imager::ImageTypes> - type of image (direct vs paletted)
 virtual() - L<Imager::ImageTypes> - whether the image has it's own
 data
 
-write() - L<Imager::Files>
+write() - L<Imager::Files> - write an image to a file
 
-write_multi() - L<Imager::Files>
+write_multi() - L<Imager::Files> - write multiple image to an image
+file.
+
+=head1 CONCEPT INDEX
+
+animated GIF - L<Imager::File/"Writing an animated GIF">
+
+aspect ratio - L<Imager::ImageTypes/i_xres>,
+L<Imager::ImageTypes/i_yres>, L<Imager::ImageTypes/i_aspect_only>
+
+blur - L<Imager::Filters/guassian>, L<Imager::Filters/conv>
+
+boxes, drawing - L<Imager::Draw/box>
+
+color - L<Imager::Color>
+
+color names - L<Imager::Color>, L<Imager::Color::Table>
+
+combine modes - L<Imager::Fill/combine>
+
+contrast - L<Imager::Filter/contrast>, L<Imager::Filter/autolevels>
+
+convolution - L<Imager::Filter/conv>
+
+cropping - L<Imager::Transformations/crop>
+
+dpi - L<Imager::ImageTypes/i_xres>
+
+drawing boxes - L<Imager::Draw/box>
+
+drawing lines - L<Imager::Draw/line>
+
+drawing text - L<Imager::Font/string>
+
+error message - L<Imager/"Basic Overview">
+
+files, font - L<Imager::Font>
+
+files, image - L<Imager::Files>
+
+filling, types of fill - L<Imager::Fill>
+
+filling, boxes - L<Imager::Draw/box>
+
+filling, flood fill - L<Imager::Draw/flood_fill>
+
+flood fill - L<Imager::Draw/flood_fill>
+
+fonts - L<Imager::Font>
+
+fonts, drawing with - L<Imager::Font/string>, L<Imager::Font/align>,
+L<Imager::Font::Wrap>
+
+fonts, metrics - L<Imager::Font/bounding_box>, L<Imager::Font::BBox>
+
+fonts, multiple master - L<Imager::Font/"MULTIPLE MASTER FONTS">
+
+fountain fill - L<Imager::Fill/"Fountain fills">,
+L<Imager::Filters/fountain>, L<Imager::Fountain>,
+L<Imager::Filters/gradgen>
+
+GIF files - L<Imager::Files/"GIF">
+
+GIF files, animated - L<Imager::File/"Writing an animated GIF">
+
+gradient fill - L<Imager::Fill/"Fountain fills">,
+L<Imager::Filters/fountain>, L<Imager::Fountain>,
+L<Imager::Filters/gradgen>
+
+guassian blur - L<Imager::Filter/guassian>
+
+hatch fills - L<Imager::Fill/"Hatched fills">
+
+invert image - L<Imager::Filter/hardinvert>
+
+JPEG - L<Imager::Files/"JPEG">
+
+lines, drawing - L<Imager::Draw/line>
+
+matrix - L<Imager::Matrix2d>, 
+L<Imager::Transformations/"Matrix Transformations">,
+L<Imager::Font/transform>
+
+metadata, image - L<Imager::ImageTypes/"Tags">
+
+mosaic - L<Imager::Filter/mosaic>
+
+noise, filter - L<Imager::Filter/noise>
+
+noise, rendered - L<Imager::Filter/turbnoise>,
+L<Imager::Filter/radnoise>
+
+posterize - L<Imager::Filter/postlevels>
+
+png files - L<Imager::Files>, L<Imager::Files/"PNG">
+
+pnm - L<Imager::Files/"PNM (Portable aNy Map">
+
+rectangles, drawing - L<Imager::Draw/box>
+
+resizing an image - L<Imager::Transformations/scale>, 
+L<Imager::Transformations/crop>
+
+saving an image - L<Imager::Files>
+
+scaling - L<Imager::Transformations/scale>
+
+sharpen - L<Imager::Filters/unsharpmask>, L<Imager::Filters/conv>
+
+size, image - L<Imager::ImageTypes/getwidth>,
+L<Imager::ImageTypes/getheight>
+
+size, text - L<Imager::Font/bounding_box>
+
+text, drawing - L<Imager::Font/string>, L<Imager::Font/align>,
+L<Imager::Font::Wrap>
+
+text, wrapping text in an area - L<Imager::Font::Wrap>
+
+text, measuring - L<Imager::Font/bounding_box>, L<Imager::Font::BBox>
+
+tiles, color - L<Imager::Filter/mosaic>
+
+unsharp mask - L<Imager::Filter/unsharpmask>
+
+watermark - L<Imager::Filter/watermark>
+
+writing an image - L<Imager::Files>
 
 =head1 SUPPORT
 
@@ -2953,11 +3169,7 @@ If you're into IRC, you can typically find the developers in #Imager
 on irc.perl.org.  As with any IRC channel, the participants could be
 occupied or asleep, so please be patient.
 
-You can report bugs either by sending email to:
-
-  bug-Imager@rt.cpan.org
-
-or by pointing your browser at:
+You can report bugs by pointing your browser at:
 
   https://rt.cpan.org/NoAuth/ReportBug.html?Queue=Imager
 

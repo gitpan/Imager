@@ -104,10 +104,26 @@ sub new {
       }
     }
 
+    # check that the segments supplied is an array ref
+    unless (ref $hsh{segments} && $hsh{segments} =~ /ARRAY/) {
+      $Imager::ERRSTR =
+        "segments must be an array reference or Imager::Fountain object";
+      return;
+    }
+
+    # make sure the segments are specified with colors
+    my @segments;
+    for my $segment (@{$hsh{segments}}) {
+      my @new_segment = @$segment;
+
+      $_ = _color($_) or return for @new_segment[3,4];
+      push @segments, \@new_segment;
+    }
+
     $self->{fill} =
       Imager::i_new_fill_fount($hsh{xa}, $hsh{ya}, $hsh{xb}, $hsh{yb},
                   $hsh{ftype}, $hsh{repeat}, $hsh{combine}, $hsh{super_sample},
-                  $hsh{ssample_param}, $hsh{segments});
+                  $hsh{ssample_param}, \@segments);
   }
   elsif (defined $hsh{image}) {
     $hsh{xoff} ||= 0;
@@ -165,7 +181,7 @@ solid
 
 hatch
 
-=item
+=item *
 
 fountain (similar to gradients in paint software)
 
@@ -218,11 +234,13 @@ absolute value taken this is alpha combined with the target.
 
 =item lighten
 
-The higher value is taken from each channel of the fill and target pixels, which is then alpha combined with the target.
+The higher value is taken from each channel of the fill and target
+pixels, which is then alpha combined with the target.
 
 =item darken
 
-The higher value is taken from each channel of the fill and target pixels, which is then alpha combined with the target.
+The higher value is taken from each channel of the fill and target
+pixels, which is then alpha combined with the target.
 
 =item hue
 

@@ -140,7 +140,7 @@ Inverts the pixel values by the amount specified.
 =cut
 */
 
-#ifdef _MSC_VER
+#ifdef WIN32
 /* random() is non-ASCII, even if it is better than rand() */
 #define random() rand()
 #endif
@@ -1216,7 +1216,6 @@ i_diff_image(i_img *im1, i_img *im2, int mindiff) {
   i_img *out;
   int outchans, diffchans;
   int xsize, ysize;
-  i_img temp;
 
   i_clear_error();
   if (im1->channels != im2->channels) {

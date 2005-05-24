@@ -328,8 +328,10 @@ i_t1_bbox(int fontnum,float points,char *str,int len,int cords[6], int utf8,char
   cords[BBOX_ASCENT]=((float)bbox.ury*points)/1000;
 
   cords[BBOX_ADVANCE_WIDTH] = ((float)advance * points)/1000;
+  cords[BBOX_RIGHT_BEARING] = 
+    cords[BBOX_ADVANCE_WIDTH] - cords[BBOX_POS_WIDTH];
 
-  return BBOX_ADVANCE_WIDTH+1;
+  return BBOX_RIGHT_BEARING+1;
 }
 
 
@@ -488,7 +490,6 @@ i_t1_has_chars(int font_num, const char *text, int len, int utf8,
 
   while (len) {
     unsigned long c;
-    int index;
     if (utf8) {
       c = i_utf8_advance(&text, &len);
       if (c == ~0UL) {
@@ -1247,7 +1248,6 @@ int
 i_tt_has_chars(TT_Fonthandle *handle, char const *text, int len, int utf8,
                char *out) {
   int count = 0;
-  int inst;
   mm_log((1, "i_tt_has_chars(handle %p, text %p, len %d, utf8 %d)\n", 
           handle, text, len, utf8));
 
@@ -1381,7 +1381,6 @@ i_tt_render_all_glyphs( TT_Fonthandle *handle, int inst, TT_Raster_Map *bit,
                         TT_Raster_Map *small_bit, int cords[6], 
                         char const* txt, int len, int smooth, int utf8 ) {
   unsigned long j;
-  int i;
   TT_F26Dot6 x,y;
   
   mm_log((1,"i_tt_render_all_glyphs( handle 0x%X, inst %d, bit 0x%X, small_bit 0x%X, txt '%.*s', len %d, smooth %d, utf8 %d)\n",
@@ -1563,8 +1562,6 @@ i_tt_rasterize( TT_Fonthandle *handle, TT_Raster_Map *bit, int cords[6], float p
     return 0;
   }
 
-  /*  ascent = ( handle->properties.horizontal->Ascender  * handle->instanceh[inst].imetrics.y_ppem ) / handle->properties.header->Units_Per_EM; */
-  
   if ( smooth ) i_tt_done_raster_map( &small_bit );
   return 1;
 }
@@ -1594,19 +1591,20 @@ Interface to text rendering into a single channel in an image
 */
 
 undef_int
-i_tt_cp( TT_Fonthandle *handle, i_img *im, int xb, int yb, int channel, float points, char const* txt, int len, int smooth, int utf8 ) {
+i_tt_cp( TT_Fonthandle *handle, i_img *im, int xb, int yb, int channel, float points, char const* txt, int len, int smooth, int utf8, int align ) {
 
   int cords[BOUNDING_BOX_COUNT];
-  int ascent, st_offset;
+  int ascent, st_offset, y;
   TT_Raster_Map bit;
   
   i_clear_error();
   if (! i_tt_rasterize( handle, &bit, cords, points, txt, len, smooth, utf8 ) ) return 0;
   
-  ascent=cords[5];
-  st_offset=cords[0];
+  ascent=cords[BBOX_ASCENT];
+  st_offset=cords[BBOX_NEG_WIDTH];
+  y = align ? yb-ascent : yb;
 
-  i_tt_dump_raster_map_channel( im, &bit, xb-st_offset , yb-ascent, channel, smooth );
+  i_tt_dump_raster_map_channel( im, &bit, xb-st_offset , y, channel, smooth );
   i_tt_done_raster_map( &bit );
 
   return 1;
@@ -1631,19 +1629,20 @@ Interface to text rendering in a single color onto an image
 */
 
 undef_int
-i_tt_text( TT_Fonthandle *handle, i_img *im, int xb, int yb, i_color *cl, float points, char const* txt, int len, int smooth, int utf8) {
+i_tt_text( TT_Fonthandle *handle, i_img *im, int xb, int yb, i_color *cl, float points, char const* txt, int len, int smooth, int utf8, int align) {
   int cords[BOUNDING_BOX_COUNT];
-  int ascent, st_offset;
+  int ascent, st_offset, y;
   TT_Raster_Map bit;
 
   i_clear_error();
   
   if (! i_tt_rasterize( handle, &bit, cords, points, txt, len, smooth, utf8 ) ) return 0;
   
-  ascent=cords[5];
-  st_offset=cords[0];
+  ascent=cords[BBOX_ASCENT];
+  st_offset=cords[BBOX_NEG_WIDTH];
+  y = align ? yb-ascent : yb;
 
-  i_tt_dump_raster_map2( im, &bit, xb+st_offset, yb-ascent, cl, smooth ); 
+  i_tt_dump_raster_map2( im, &bit, xb+st_offset, y, cl, smooth ); 
   i_tt_done_raster_map( &bit );
 
   return 1;
@@ -1667,7 +1666,7 @@ Function to get texts bounding boxes given the instance of the font (internal)
 static
 undef_int
 i_tt_bbox_inst( TT_Fonthandle *handle, int inst ,const char *txt, int len, int cords[BOUNDING_BOX_COUNT], int utf8 ) {
-  int i, upm, casc, cdesc, first;
+  int upm, casc, cdesc, first;
   
   int start    = 0;
   int width    = 0;
@@ -1720,7 +1719,7 @@ i_tt_bbox_inst( TT_Fonthandle *handle, int inst ,const char *txt, int len, int c
 	descent  = (gm->bbox.yMin-63) / 64;
 	first = 0;
       }
-      if (i == len-1) {
+      if (!len) { /* if at end of string */
 	/* the right-side bearing - in case the right-side of a 
 	   character goes past the right of the advance width,
 	   as is common for italic fonts
@@ -1729,8 +1728,6 @@ i_tt_bbox_inst( TT_Fonthandle *handle, int inst ,const char *txt, int len, int c
 	  - (gm->bbox.xMax - gm->bbox.xMin);
 	/* fprintf(stderr, "font info last: %d %d %d %d\n", 
 	   gm->bbox.xMax, gm->bbox.xMin, gm->advance, rightb); */
-	if (rightb > 0)
-	  rightb = 0;
       }
 
       ascent  = (ascent  >  casc ?  ascent : casc );
@@ -1740,13 +1737,16 @@ i_tt_bbox_inst( TT_Fonthandle *handle, int inst ,const char *txt, int len, int c
   
   cords[BBOX_NEG_WIDTH]=start;
   cords[BBOX_GLOBAL_DESCENT]=gdescent;
-  cords[BBOX_POS_WIDTH]=width - rightb / 64;
+  cords[BBOX_POS_WIDTH]=width;
+  if (rightb < 0)
+    cords[BBOX_POS_WIDTH] -= rightb / 64;
   cords[BBOX_GLOBAL_ASCENT]=gascent;
   cords[BBOX_DESCENT]=descent;
   cords[BBOX_ASCENT]=ascent;
   cords[BBOX_ADVANCE_WIDTH] = width;
+  cords[BBOX_RIGHT_BEARING] = rightb / 64;
 
-  return BBOX_ADVANCE_WIDTH + 1;
+  return BBOX_RIGHT_BEARING + 1;
 }
 
 

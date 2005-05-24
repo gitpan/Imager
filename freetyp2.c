@@ -38,6 +38,12 @@ Truetype, Type1 and Windows FNT.
 #include <stdio.h>
 #include <ft2build.h>
 #include FT_FREETYPE_H
+#ifdef FT_MULTIPLE_MASTERS_H
+#ifndef T1_CONFIG_OPTION_NO_MM_SUPPORT
+#define IM_FT2_MM
+#include FT_MULTIPLE_MASTERS_H
+#endif
+#endif
 
 static void ft2_push_message(int code);
 
@@ -74,6 +80,12 @@ struct FT2_Fonthandle {
 
   /* used to adjust so we can align the draw point to the top-left */
   double matrix[6];
+
+#ifdef IM_FT2_MM
+  /* Multiple master data if any */
+  int has_mm;
+  FT_Multi_Master mm;
+#endif
 };
 
 /* the following is used to select a "best" encoding */
@@ -114,8 +126,6 @@ i_ft2_new(char *name, int index) {
   FT_Error error;
   FT2_Fonthandle *result;
   FT_Face face;
-  double matrix[6] = { 1, 0, 0,
-                       0, 1, 0 };
   int i, j;
   FT_Encoding encoding;
   int score;
@@ -165,6 +175,27 @@ i_ft2_new(char *name, int index) {
   /*i_ft2_settransform(result, matrix); */
   result->matrix[0] = 1; result->matrix[1] = 0; result->matrix[2] = 0;
   result->matrix[3] = 0; result->matrix[4] = 1; result->matrix[5] = 0;
+
+#ifdef IM_FT2_MM
+ {
+   FT_Multi_Master *mm = &result->mm;
+   int i;
+
+   if ((face->face_flags & FT_FACE_FLAG_MULTIPLE_MASTERS) != 0 
+       && (error = FT_Get_Multi_Master(face, mm)) == 0) {
+     mm_log((2, "MM Font, %d axes, %d designs\n", mm->num_axis, mm->num_designs));
+     for (i = 0; i < mm->num_axis; ++i) {
+       mm_log((2, "  axis %d name %s range %ld - %ld\n", i, mm->axis[i].name,
+               (long)(mm->axis[i].minimum), (long)(mm->axis[i].maximum)));
+     }
+     result->has_mm = 1;
+   }
+   else {
+     mm_log((2, "No multiple masters\n"));
+     result->has_mm = 0;
+   }
+ }
+#endif
 
   return result;
 }
@@ -357,21 +388,25 @@ i_ft2_bbox(FT2_Fonthandle *handle, double cheight, double cwidth,
       /* last character 
        handle the case where the right the of the character overlaps the 
        right*/
-      rightb = gm->horiAdvance - gm->horiBearingX - gm->width;
-      if (rightb > 0)
-        rightb = 0;
+      rightb = (gm->horiAdvance - gm->horiBearingX - gm->width)/64;
+      /*if (rightb > 0)
+        rightb = 0;*/
     }
   }
 
   bbox[BBOX_NEG_WIDTH] = start;
   bbox[BBOX_GLOBAL_DESCENT] = handle->face->size->metrics.descender / 64;
-  bbox[BBOX_POS_WIDTH] = width - rightb;
+  bbox[BBOX_POS_WIDTH] = width;
+  if (rightb < 0)
+    bbox[BBOX_POS_WIDTH] -= rightb;
   bbox[BBOX_GLOBAL_ASCENT] = handle->face->size->metrics.ascender / 64;
   bbox[BBOX_DESCENT] = descent;
   bbox[BBOX_ASCENT] = ascent;
   bbox[BBOX_ADVANCE_WIDTH] = width;
+  bbox[BBOX_RIGHT_BEARING] = rightb;
+  mm_log((1, " bbox=> negw=%d glob_desc=%d pos_wid=%d glob_asc=%d desc=%d asc=%d adv_width=%d rightb=%d\n", bbox[0], bbox[1], bbox[2], bbox[3], bbox[4], bbox[5], bbox[6], bbox[7]));
 
-  return BBOX_ADVANCE_WIDTH + 1;
+  return BBOX_RIGHT_BEARING + 1;
 }
 
 /*
@@ -395,7 +430,6 @@ too much hard work.
 void ft2_transform_box(FT2_Fonthandle *handle, int bbox[4]) {
   double work[8];
   double *matrix = handle->matrix;
-  int i;
   
   work[0] = matrix[0] * bbox[0] + matrix[1] * bbox[1];
   work[1] = matrix[3] * bbox[0] + matrix[4] * bbox[1];
@@ -457,13 +491,11 @@ i_ft2_bbox_r(FT2_Fonthandle *handle, double cheight, double cwidth,
   int ascent = 0, descent = 0;
   int glyph_ascent, glyph_descent;
   FT_Glyph_Metrics *gm;
-  int start = 0;
   int work[4];
   int bounds[4];
   double x = 0, y = 0;
   int i;
   FT_GlyphSlot slot;
-  int advx, advy;
   int loadFlags = FT_LOAD_DEFAULT;
 
   if (vlayout)
@@ -738,6 +770,7 @@ Returns non-zero on success.
 =cut
 */
 
+int
 i_ft2_cp(FT2_Fonthandle *handle, i_img *im, int tx, int ty, int channel,
          double cheight, double cwidth, char const *text, int len, int align,
          int aa, int vlayout, int utf8) {
@@ -823,10 +856,10 @@ int i_ft2_has_chars(FT2_Fonthandle *handle, char const *text, int len,
 /* uses a method described in fterrors.h to build an error translation
    function
 */
-#undef __FT_ERRORS_H__
+#undef __FTERRORS_H__
 #define FT_ERRORDEF(e, v, s) case v: i_push_error(code, s); return;
-#define FT_ERROR_START_LIST
-#define FT_ERROR_END_LIST
+#define FT_ERROR_START_LIST 
+#define FT_ERROR_END_LIST 
 
 /*
 =back
@@ -976,7 +1009,7 @@ i_ft2_glyph_name(FT2_Fonthandle *handle, unsigned long ch, char *name_buf,
     if (error) {
       ft2_push_message(error);
       *name_buf = '\0';
-      return;
+      return 0;
     }
     if (*name_buf) {
       return strlen(name_buf) + 1;
@@ -1008,6 +1041,77 @@ i_ft2_face_has_glyph_names(FT2_Fonthandle *handle) {
   return 0;
 #else
   return FT_Has_PS_Glyph_Names(handle->face);
+#endif
+}
+
+int
+i_ft2_is_multiple_master(FT2_Fonthandle *handle) {
+  i_clear_error();
+#ifdef IM_FT2_MM
+  return handle->has_mm;
+#else
+  return 0;
+#endif
+}
+
+int
+i_ft2_get_multiple_masters(FT2_Fonthandle *handle, i_font_mm *mm) {
+#ifdef IM_FT2_MM
+  int i;
+  FT_Multi_Master *mms = &handle->mm;
+
+  i_clear_error();
+  if (!handle->has_mm) {
+    i_push_error(0, "Font has no multiple masters");
+    return 0;
+  }
+  mm->num_axis = mms->num_axis;
+  mm->num_designs = mms->num_designs;
+  for (i = 0; i < mms->num_axis; ++i) {
+    mm->axis[i].name = mms->axis[i].name;
+    mm->axis[i].minimum = mms->axis[i].minimum;
+    mm->axis[i].maximum = mms->axis[i].maximum;
+  }
+
+  return 1;
+#else
+  i_clear_error();
+  i_push_error(0, "Multiple master functions unavailable");
+  return 0;
+#endif
+}
+
+int
+i_ft2_set_mm_coords(FT2_Fonthandle *handle, int coord_count, long *coords) {
+#ifdef IM_FT2_MM
+  int i;
+  FT_Long ftcoords[T1_MAX_MM_AXIS];
+  FT_Error error;
+
+  i_clear_error();
+  if (!handle->has_mm) {
+    i_push_error(0, "Font has no multiple masters");
+    return 0;
+  }
+  if (coord_count != handle->mm.num_axis) {
+    i_push_error(0, "Number of MM coords doesn't match MM axis count");
+    return 0;
+  }
+  for (i = 0; i < coord_count; ++i)
+    ftcoords[i] = coords[i];
+
+  error = FT_Set_MM_Design_Coordinates(handle->face, coord_count, ftcoords);
+  if (error) {
+    ft2_push_message(error);
+    return 0;
+  }
+  
+  return 1;
+#else 
+  i_clear_error();
+  i_push_error(0, "Multiple master functions unavailable");
+
+  return 0;
 #endif
 }
 

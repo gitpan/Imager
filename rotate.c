@@ -185,7 +185,6 @@ i_img *i_matrix_transform_bg(i_img *src, int xsize, int ysize, double *matrix,
   int ch;
   int i, j;
   double sx, sy, sz;
-  double out[3];
 
   if (src->type == i_direct_type) {
     if (src->bits == i_8_bits) {
@@ -420,7 +419,7 @@ i_img *i_matrix_transform(i_img *src, int xsize, int ysize, double *matrix) {
   return i_matrix_transform_bg(src, xsize, ysize, matrix, NULL, NULL);
 }
 
-
+static void
 i_matrix_mult(double *dest, double *left, double *right) {
   int i, j, k;
   double accum;

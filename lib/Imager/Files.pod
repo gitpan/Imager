@@ -79,6 +79,8 @@ When you read an image, Imager may set some tags, possibly including
 information about the spatial resolution, textual information, and
 animation information.  See L<Imager::ImageTypes/Tags> for specifics.
 
+The open() method is a historical alias for the read() method.
+
 =head2 Input and output
 
 When reading or writing you can specify one of a variety of sources or
@@ -430,6 +432,13 @@ The C<i_xres> and C<i_yres> tags are expressed in pixels per inch no
 matter tha value of this tag, they will be converted to/from the value
 stored in the TIFF file.
 
+=item tiff_resolutionunit_name
+
+This is set when reading a TIFF file to the name of the unit given by
+C<tiff_resolutionunit>.  Possible results include C<inch>,
+C<centimeter>, C<none> (the C<i_aspect_only> tag is also set reading
+these files) or C<unknown>.
+
 =item tiff_documentname
 
 =item tiff_imagedescription
@@ -546,9 +555,7 @@ Tags:
 
 =back
 
-
 =head2 RAW
-
 
 When reading raw images you need to supply the width and height of the
 image in the xsize and ysize options:
@@ -575,6 +582,10 @@ values for the first line and so on, you can use the interleave option:
 
   $img->read(file=>'foo.raw', xsize=100, ysize=>100, interleave=>1)
     or die "Cannot read raw image\n";
+
+=head2 PNG
+
+There are no PNG specific tags.
 
 =head1 EXAMPLES
 

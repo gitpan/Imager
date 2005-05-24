@@ -1,3 +1,4 @@
+#define _WIN32_WINNT 0x500
 #include "image.h"
 #define STRICT
 #include <windows.h>
@@ -50,6 +51,9 @@ int i_wf_bbox(char *face, int size, char *text, int length, int *bbox) {
   GLYPHMETRICS gm;
   int i;
   MAT2 mat;
+  int ascent, descent, max_ascent = -size, min_descent = size;
+
+  mm_log((1, "i_wf_bbox(face %s, size %d, text %p, length %d, bbox %p)\n", face, size, text, length, bbox));
 
   set_logfont(face, size, &lf);
   font = CreateFontIndirect(&lf);
@@ -58,7 +62,35 @@ int i_wf_bbox(char *face, int size, char *text, int length, int *bbox) {
   dc = GetDC(NULL);
   oldFont = (HFONT)SelectObject(dc, font);
 
-#if 1
+  {
+    char facename[100];
+    if (GetTextFace(dc, sizeof(facename), facename)) {
+      mm_log((1, "  face: %s\n", facename));
+    }
+  }
+
+  for (i = 0; i < length; ++i) {
+    unsigned char c = text[i];
+    unsigned char cp = c > '~' ? '.' : c < ' ' ? '.' : c;
+    
+    memset(&mat, 0, sizeof(mat));
+    mat.eM11.value = 1;
+    mat.eM22.value = 1;
+    if (GetGlyphOutline(dc, c, GGO_METRICS, &gm, 0, NULL, &mat) != GDI_ERROR) {
+      mm_log((2, "  glyph '%c' (%02x): bbx (%u,%u) org (%d,%d) inc(%d,%d)\n",
+	      cp, c, gm.gmBlackBoxX, gm.gmBlackBoxY, gm.gmptGlyphOrigin.x,
+		gm.gmptGlyphOrigin.y, gm.gmCellIncX, gm.gmCellIncY));
+
+      ascent = gm.gmptGlyphOrigin.y;
+      descent = ascent - gm.gmBlackBoxY;
+      if (ascent > max_ascent) max_ascent = ascent;
+      if (descent < min_descent) min_descent = descent;
+    }
+    else {
+	mm_log((1, "  glyph '%c' (%02x): error %d\n", cp, c, GetLastError()));
+    }
+  }
+
   if (!GetTextExtentPoint32(dc, text, length, &sz)
       || !GetTextMetrics(dc, &tm)) {
     SelectObject(dc, oldFont);
@@ -66,50 +98,37 @@ int i_wf_bbox(char *face, int size, char *text, int length, int *bbox) {
     DeleteObject(font);
     return 0;
   }
-  /* if there's a way to get a characters ascent/descent reliably, I can't
-     see it.  GetGlyphOutline() seems to return the same size for
-     all characters.
-  */
-  bbox[1] = bbox[4] = tm.tmDescent;
-  bbox[2] = sz.cx;
-  bbox[3] = bbox[5] = tm.tmAscent;
+  bbox[BBOX_GLOBAL_DESCENT] = tm.tmDescent;
+  bbox[BBOX_DESCENT] = min_descent == size ? tm.tmDescent : min_descent;
+  bbox[BBOX_POS_WIDTH] = sz.cx;
+  bbox[BBOX_ADVANCE_WIDTH] = sz.cx;
+  bbox[BBOX_GLOBAL_ASCENT] = tm.tmAscent;
+  bbox[BBOX_ASCENT] = max_ascent == -size ? tm.tmAscent : max_ascent;
   
-  if (GetCharABCWidths(dc, text[0], text[0], &first)
+  if (length
+      && GetCharABCWidths(dc, text[0], text[0], &first)
       && GetCharABCWidths(dc, text[length-1], text[length-1], &last)) {
-    bbox[0] = first.abcA;
+    mm_log((1, "first: %d A: %d  B: %d  C: %d\n", text[0],
+	    first.abcA, first.abcB, first.abcC));
+    mm_log((1, "last: %d A: %d  B: %d  C: %d\n", text[length-1],
+	    last.abcA, last.abcB, last.abcC));
+    bbox[BBOX_NEG_WIDTH] = first.abcA;
+    bbox[BBOX_RIGHT_BEARING] = last.abcC;
     if (last.abcC < 0)
-      bbox[2] -= last.abcC;
+      bbox[BBOX_POS_WIDTH] -= last.abcC;
   }
   else {
-    bbox[0] = 0;
+    bbox[BBOX_NEG_WIDTH] = 0;
+    bbox[BBOX_RIGHT_BEARING] = 0;
   }
-#else
-  for (i = 0; i < length; ++i) {
-    memset(&gm, 0, sizeof(gm));
-    memset(&mat, 0, sizeof(mat));
-    mat.eM11.value = 1;
-    mat.eM22.value = 1;
-    if (GetGlyphOutline(dc, GGO_METRICS, text[i], &gm, 0, NULL, &mat) != GDI_ERROR) {
-      printf("%02X: black (%d, %d) origin (%d, %d) cell(%d, %d)\n",
-	     text[i], gm.gmBlackBoxX, gm.gmBlackBoxY, gm.gmptGlyphOrigin.x, 
-	     gm.gmptGlyphOrigin.y, gm.gmCellIncX, gm.gmCellIncY);
-      printf("  : mat [ %-8f  %-8f ]\n", fixed(mat.eM11), fixed(mat.eM12));
-      printf("        [ %-8f  %-8f ]\n", fixed(mat.eM21), fixed(mat.eM22));
-    }
-    else {
-      printf("Could not get metrics for '\\x%02X'\n", text[i]);
-    }
-    if (GetCharABCWidths(dc, text[i], text[i], &first)) {
-      printf("%02X: %d %d %d\n", text[i], first.abcA, first.abcB, first.abcC);
-    }
-  }
-#endif
 
   SelectObject(dc, oldFont);
   ReleaseDC(NULL, dc);
   DeleteObject(font);
 
-  return 6;
+  mm_log((1, " bbox=> negw=%d glob_desc=%d pos_wid=%d glob_asc=%d desc=%d asc=%d adv_width=%d rightb=%d\n", bbox[0], bbox[1], bbox[2], bbox[3], bbox[4], bbox[5], bbox[6], bbox[7]));
+
+  return BBOX_RIGHT_BEARING + 1;
 }
 
 /*
@@ -139,8 +158,15 @@ i_wf_text(char *face, i_img *im, int tx, int ty, i_color *cl, int size,
   line_width = sz.cx * 3;
   line_width = (line_width + 3) / 4 * 4;
   top = ty;
-  if (align)
+  if (align) {
     top -= tm.tmAscent;
+  }
+  else {
+    int bbox[BOUNDING_BOX_COUNT];
+
+    i_wf_bbox(face, size, text, len, bbox);
+    top -= tm.tmAscent - bbox[BBOX_ASCENT];
+  }
 
   for (y = 0; y < sz.cy; ++y) {
     for (x = 0; x < sz.cx; ++x) {
@@ -149,7 +175,7 @@ i_wf_text(char *face, i_img *im, int tx, int ty, i_color *cl, int size,
       i_gpix(im, tx+x, top+sz.cy-y-1, &pel);
       for (ch = 0; ch < im->channels; ++ch) {
 	pel.channel[ch] = 
-	  ((255-scale) * pel.channel[ch] + scale*cl->channel[ch]) / 255.0;
+	  ((255-scale) * pel.channel[ch] + scale*cl->channel[ch]) / 255;
       }
       i_ppix(im, tx+x, top+sz.cy-y-1, &pel);
     }
@@ -176,7 +202,6 @@ i_wf_cp(char *face, i_img *im, int tx, int ty, int channel, int size,
   SIZE sz;
   int line_width;
   int x, y;
-  int ch;
   TEXTMETRIC tm;
   int top;
 
@@ -187,8 +212,15 @@ i_wf_cp(char *face, i_img *im, int tx, int ty, int channel, int size,
   line_width = sz.cx * 3;
   line_width = (line_width + 3) / 4 * 4;
   top = ty;
-  if (align)
+  if (align) {
     top -= tm.tmAscent;
+  }
+  else {
+    int bbox[BOUNDING_BOX_COUNT];
+
+    i_wf_bbox(face, size, text, len, bbox);
+    top -= tm.tmAscent - bbox[BBOX_ASCENT];
+  }
 
   for (y = 0; y < sz.cy; ++y) {
     for (x = 0; x < sz.cx; ++x) {
@@ -203,6 +235,28 @@ i_wf_cp(char *face, i_img *im, int tx, int ty, int channel, int size,
   DeleteObject(bm);
 
   return 1;
+}
+
+/*
+=item i_wf_addfont(char const *filename, char const *resource_file)
+
+Adds a TTF font file as usable by the application.
+
+The font is always added as private to the application.
+
+=cut
+ */
+int
+i_wf_addfont(char const *filename) {
+  i_clear_error();
+
+  if (AddFontResourceEx(filename, FR_PRIVATE, 0)) {
+    return 1;
+  }
+  else {
+    i_push_errorf(0, "Could not add resource: %ld", GetLastError());
+    return 0;
+  }
 }
 
 /*
@@ -278,7 +332,7 @@ static LPVOID render_text(char *face, int size, char *text, int length, int aa,
       bmih->biBitCount = 24;
       bmih->biCompression = BI_RGB;
       bmih->biSizeImage = 0;
-      bmih->biXPelsPerMeter = 72 / 2.54 * 100;
+      bmih->biXPelsPerMeter = (LONG)(72 / 2.54 * 100);
       bmih->biYPelsPerMeter = bmih->biXPelsPerMeter;
       bmih->biClrUsed = 0;
       bmih->biClrImportant = 0;

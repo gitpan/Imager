@@ -2,9 +2,8 @@
 use ExtUtils::MakeMaker;
 use Cwd;
 use Config;
-
-$lext=$Config{'so'};   # Get extensions of libraries
-$aext=$Config{'_a'};
+use File::Spec;
+use Getopt::Long;
 
 #
 # IM_INCPATH      colon seperated list of paths to extra include paths
@@ -23,31 +22,69 @@ $aext=$Config{'_a'};
 # IM_DFLAGS       Extra flags to pass to the preprocessor
 # IM_SUPPRESS_PROMPT  Suppress the prompt asking about gif support
 
+my $help;
+my @enable;
+my @disable;
+my @incpaths;
+my @libpaths;
+my $noprobe;
+GetOptions("help" => \$help,
+           "enable=s" => \@enable,
+           "disable=s" => \@disable,
+           "incpath=s", \@incpaths,
+           "libpath=s" => \@libpaths,
+           "noprobe" => \$noprobe);
+
+if ($help) {
+  usage();
+}
+
+if (@enable && @disable) {
+  print STDERR "Only --enable or --disable can be used, not both, try --help\n";
+  exit 1;
+}
 
 getenv();     # get environment variables
 init();       # initialize global data
 pathcheck();  # Check if directories exist
+
+if (exists $ENV{IM_ENABLE}) {
+  my %en = map { $_, 1 } split ' ', $ENV{IM_ENABLE};
+  for my $key (keys %formats) {
+    delete $formats{$key} unless $en{$key};
+  }
+}
+if (@enable) {
+  my %en = map { $_ => 1 } map { split /,/ } @enable;
+  for my $key (keys %formats) {
+    delete $formats{$key} unless $en{$key};
+  }
+}
+elsif (@disable) {
+  delete @formats{map { split /,/ } @disable};
+}
+
+my @defines;
 
 # Pick what libraries are used
 if ($MANUAL) {
   manual();
 } else {
   automatic();
-  if (exists $ENV{IM_ENABLE}) {
-    my %en = map { $_, 1 } split ' ', $ENV{IM_ENABLE};
-    for my $key (keys %formats) {
-      delete $formats{$key} unless $en{$key};
-    }
-  }
 }
 
 # Make sure there isn't a clash between the gif libraries.
 gifcheck();
 
-for $frm(values %formats) {
-  $F_DEFINE .= ' -D'.$frm->{def};
+my $lib_cflags = '';
+my $F_LIBS = '';
+my $F_OBJECT = '';
+for my $frmkey (keys %formats) {
+  my $frm = $formats{$frmkey};
+  push @defines, [ $frm->{def}, 1, "$frmkey available" ];
   $F_LIBS   .= ' '  .$frm->{libfiles};
   $F_OBJECT .= ' '  .$frm->{objfiles};
+  $lib_cflags   .= ' '  .$frm->{cflags} if $frm->{cflags};
 }
 
 $F_INC  = join ' ', map "-I$_", map / / ? qq{"$_"} : $_, 
@@ -71,19 +108,18 @@ if (defined $Config{'d_dlsymun'}) { $OSDEF  .= ' -DDLSYMUN'; }
        'NAME'         => 'Imager',
        'VERSION_FROM' => 'Imager.pm',
        'LIBS'         => "$LFLAGS -lm $OSLIBS $F_LIBS",
-       'DEFINE'       => "$F_DEFINE $EXTDEF $OSDEF $CFLAGS",
-       'INC'          => "$DFLAGS $F_INC",
+       'DEFINE'       => "$OSDEF $CFLAGS",
+       'INC'          => "$lib_cflags $DFLAGS $F_INC",
        'OBJECT'       => join(' ', @objs, $F_OBJECT),
-       clean          => { FILES=>'testout' },
+       clean          => { FILES=>'testout meta.tmp' },
       );
 
 if ($ExtUtils::MakeMaker::VERSION > 6.06) {
   $opts{AUTHOR} = 'Tony Cook <tony@imager.perl.org>, Arnar M. Hrafnkelsson';
   $opts{ABSTRACT} = 'Perl extension for Generating 24 bit Images';
 }
-if ($ExtUtils::MakeMaker::VERSION > 6.10) {
-  $opts{NO_META} = 1;
-}
+
+make_imconfig(\@defines);
 
 if ($VERBOSE) { print Dumper(\%opts); }
 mkdir('testout',0777); # since we cannot include it in the archive.
@@ -99,7 +135,37 @@ dyntest.$(MYEXTLIB) : dynfilt/Makefile
 
 lib/Imager/Regops.pm : regmach.h regops.perl
 	$(PERL) regops.perl regmach.h lib/Imager/Regops.pm
+
+imconfig.h: Makefile.PL
+	$(ECHO) "imconfig.h out-of-date with respect to $?"
+	$(PERLRUN) Makefile.PL
+	$(ECHO) "==> Your Makefile has been rebuilt - re-run your make command <=="
 ';
+}
+
+sub MY::metafile {
+  my ($self) = @_;
+
+  my $meta = <<YAML;
+--- #YAML:1.0
+name: Imager
+version: $self->{VERSION}
+version_from: $self->{VERSION_FROM}
+author: $self->{AUTHOR}
+abstract: $self->{ABSTRACT}
+installdirs: $self->{INSTALLDIRS}
+recommends:
+  Parse::RecDescent: 0
+license: perl
+dynamic_config: 1
+distribution_type: module
+generated_by: Imager version $self->{VERSION}
+YAML
+  open META, "> meta.tmp" or die "Cannot create meta.tmp: $!";
+  print META $meta;
+  close META;
+  
+  return sprintf "metafile :\n\t\$(CP) meta.tmp META.yml\n";
 }
 
 # manual configuration of helper libraries
@@ -115,7 +181,7 @@ EOF
 
   <STDIN>; # eat one return
 
-  for $frm(sort { $formats{$b}{order} <=> $formats{$a}{order} } keys %formats) {
+  for my $frm(sort { $formats{$b}{order} <=> $formats{$a}{order} } keys %formats) {
   SWX:
     if ($formats{$frm}{docs}) { print "\n",$formats{$frm}{docs},"\n\n"; }
     print "Enable $frm support: ";
@@ -198,7 +264,8 @@ EOFF
 
   # we need the version in a #ifdefable form
 
-  $F_DEFINE .= "-DIM_GIFMAJOR=$major -DIM_GIFMINOR=$minor";
+  push @defines, [ IM_GIFMAJOR, $major, "Parsed giflib version" ];
+  push @defines, [ IM_GIFMINOR, $minor ];
 }
 
 
@@ -219,6 +286,12 @@ sub gd {
 
 sub checkformat {
   my $frm=shift;
+  
+  my $code = $formats{$frm}{'code'};
+  if ($code && !$noprobe) {
+    return 1 if $code->($formats{$frm}, $frm);
+  }
+
   my $libchk=$formats{$frm}{'libcheck'};
   my $incchk=$formats{$frm}{'inccheck'};
 
@@ -229,7 +302,7 @@ sub checkformat {
 
   my @i;
   for my $ip (@incs) {
-    push(@i, gd($ip,$incchk));
+    push(@i, $ip) if $incchk->($ip,$frm);
   }
 
   printf("%10s: includes %s - libraries %s\n",$frm,(@i?'found':'not found'),(@l?'found':'not found'));
@@ -237,8 +310,6 @@ sub checkformat {
   $formats{$frm}{libdir} = \@l;
   return scalar(@i && @l);
 }
-
-
 
 
 sub pathcheck {
@@ -273,17 +344,29 @@ sub pathcheck {
 sub init {
 
   @definc{'/usr/include'}=();
-  @incs=(split(/\Q$Config{path_sep}/, $INCPATH), 
-         qw(/sw/include 
-            /usr/include/freetype2
-            /usr/local/include/freetype2
-            /usr/local/include/freetype1/freetype
-            /usr/include /usr/local/include /usr/include/freetype 
-            /usr/local/include/freetype));
-  @libs=(split(/\Q$Config{path_sep}/,$LIBPATH), 
-         qw(/sw/lib),  split(/ /, $Config{'libpth'}));
+  @incs=(split(/\Q$Config{path_sep}/, $INCPATH),
+        map { split /\Q$Config{path_sep}/} @incpaths );
+  if ($Config{locincpth}) {
+    push @incs, grep -d, split ' ', $Config{locincpth};
+  }
   if ($^O =~ /win32/i && $Config{cc} =~ /\bcl\b/i) {
     push(@incs, split /;/, $ENV{INCLUDE}) if exists $ENV{INCLUDE};
+  }
+  push @incs, grep -d,
+      qw(/sw/include 
+         /usr/include/freetype2
+         /usr/local/include/freetype2
+         /usr/local/include/freetype1/freetype
+         /usr/include /usr/local/include /usr/include/freetype
+         /usr/local/include/freetype);
+
+  @libs= ( split(/\Q$Config{path_sep}/,$LIBPATH),
+    map { split /\Q$Config{path_sep}/} @libpaths );
+  if ($Config{loclibpth}) {
+    push @libs, grep -d, split ' ', $Config{loclibpth};
+  }
+  push @libs, grep -d, qw(/sw/lib),  split(/ /, $Config{'libpth'});
+  if ($^O =~ /win32/i && $Config{cc} =~ /\bcl\b/i) {
     push(@libs, split /;/, $ENV{LIB}) if exists $ENV{LIB};
   }
   if ($^O eq 'cygwin') {
@@ -291,10 +374,13 @@ sub init {
     push(@incs, '/usr/include/w32api') if -d '/usr/lib/w32api';
   }
 
+  my $lext=$Config{'so'};   # Get extensions of libraries
+  my $aext=$Config{'_a'};
+
   $formats{'jpeg'}={
 		    order=>'21',
 		    def=>'HAVE_LIBJPEG',
-		    inccheck=>sub { $_[0] eq 'jpeglib.h' },
+		    inccheck=>sub { -e catfile($_[0], 'jpeglib.h') },
 		    libcheck=>sub { $_[0] eq "libjpeg$aext" or $_ eq "libjpeg.$lext" },
 		    libfiles=>'-ljpeg',
 		    objfiles=>'jpeg.o',
@@ -306,7 +392,7 @@ sub init {
   $formats{'tiff'}={
 		    order=>'23',
 		    def=>'HAVE_LIBTIFF',
-		    inccheck=>sub { $_[0] eq 'tiffio.h' },
+		    inccheck=>sub { -e catfile($_[0], 'tiffio.h') },
 		    libcheck=>sub { $_[0] eq "libtiff$aext" or $_ eq "libtiff.$lext" },
 		    libfiles=>'-ltiff',
 		    objfiles=>'tiff.o',
@@ -318,20 +404,21 @@ sub init {
   $formats{'png'}={
 		   order=>'22',
 		   def=>'HAVE_LIBPNG',
-		   inccheck=>sub { $_[0] eq 'png.h' },
+		   inccheck=>sub { -e catfile($_[0], 'png.h') },
 		   libcheck=>sub { $_[0] eq "libpng$aext" or $_[0] eq "libpng.$lext" },
 		   libfiles=>'-lpng -lz',
 		   objfiles=>'png.o',
 		   docs=>q{
 			   Png stands for Portable Network Graphics and is intended as
 			   a replacement for gif on the web. It is patent free and
-			   is recommended by the w3c, you need libpng to use these formats}
+			   is recommended by the w3c, you need libpng to use these formats},
+                   code => \&png_probe,
 		  };
 
   $formats{'gif'}={
 		   order=>'20',
 		   def=>'HAVE_LIBGIF',
-		   inccheck=>sub { $_[0] eq 'gif_lib.h' },
+		   inccheck=>sub { -e catfile($_[0], 'gif_lib.h') },
 		   libcheck=>sub { $_[0] eq "libgif$aext" or $_[0] eq "libgif.$lext" },
 		   libfiles=>'-lgif',
 		   objfiles=>'gif.o',
@@ -346,7 +433,7 @@ sub init {
   $formats{'ungif'}={
 		     order=>'21',
 		     def=>'HAVE_LIBGIF',
-		     inccheck=>sub { $_[0] eq 'gif_lib.h' },
+		     inccheck=>sub { -e catfile($_[0], 'gif_lib.h') },
 		     libcheck=>sub { $_[0] eq "libungif$aext" or $_[0] eq "libungif.$lext" },
 		     libfiles=>'-lungif',
 		     objfiles=>'gif.o',
@@ -360,7 +447,7 @@ sub init {
   $formats{'T1-fonts'}={
 			order=>'30',
 			def=>'HAVE_LIBT1',
-			inccheck=>sub { $_[0] eq 't1lib.h' },
+			inccheck=>sub { -e catfile($_[0], 't1lib.h') },
 			libcheck=>sub { $_[0] eq "libt1$aext" or $_[0] eq "libt1.$lext" },
 			libfiles=>'-lt1',
 			objfiles=>'',
@@ -371,24 +458,26 @@ sub init {
 				for use in images.}
 		       };
 
-  $formats{'TT-fonts'}={
-			order=>'31',
-			def=>'HAVE_LIBTT',
-			inccheck=>sub { $_[0] eq 'freetype.h' },
-			libcheck=>sub { $_[0] eq "libttf$aext" or $_[0] eq "libttf.$lext" },
-			libfiles=>'-lttf',
-			objfiles=>'',
-			docs=>q{
-				Truetype fonts are scalable fonts. They can include 
-				kerning and hinting information and generally yield good
-				visual quality esp on low resultions. The freetype library is
-				used to rasterize for us. The only drawback is that there
-				are alot of badly designed fonts out there.}
+  $formats{'TT-fonts'}=
+    {
+     order=>'31',
+     def=>'HAVE_LIBTT',
+     inccheck=>sub { -e catfile($_[0], 'freetype.h')
+                       && !-e catfile($_[0], 'fterrors.h') },
+     libcheck=>sub { $_[0] eq "libttf$aext" or $_[0] eq "libttf.$lext" },
+     libfiles=>'-lttf',
+     objfiles=>'',
+     docs=>q{
+Truetype fonts are scalable fonts. They can include 
+kerning and hinting information and generally yield good
+visual quality esp on low resultions. The freetype library is
+used to rasterize for us. The only drawback is that there
+are alot of badly designed fonts out there.}
 		       };
   $formats{'w32'} = {
 		     order=>40,
 		     def=>'HAVE_WIN32',
-		     inccheck=>sub { lc $_[0] eq 'windows.h' },
+		     inccheck=>sub { -e catfile($_[0], 'windows.h') },
 		     libcheck=>sub { lc $_[0] eq 'gdi32.lib' 
 				       || lc $_[0] eq 'libgdi32.a' },
 		     libfiles=>$^O eq 'cygwin' ? '-lgdi32' : '',
@@ -402,14 +491,15 @@ DOCS
   $formats{'freetype2'} = {
                            order=>'29',
                            def=>'HAVE_FT2',
-                           inccheck=>sub { lc $_[0] eq 'ft2build.h' },
+                           inccheck=>sub { -e catfile($_[0], 'ft2build.h') },
                            libcheck=>sub { $_[0] eq "libfreetype$aext" or $_[0] eq "libfreetype.$lext" },
                            libfiles=>'-lfreetype',
                            objfiles=>'freetyp2.o',
-                           docs=><<DOCS
+                           docs=><<DOCS,
 Freetype 2 supports both Truetype and Type 1 fonts, both of which are
-scalable.
+scalable.  It also supports a variety of other fonts.
 DOCS
+                           code => \&freetype2_probe,
                           };
   # Make fix indent
   for (keys %formats) { $formats{$_}->{docs} =~ s/^\s+/  /mg; }
@@ -448,11 +538,126 @@ sub getenv {
   if ($VERBOSE) { print "Verbose mode\n"; require Data::Dumper; import Data::Dumper qw(Dumper);}
 
   if ($NOLOG)   { print "Logging not compiled into module\n"; }
-  else { $EXTDEF.=' -DIMAGER_LOG'; }
+  else { 
+    push @defines, [ IMAGER_LOG => 1, "Logging system" ];
+  }
 
   if ($DEBUG_MALLOC) {
-    $EXTDEF.=' -DIMAGER_DEBUG_MALLOC';
+    push @defines, [ IMAGER_DEBUG_MALLOC => 1, "Use Imager's DEBUG malloc()" ];
     print "Malloc debugging enabled\n";
   }
+
+}
+
+sub make_imconfig {
+  my ($defines) = @_;
+
+  open CONFIG, "> imconfig.h"
+    or die "Cannot create imconfig.h: $!\n";
+  print CONFIG <<EOS;
+/* This file is automatically generated by Makefile.PL.
+   Don't edit this file, since any changes will be lost */
+
+#ifndef IMAGER_IMCONFIG_H
+#define IMAGER_IMCONFIG_H
+EOS
+  for my $define (@$defines) {
+    if ($define->[2]) {
+      print CONFIG "\n/*\n  $define->[2]\n*/\n\n";
+    }
+    print CONFIG "#define $define->[0] $define->[1]\n";
+  }
+  print CONFIG "\n#endif\n";
+  close CONFIG;
+}
+
+# use pkg-config to probe for libraries
+# works around the junk that pkg-config dumps on FreeBSD
+sub _pkg_probe {
+  my ($pkg) = @_;
+
+  is_exe('pkg-config') or return;
+
+  my $redir = $^O eq 'MSWin32' ? '' : '2>/dev/null';
+
+  !system("pkg-config $pkg --exists $redir");
+}
+
+# probes for freetype2 by trying to run freetype-config
+sub freetype2_probe {
+  my ($frm, $frmkey) = @_;
+
+  is_exe('freetype-config') or return;
+
+  my $cflags = `freetype-config --cflags`
+    and !$? or return;
+  chomp $cflags;
+  
+  $frm->{cflags} = $cflags;
+  my $lflags = `freetype-config --libs`
+    and !$? or return;
+  chomp $lflags;
+  $frm->{libfiles} = $lflags;
+
+  printf "%10s: configured via freetype-config\n", $frmkey;
+
+  return 1;
+}
+
+# probes for libpng via pkg-config
+sub png_probe {
+  my ($frm, $frmkey) = @_;
+
+  is_exe('pkg-config') or return;
+
+  my $config;
+  for my $check_conf (qw(libpng libpng12 libpng10)) {
+    if (_pkg_probe($check_conf)) {
+      $config = $check_conf;
+      last;
+    }
+  }
+  $config or return;
+
+  my $cflags = `pkg-config $config --cflags`
+    and !$? or return;
+
+  my $lflags = `pkg-config $config --libs`
+    and !$? or return;
+
+  chomp $cflags;
+  chomp $lflags;
+  $frm->{cflags} = $cflags;
+  $frm->{libfiles} = $lflags;
+
+  printf "%10s: configured via `pkg-config $config ...`\n", $frmkey;
+
+  return 1;
+}
+
+sub catfile {
+  return File::Spec->catfile(@_);
+}
+
+sub is_exe {
+  my ($name) = @_;
+
+  for my $dir (File::Spec->path) {
+    -x catfile($dir, "$name$Config{_exe}")
+      and return 1;
+  }
+
+  return;
+}
+
+sub usage {
+  print STDERR <<EOS;
+Usage: $0 [--enable feature1,feature2,...] [--incpath ...] [--libpath ...]
+       $0 [--disable feature1,feature2,...] [--incpath ...] [--libpath ...]
+       $0 --help
+Possible feature names are:
+  png gif ungif jpeg tiff T1-fonts TT-fonts freetype2
+EOS
+  exit 1;
 
 }

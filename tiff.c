@@ -31,7 +31,6 @@ Some of these functions are internal.
 =cut
 */
 
-
 #define byteswap_macro(x) \
      ((((x) & 0xff000000) >> 24) | (((x) & 0x00ff0000) >>  8) |     \
       (((x) & 0x0000ff00) <<  8) | (((x) & 0x000000ff) << 24))
@@ -61,10 +60,33 @@ static void error_handler(char const *module, char const *fmt, va_list ap) {
   i_push_errorvf(0, fmt, ap);
 }
 
+#define WARN_BUFFER_LIMIT 10000
+static char *warn_buffer = NULL;
+static int warn_buffer_size = 0;
+
 static void warn_handler(char const *module, char const *fmt, va_list ap) {
-  /* for now do nothing, perhaps we could warn(), though that should be
-     done in the XS code, not in the code which isn't mean to know perl 
-     exists ;) */
+  char buf[1000];
+
+  buf[0] = '\0';
+#ifdef HAVE_SNPRINTF
+  vsnprintf(buf, sizeof(buf), fmt, ap);
+#else
+  vsprintf(buf, fmt, ap);
+#endif
+  if (!warn_buffer || strlen(warn_buffer)+strlen(buf)+2 > warn_buffer_size) {
+    int new_size = warn_buffer_size + strlen(buf) + 2;
+    char *old_buffer = warn_buffer;
+    if (new_size > WARN_BUFFER_LIMIT) {
+      new_size = WARN_BUFFER_LIMIT;
+    }
+    warn_buffer = myrealloc(warn_buffer, new_size);
+    if (!old_buffer) *warn_buffer = '\0';
+    warn_buffer_size = new_size;
+  }
+  if (strlen(warn_buffer)+strlen(buf)+2 <= warn_buffer_size) {
+    strcat(warn_buffer, buf);
+    strcat(warn_buffer, "\n");
+  }
 }
 
 static int save_tiff_tags(TIFF *tif, i_img *im);
@@ -176,16 +198,28 @@ static i_img *read_one_tiff(TIFF *tif) {
       xres = yres;
     else if (!gotYres)
       yres = xres;
+    i_tags_addn(&im->tags, "tiff_resolutionunit", 0, resunit);
     if (resunit == RESUNIT_CENTIMETER) {
       /* from dots per cm to dpi */
       xres *= 2.54;
       yres *= 2.54;
+      i_tags_add(&im->tags, "tiff_resolutionunit_name", 0, "centimeter", -1, 0);
     }
-    i_tags_addn(&im->tags, "tiff_resolutionunit", 0, resunit);
-    if (resunit == RESUNIT_NONE)
+    else if (resunit == RESUNIT_NONE) {
       i_tags_addn(&im->tags, "i_aspect_only", 0, 1);
-    i_tags_set_float(&im->tags, "i_xres", 0, xres);
-    i_tags_set_float(&im->tags, "i_yres", 0, yres);
+      i_tags_add(&im->tags, "tiff_resolutionunit_name", 0, "none", -1, 0);
+    }
+    else if (resunit == RESUNIT_INCH) {
+      i_tags_add(&im->tags, "tiff_resolutionunit_name", 0, "inch", -1, 0);
+    }
+    else {
+      i_tags_add(&im->tags, "tiff_resolutionunit_name", 0, "unknown", -1, 0);
+    }
+    /* tifflib doesn't seem to provide a way to get to the original rational
+       value of these, which would let me provide a more reasonable
+       precision. So make up a number. */
+    i_tags_set_float2(&im->tags, "i_xres", 0, xres, 6);
+    i_tags_set_float2(&im->tags, "i_yres", 0, yres, 6);
   }
 
   /* Text tags */
@@ -200,6 +234,10 @@ static i_img *read_one_tiff(TIFF *tif) {
   }
 
   i_tags_add(&im->tags, "i_format", 0, "tiff", -1, 0);
+  if (warn_buffer && *warn_buffer) {
+    i_tags_add(&im->tags, "i_warning", 0, warn_buffer, -1, 0);
+    *warn_buffer = '\0';
+  }
   
   /*   TIFFPrintDirectory(tif, stdout, 0); good for debugging */
 
@@ -367,6 +405,8 @@ i_readtiff_wiol(io_glue *ig, int length) {
   i_clear_error();
   old_handler = TIFFSetErrorHandler(error_handler);
   old_warn_handler = TIFFSetWarningHandler(warn_handler);
+  if (warn_buffer)
+    *warn_buffer = '\0';
 
   /* Add code to get the filename info from the iolayer */
   /* Also add code to check for mmapped code */
@@ -421,6 +461,8 @@ i_readtiff_multi_wiol(io_glue *ig, int length, int *count) {
   i_clear_error();
   old_handler = TIFFSetErrorHandler(error_handler);
   old_warn_handler = TIFFSetWarningHandler(warn_handler);
+  if (warn_buffer)
+    *warn_buffer = '\0';
 
   /* Add code to get the filename info from the iolayer */
   /* Also add code to check for mmapped code */
@@ -484,7 +526,6 @@ i_writetiff_low_faxable(TIFF *tif, i_img *im, int fine) {
   uint32 y;
   int rc;
   uint32 x;
-  int luma_mask;
   uint32 rowsperstrip;
   float vres = fine ? 196 : 98;
   int luma_chan;
@@ -596,7 +637,7 @@ i_writetiff_low(TIFF *tif, i_img *im) {
   tsize_t linebytes;
   int ch, ci, rc;
   uint32 x;
-  int got_xres, got_yres, got_aspectonly, aspect_only, resunit;
+  int got_xres, got_yres, aspect_only, resunit;
   double xres, yres;
   uint16 bitspersample = 8;
   uint16 samplesperpixel;
@@ -661,7 +702,6 @@ i_writetiff_low(TIFF *tif, i_img *im) {
     i_color c;
     int count = i_colorcount(im);
     int size;
-    int bits;
     int ch, i;
     
     samplesperpixel = 1;
@@ -962,7 +1002,6 @@ Stores an image in the iolayer object.
 undef_int
 i_writetiff_wiol(i_img *img, io_glue *ig) {
   TIFF* tif;
-  int i;
 
   io_glue_commit_types(ig);
   i_clear_error();
@@ -1017,7 +1056,6 @@ point.
 undef_int
 i_writetiff_wiol_faxable(i_img *im, io_glue *ig, int fine) {
   TIFF* tif;
-  int i;
 
   io_glue_commit_types(ig);
   i_clear_error();

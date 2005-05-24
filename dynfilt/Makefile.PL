@@ -47,18 +47,17 @@ $_.\$(SO): $_\$(OBJ_EXT)
 
 
 pure_all :: 
-	\$(NOOP)
+	$(NOOP)
 
 ';
 
 }
 elsif ($^O =~ /win32/i && $Config{cc} =~ /cl/) {
-    my @libpth = grep /\S/, split /("[^"]*"|\S+)/,$Config{libpth};
-    
+  my @libpth = grep /\S/, split /("[^"]*"|\S+)/,$Config{libpth};
         '
 all :: dynamic
 
-dynamic ::       '.$libstr.(join("\n",map { qq{
+dynamic :: '.$libstr.(join("\n",map { qq{
 
 $_.\$(SO): $_\$(OBJ_EXT)
     \$(LD) /OUT:\$\@ }.lddl_magic($_).qq{ \$(OTHERLDFLAGS) $_\$(OBJ_EXT) $Config{libs} }.join(' ', map "/libpath:$_", @libpth).qq{
@@ -67,26 +66,36 @@ $_.\$(SO): $_\$(OBJ_EXT)
 
 
 pure_all :: 
-	\$(NOOP)
+	$(NOOP)
 
 ';
 
 } else {
-        '
-all :: dynamic
+  my $ldrun = $^O =~ /win32/i ? '' : 'LD_RUN_PATH="$(LD_RUN_PATH)"';
+  my $phony_colon = $Config{make} eq 'dmake' ? ':' : '::';
+    
+        "
+all $phony_colon dynamic
 
-dynamic ::       '.$libstr.(join("\n",map { qq{
+dynamic $phony_colon ".$libstr.(join("\n",map { qq{
 
 $_.\$(SO): $_\$(OBJ_EXT)
-	LD_RUN_PATH="\$(LD_RUN_PATH)" \$(LD) -o \$\@ \$(LDDLFLAGS) \$(OTHERLDFLAGS) $_\$(OBJ_EXT)
+	$ldrun \$(LD) -o \$\@ \$(LDDLFLAGS) \$(OTHERLDFLAGS) $_\$(OBJ_EXT)
 
 } } @plugins)).'
 
 
 pure_all :: 
-	\$(NOOP)
+	$(NOOP)
 
 ';
 
 }
+}
+
+# EU::MM crashes without this when we define it in the base Makefile.PL
+# but then warns about redefinition, so delete the GLOB entry
+BEGIN { delete $MY::{metafile} }
+sub MY::metafile {
+  '';
 }

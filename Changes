@@ -961,6 +961,155 @@ Revision history for Perl extension Imager.
 - method index didn't include errstr()
 - document that you don't want the FT2 freetype.h in the include path
 
+0.44_01 Tue 24 May 2005
+- the plugins Makefile has long produced an error after all tests were
+  complete on Win32, finally tracked down why
+- Makefile.PL now checks the directories specified by $Config{locincpth}
+  and $Config{loclibpth} for includes and libraries respectively.
+  Resolves: https://rt.cpan.org/Ticket/Display.html?id=2942
+- we were undefing the wrong macro (used as an include guard) when
+  building the error code translation function for freetype 2.  This
+  meant most errors came out as numbers.
+- add a note to the README on how to get font suitcases and dfont files
+  working on OS X.
+- add dfont to the list of extensions supported by ft2
+- document Imager::Font->new()'s index parameter
+- added concept index to Imager.pm's POD
+- the gradgen filter now does the same color value conversion that
+  Imager's drawing functions do.
+- added trivial multiple master support via the FT2 driver
+- added .pcf and .pcf.gz to the list of extensions supported by ft2
+- the tiff reader now puts warning messages produced during reading into
+  the i_warning tag.
+  Resolves: https://rt.cpan.org/Ticket/Display.html?id=8722
+- the i_xres and i_yres tags are now stored in a resolution similar
+  to their source.
+  Resolves: https://rt.cpan.org/Ticket/Display.html?id=8520
+- added tiff_resolutionunit_name tag when reading tiff files
+- Makefile.PL now attempts to use freetype-config to configure freetype 2
+  and pkg-config to configure libpng.
+- avoid complaining about include/lib directories we pull from 
+  perl's config or we have built-in
+- Makefile.PL now builds imconfig.h with #defines for libraries
+  present (and for the GIF library version) rather than putting them
+  into CFLAGS
+- scanning for required include files is now down by directory rather
+  than by file, using -e to check for the existence for a file rather than
+  doing an eq against every filename in the directory.
+- previously we only checked a candidate include directory for freetype.h
+  to consider it a valid FT1.x include directory.  We now check if it
+  contains fterrors.h too, if it does, then it's from a FT2 installation
+  and we ignore it.
+- Makefile.PL now accepts command-line options to set include and library
+  directories and to enable/disable drivers.
+- added simple examples to most of the filters documented in 
+  Imager::Filters
+- explicitly document there are no PNG specific tags.
+- more examples in Imager::Draw
+- minor cleanup of Imager::Fill
+- eliminate unused variables and static functions
+- simplify some XS code by adding another typemap entry
+- the right-side bearing used to adjust the final width wasn't being
+  calculated correctly, this would cause the bounding_box() function for 
+  freetype 2.x to return a larger than expected text width.
+  http://rt.cpan.org/NoAuth/Bug.html?id=11291
+- add scaleX/scaleY to the method index and gives them some examples
+  http://rt.cpan.org/NoAuth/Bug.html?id=11328
+- call read() instead of open() in the example code in Imager.pm,
+  and mention that open() is an alias for read().
+  http://rt.cpan.org/NoAuth/Bug.html?id=11431
+- added reference list of crop() parameters.
+  http://rt.cpan.org/NoAuth/Bug.html?id=11430
+- reading a tga image with an idstring of 128 or more bytes would result 
+  in an allocation error, if the platform char type was signed
+- tests now check that tga tags are set
+- calling the read() method for a format not included in the Imager build,
+  for example, JPEG with no libjpeg installed, would crash with an 
+  undefined function error (modified by DynaLoaders dependence on 
+  AutoLoader.)
+  http://rt.cpan.org/NoAuth/Bug.html?id=9618
+- some test scripts have been modified to use Test::More, which is now
+  included under the t directory.  Eventually all will be modified to use
+  Test::More and the duplicates in t/testtools.pl will be removed
+- the convert, crop, rotate, copy, matrix_transform, to_paletted, to_rgb8, 
+  scaleX and scaleY methods now warn when called in void context.
+  http://rt.cpan.org/NoAuth/Bug.html?id=9672
+- correct email addresses in the README file, and include bug reporting
+  information there too
+- added README for samples directory, describes interleave.pl and 
+  anaglyph.pl to start.
+- the XS for the internal i_glin() function wasn't copying the pixel
+  values across to the returned color objects.
+  http://rt.cpan.org/NoAuth/Bug.html?id=11860 
+- Imager::Cookbook wasn't included in the MANIFEST
+- added samp-form.cgi and samp-image.cgi to the samples directory to 
+  demonstrate displaying a generated image on a HTML page.
+- Makefile.PL now adds rules to generate a suitable META.yml to the
+  generated Makefile.
+- added sample code for handling images uploaded via a HTML form.
+- saving a GIMP gradiant file with Imager::Fountain->save has always been
+  broken.  Fixed it and added tests.
+- newer versions of GIMP add a line to gradient files before the
+  segment count giving a descriptive name of the gradient.  
+  Imager::Fountain can now read and write such gradient files.  The
+  interface is a bit indirect, but I'd like to preserve
+  Imager::Fountain as a blessed array ref for now.
+- the segments parameter supplied to the fountain filter and the
+  fountain fill contructor now accepts color names or other 
+  descriptions as other functions do.
+- fix a few compiler warnings
+- document the Imager::Font::BBox advance_width() method
+- Imager::Font::BBox advance_width() method was falling back to
+  the wrong value when the font driver's low level function
+  didn't return the advance width.
+- the FT 1.x was comparing versus an uninitialized variable when
+  checking the end of string when calculating the right side bearing
+  used to adjust pos_width for glyphs that overlap the right side of the
+  advance width.
+- Imager::Font::BBox objects now have right_bearing() and display_width()
+  methods.  Hopefully this and the advance_width() method fills out
+  the Imager bounding box interface to a useful state.
+  Implemented for all four font drivers.
+- Win32 font bounding_box() method now supports the advance width
+  and right bearing values.
+- Imager::Matrix2d->rotate() would only rotate around the supplied 
+  centre point if both 'x' and 'y' were non-zero.
+- the internal i_tags_get_string() function now acts correctly for
+  integer only tags.
+- the FT1.x driver now supports the align parameter correctly.
+  Tests were added to each driver to check correct handling of the align
+  parameter.
+- the Win32 font driver bounding_box() method now puts accurate values
+  in the ascent and descent values, previously they were set to the 
+  font ascent/descent rather than the values specific to the string.
+- supplying align=>0 to the win32 font driver string() function 
+  now aligns in the same way as the other drivers.
+- removed the bug reporting email address to prevent spammers stripping
+  it.  The URL is still there and if someone knows how rt.cpan.org works
+  they can still figure out the email.
+- the internal function used to probe file formats if the type
+  parameter wasn't passed to the read() method would produce
+  diagnostics on stdout, precluding use in web applications.  Silenced
+  it.
+- the setcolors() had a fencepost error making it impossible to 
+  use it to set the last color in the palette.
+  http://rt.cpan.org/NoAuth/Bug.html?id=12676
+- fix the filter examples in Imager::Filter so they don't indicate that 
+  a new image is returned (the filter() method works in-place)
+- add examples for the fountain filter
+- prevent warnings from Makefile.PL when there's no libraries found
+- Imager no longer assumes that MSVC is the only native Win32 
+  compiler, MinGW can be used to build Imager.
+- fixed an inverted condition checking the giflib version, and 
+  replaced a manual test skip in t/t105gif.t
+- add tests to exercise hatch fills for floating images.  This code is
+  mis-generated with the gcc 4.0 that ships with OS X 10.4
+- work around junk that pkg-config sends to stderr on FreeBSD 4.10
+- testimg/base.jpg was missing from the MANIFEST, causing test failures
+- use a temp file to avoid messing with echo on Win32 when building
+  META.yml
+- add some Mac OS X notes to the README
+
 =================================================================
 
         For latest versions check the Imager-devel pages:

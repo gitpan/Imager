@@ -170,8 +170,6 @@ The conversion cannot be done for virtual images.
 */
 int i_img_to_rgb_inplace(i_img *im) {
   i_img temp;
-  i_color *pal;
-  int palsize;
 
   if (im->virtual)
     return 0;
@@ -341,7 +339,7 @@ RGB.
 =cut
 */
 static int i_plin_p(i_img *im, int l, int r, int y, i_color *vals) {
-  int ch, count, i;
+  int count, i;
   i_palidx *data;
   i_palidx which;
   if (y >=0 && y < im->ysize && l < im->xsize && l >= 0) {
@@ -539,7 +537,7 @@ static int i_maxcolors_p(i_img *im) {
 =cut
 */
 static int i_setcolors_p(i_img *im, int index, i_color *colors, int count) {
-  if (index >= 0 && count >= 1 && index + count < PALEXT(im)->count) {
+  if (index >= 0 && count >= 1 && index + count <= PALEXT(im)->count) {
     while (count) {
       PALEXT(im)->pal[index++] = *colors++;
       --count;

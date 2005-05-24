@@ -18,6 +18,7 @@ typedef io_glue* Imager__IO;
 typedef i_color* Imager__Color;
 typedef i_fcolor* Imager__Color__Float;
 typedef i_img*   Imager__ImgRaw;
+typedef int undef_neg_int;
 
 #ifdef HAVE_LIBTT
 typedef TT_Fonthandle* Imager__Font__TT;
@@ -558,6 +559,7 @@ static struct value_name orddith_names[] =
   { "custom", od_custom, },
 };
 
+#if 0
 static int
 hv_fetch_bool(HV *hv, char *name, int def) {
   SV **sv;
@@ -581,6 +583,7 @@ hv_fetch_int(HV *hv, char *name, int def) {
   else
     return def;
 }
+#endif
 
 /* look through the hash for quantization options */
 static void handle_quant_opts(i_quantize *quant, HV *hv)
@@ -845,7 +848,6 @@ load_fount_segs(AV *asegs, int *count) {
   */
   int i, j;
   AV *aseg;
-  SV *sv;
   i_fountain_seg *segs;
   double work[3];
   int worki[2];
@@ -1908,7 +1910,7 @@ MODULE = Imager         PACKAGE = Imager
 
 
 undef_int
-i_tt_text(handle,im,xb,yb,cl,points,str_sv,len_ignored,smooth,utf8)
+i_tt_text(handle,im,xb,yb,cl,points,str_sv,len_ignored,smooth,utf8,align=1)
   Imager::Font::TT     handle
     Imager::ImgRaw     im
 	       int     xb
@@ -1919,6 +1921,7 @@ i_tt_text(handle,im,xb,yb,cl,points,str_sv,len_ignored,smooth,utf8)
 	       int     len_ignored
 	       int     smooth
                int     utf8
+               int     align
              PREINIT:
                char *str;
                STRLEN len;
@@ -1929,13 +1932,13 @@ i_tt_text(handle,im,xb,yb,cl,points,str_sv,len_ignored,smooth,utf8)
 #endif
                str = SvPV(str_sv, len);
                RETVAL = i_tt_text(handle, im, xb, yb, cl, points, str, 
-                                  len, smooth, utf8);
+                                  len, smooth, utf8, align);
              OUTPUT:
                RETVAL                
 
 
 undef_int
-i_tt_cp(handle,im,xb,yb,channel,points,str_sv,len_ignored,smooth,utf8)
+i_tt_cp(handle,im,xb,yb,channel,points,str_sv,len_ignored,smooth,utf8,align=1)
   Imager::Font::TT     handle
     Imager::ImgRaw     im
 	       int     xb
@@ -1946,6 +1949,7 @@ i_tt_cp(handle,im,xb,yb,channel,points,str_sv,len_ignored,smooth,utf8)
 	       int     len_ignored
 	       int     smooth
                int     utf8
+               int     align
              PREINIT:
                char *str;
                STRLEN len;
@@ -1956,12 +1960,12 @@ i_tt_cp(handle,im,xb,yb,channel,points,str_sv,len_ignored,smooth,utf8)
 #endif
                str = SvPV(str_sv, len);
                RETVAL = i_tt_cp(handle, im, xb, yb, channel, points, str, len,
-                                smooth, utf8);
+                                smooth, utf8, align);
              OUTPUT:
                 RETVAL
 
 
-undef_int
+void
 i_tt_bbox(handle,point,str_sv,len_ignored, utf8)
   Imager::Font::TT     handle
 	     float     point
@@ -2619,8 +2623,6 @@ void
 i_readgif_callback(...)
           PROTOTYPE: &
             PREINIT:
-               char*    data;
-	        int     length;
 	        int*    colour_table;
 	        int     colours, q, w;
 	      i_img*    rimg;
@@ -3332,11 +3334,6 @@ DSO_call(handle,func_index,hv)
 
 
 
-# this is mostly for testing...
-# this function results in 'RETVAL' : unreferenced local variable
-# in VC++, and might be subtley wrong
-# the most obvious change may result in a double free so I'm leaving it
-# for now
 SV *
 i_get_pixel(im, x, y)
 	Imager::ImgRaw im
@@ -3347,13 +3344,15 @@ i_get_pixel(im, x, y)
       CODE:
 	color = (i_color *)mymalloc(sizeof(i_color));
 	if (i_gpix(im, x, y, color) == 0) {
-          ST(0) = sv_newmortal();
-          sv_setref_pv(ST(0), "Imager::Color", (void *)color);
+          RETVAL = NEWSV(0, 0);
+          sv_setref_pv(RETVAL, "Imager::Color", (void *)color);
         }
         else {
           myfree(color);
-          ST(0) = &PL_sv_undef;
+          RETVAL = &PL_sv_undef;
         }
+      OUTPUT:
+        RETVAL
         
 
 int
@@ -3475,14 +3474,16 @@ i_addcolors(im, ...)
         index = i_addcolors(im, colors, items-1);
         myfree(colors);
         if (index == 0) {
-          ST(0) = sv_2mortal(newSVpv("0 but true", 0));
+          RETVAL = newSVpv("0 but true", 0);
         }
         else if (index == -1) {
-          ST(0) = &PL_sv_undef;
+          RETVAL = &PL_sv_undef;
         }
         else {
-          ST(0) = sv_2mortal(newSViv(index));
+          RETVAL = newSViv(index);
         }
+      OUTPUT:
+        RETVAL
 
 undef_int 
 i_setcolors(im, index, ...)
@@ -3540,33 +3541,13 @@ i_getcolors(im, index, ...)
         myfree(colors);
 
 
-SV *
+undef_neg_int
 i_colorcount(im)
         Imager::ImgRaw im
-      PREINIT:
-        int count;
-      CODE:
-        count = i_colorcount(im);
-        if (count >= 0) {
-          ST(0) = sv_2mortal(newSViv(count));
-        }
-        else {
-          ST(0) = &PL_sv_undef;
-        }
 
-SV *
+undef_neg_int
 i_maxcolors(im)
         Imager::ImgRaw im
-      PREINIT:
-        int count;
-      CODE:
-        count = i_maxcolors(im);
-        if (count >= 0) {
-          ST(0) = sv_2mortal(newSViv(count));
-        }
-        else {
-          ST(0) = &PL_sv_undef;
-        }
 
 SV *
 i_findcolor(im, color)
@@ -3576,11 +3557,13 @@ i_findcolor(im, color)
         i_palidx index;
       CODE:
         if (i_findcolor(im, color, &index)) {
-          ST(0) = sv_2mortal(newSViv(index));
+          RETVAL = newSViv(index);
         }
         else {
-          ST(0) = &PL_sv_undef;
+          RETVAL = &PL_sv_undef;
         }
+      OUTPUT:
+        RETVAL
 
 int
 i_img_bits(im)
@@ -3777,14 +3760,16 @@ i_gpixf(im, x, y)
       CODE:
 	color = (i_fcolor *)mymalloc(sizeof(i_fcolor));
 	if (i_gpixf(im, x, y, color) == 0) {
-          ST(0) = sv_newmortal();
-          sv_setref_pv(ST(0), "Imager::Color::Float", (void *)color);
+          RETVAL = NEWSV(0,0);
+          sv_setref_pv(RETVAL, "Imager::Color::Float", (void *)color);
         }
         else {
           myfree(color);
-          ST(0) = &PL_sv_undef;
+          RETVAL = &PL_sv_undef;
         }
-        
+      OUTPUT:
+        RETVAL
+
 void
 i_glin(im, l, r, y)
         Imager::ImgRaw im
@@ -3802,6 +3787,7 @@ i_glin(im, l, r, y)
           for (i = 0; i < count; ++i) {
             SV *sv;
             i_color *col = mymalloc(sizeof(i_color));
+            *col = vals[i];
             sv = sv_newmortal();
             sv_setref_pv(sv, "Imager::Color", (void *)col);
             PUSHs(sv);
@@ -3897,12 +3883,14 @@ i_tags_find(im, name, start)
       CODE:
         if (i_tags_find(&im->tags, name, start, &entry)) {
           if (entry == 0)
-            ST(0) = sv_2mortal(newSVpv("0 but true", 0));
+            RETVAL = newSVpv("0 but true", 0);
           else
-            ST(0) = sv_2mortal(newSViv(entry));
+            RETVAL = newSViv(entry);
         } else {
-          ST(0) = &PL_sv_undef;
+          RETVAL = &PL_sv_undef;
         }
+      OUTPUT:
+        RETVAL
 
 SV *
 i_tags_findn(im, code, start)
@@ -3914,12 +3902,15 @@ i_tags_findn(im, code, start)
       CODE:
         if (i_tags_findn(&im->tags, code, start, &entry)) {
           if (entry == 0)
-            ST(0) = sv_2mortal(newSVpv("0 but true", 0));
+            RETVAL = newSVpv("0 but true", 0);
           else
-            ST(0) = sv_2mortal(newSViv(entry));
+            RETVAL = newSViv(entry);
         }
-        else
-          ST(0) = &PL_sv_undef;
+        else {
+          RETVAL = &PL_sv_undef;
+        }
+      OUTPUT:
+        RETVAL
 
 int
 i_tags_delete(im, entry)
@@ -3969,6 +3960,28 @@ i_tags_get(im, index)
           else {
             PUSHs(sv_2mortal(newSViv(entry->idata)));
           }
+        }
+
+void
+i_tags_get_string(im, what_sv)
+        Imager::ImgRaw  im
+        SV *what_sv
+      PREINIT:
+        char const *name = NULL;
+        int code;
+        char buffer[200];
+      PPCODE:
+        if (SvIOK(what_sv)) {
+          code = SvIV(what_sv);
+          name = NULL;
+        }
+        else {
+          name = SvPV_nolen(what_sv);
+          code = 0;
+        }
+        if (i_tags_get_string(&im->tags, name, code, buffer, sizeof(buffer))) {
+          EXTEND(SP, 1);
+          PUSHs(sv_2mortal(newSVpv(buffer, 0)));
         }
 
 int
@@ -4030,6 +4043,9 @@ i_wf_cp(face, im, tx, ty, channel, size, text, align, aa)
       OUTPUT:
 	RETVAL
 
+undef_int
+i_wf_addfont(font)
+        char *font
 
 #endif
 
@@ -4313,6 +4329,58 @@ i_ft2_can_do_glyph_names()
 int
 i_ft2_face_has_glyph_names(handle)
         Imager::Font::FT2 handle
+
+int
+i_ft2_is_multiple_master(handle)
+        Imager::Font::FT2 handle
+
+void
+i_ft2_get_multiple_masters(handle)
+        Imager::Font::FT2 handle
+      PREINIT:
+        i_font_mm mm;
+        int i;
+      PPCODE:
+        if (i_ft2_get_multiple_masters(handle, &mm)) {
+          EXTEND(SP, 2+mm.num_axis);
+          PUSHs(sv_2mortal(newSViv(mm.num_axis)));
+          PUSHs(sv_2mortal(newSViv(mm.num_designs)));
+          for (i = 0; i < mm.num_axis; ++i) {
+            AV *av = newAV();
+            SV *sv;
+            av_extend(av, 3);
+            sv = newSVpv(mm.axis[i].name, strlen(mm.axis[i].name));
+            SvREFCNT_inc(sv);
+            av_store(av, 0, sv);
+            sv = newSViv(mm.axis[i].minimum);
+            SvREFCNT_inc(sv);
+            av_store(av, 1, sv);
+            sv = newSViv(mm.axis[i].maximum);
+            SvREFCNT_inc(sv);
+            av_store(av, 2, sv);
+            PUSHs(newRV_noinc((SV *)av));
+          }
+        }
+
+undef_int
+i_ft2_set_mm_coords(handle, ...)
+        Imager::Font::FT2 handle
+      PROTOTYPE: DISABLE
+      PREINIT:
+        long *coords;
+        int ix_coords, i;
+      CODE:
+        /* T_ARRAY handling by xsubpp seems to be busted in 5.6.1, so
+           transfer the array manually */
+        ix_coords = items-1;
+        coords = mymalloc(sizeof(long) * ix_coords);
+	for (i = 0; i < ix_coords; ++i) {
+          coords[i] = (long)SvIV(ST(1+i));
+        }
+        RETVAL = i_ft2_set_mm_coords(handle, ix_coords, coords);
+        myfree(coords);
+      OUTPUT:
+        RETVAL
 
 #endif
 

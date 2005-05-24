@@ -1,0 +1,52 @@
+This directory includes example code for Imager.
+
+If you have sample code to contribute, please contact the maintainer.
+
+The notes here just provide a basic description and the functions
+used.
+
+anaglyph.pl
+
+  Produce a color, grey or pure anaglyph image given left and right
+  images of a stereoscopic pair.
+
+  Uses transform2() and convert().
+
+interleave.pl
+
+  Produce an interleaved image given the left and right images of a
+  stereoscopic pair.  Note that the source images must be pre-scaled.
+
+  This includes 3 different implementations, first using transform2(),
+  the second using the internal i_copyto() function and the third using
+  the internal i_glin() and i_plin() functions.
+
+samp-form.cgi
+samp-image.cgi
+
+  Example that demonstrates generating an image linked from a HTML form.
+
+  The POD for this sample discusses alternate approaches and security
+  considerations.
+
+samp-scale.html
+samp-scale.cgi
+
+  Example that demonstrates reading an image uploaded via a HTML form.
+
+  Produces an output image scaled to fit inside 200x200.
+
+samp-tags.html
+samp-tags.cgi
+
+  Example that demonstrates reading an image uploaded via a HTML form.
+
+  Produces a text/plain report of the tags that Imager defined for the
+  image.
+
+  This and the previous sample are very similar, the intent is to show
+  the common elements and to demonstrate that the output is independent
+  of the input.
+
+  See the section "Parsing an image posted via CGI" in Imager::Cookbook
+  for cautions and details on reading uploaded images.

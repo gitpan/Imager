@@ -1,6 +1,7 @@
 #ifndef _IMAGE_H_
 #define _IMAGE_H_
 
+#include "imconfig.h"
 #include "imio.h"
 #include "iolayer.h"
 #include "log.h"
@@ -245,6 +246,30 @@ float i_img_diff   (i_img *im1,i_img *im2);
 
 undef_int i_init_fonts( int t1log );
 
+/*
+   describes an axis of a MM font.
+   Modelled on FT2's FT_MM_Axis.
+   It would be nice to have a default entry too, but FT2 
+   doesn't support it.
+*/
+typedef struct i_font_mm_axis_tag {
+  char const *name;
+  int minimum;
+  int maximum;
+} i_font_mm_axis;
+
+#define IM_FONT_MM_MAX_AXES 4
+
+/* 
+   multiple master information for a font, if any 
+   modelled on FT2's FT_Multi_Master.
+*/
+typedef struct i_font_mm_tag {
+  int num_axis;
+  int num_designs; /* provided but not necessarily useful */
+  i_font_mm_axis axis[IM_FONT_MM_MAX_AXES];
+} i_font_mm;
+
 #ifdef HAVE_LIBT1
 #include <t1lib.h>
 
@@ -271,8 +296,8 @@ typedef struct TT_Fonthandle_ TT_Fonthandle;
 undef_int i_init_tt( void );
 TT_Fonthandle* i_tt_new(char *fontname);
 void i_tt_destroy( TT_Fonthandle *handle );
-undef_int i_tt_cp( TT_Fonthandle *handle,i_img *im,int xb,int yb,int channel,float points,char const* txt,int len,int smooth, int utf8);
-undef_int i_tt_text( TT_Fonthandle *handle, i_img *im, int xb, int yb, i_color *cl, float points, char const* txt, int len, int smooth, int utf8);
+undef_int i_tt_cp( TT_Fonthandle *handle,i_img *im,int xb,int yb,int channel,float points,char const* txt,int len,int smooth, int utf8, int align);
+undef_int i_tt_text( TT_Fonthandle *handle, i_img *im, int xb, int yb, i_color *cl, float points, char const* txt, int len, int smooth, int utf8, int align);
 undef_int i_tt_bbox( TT_Fonthandle *handle, float points,char *txt,int len,int cords[6], int utf8);
 int i_tt_has_chars(TT_Fonthandle *handle, char const *text, int len, int utf8, char *out);
 void i_tt_dump_names(TT_Fonthandle *handle);
@@ -316,6 +341,12 @@ extern int i_ft2_glyph_name(FT2_Fonthandle *handle, unsigned long ch,
 extern int i_ft2_can_do_glyph_names(void);
 extern int i_ft2_face_has_glyph_names(FT2_Fonthandle *handle);
 
+extern int i_ft2_get_multiple_masters(FT2_Fonthandle *handle,
+                                      i_font_mm *mm);
+extern int
+i_ft2_is_multiple_master(FT2_Fonthandle *handle);
+extern int
+i_ft2_set_mm_coords(FT2_Fonthandle *handle, int coord_count, long *coords);
 #endif
 
 #ifdef WIN32
@@ -325,6 +356,7 @@ extern int i_wf_text(char *face, i_img *im, int tx, int ty, i_color *cl,
 		     int size, char *text, int len, int align, int aa);
 extern int i_wf_cp(char *face, i_img *im, int tx, int ty, int channel, 
 		   int size, char *text, int len, int align, int aa);
+extern int i_wf_addfont(char const *file);
 
 #endif
 
@@ -749,6 +781,8 @@ extern int i_tags_get_float(i_img_tags *tags, char const *name, int code,
 			    double *value);
 extern int i_tags_set_float(i_img_tags *tags, char const *name, int code, 
 			    double value);
+extern int i_tags_set_float2(i_img_tags *tags, char const *name, int code, 
+			    double value, int places);
 extern int i_tags_get_int(i_img_tags *tags, char const *name, int code, 
                           int *value);
 extern int i_tags_get_string(i_img_tags *tags, char const *name, int code, 
