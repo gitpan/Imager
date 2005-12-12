@@ -143,7 +143,7 @@ Creates a new 16-bit per sample image.
 =cut
 */
 i_img *i_img_16_new_low(i_img *im, int x, int y, int ch) {
-  int bytes;
+  int bytes, line_bytes;
   mm_log((1,"i_img_16_new(x %d, y %d, ch %d)\n", x, y, ch));
 
   if (x < 1 || y < 1) {
@@ -160,6 +160,15 @@ i_img *i_img_16_new_low(i_img *im, int x, int y, int ch) {
     return NULL;
   }
   
+  /* basic assumption: we can always allocate a buffer representing a
+     line from the image, otherwise we're going to have trouble
+     working with the image */
+  line_bytes = sizeof(i_fcolor) * x;
+  if (line_bytes / x != sizeof(i_fcolor)) {
+    i_push_error(0, "integer overflow calculating scanline allocation");
+    return NULL;
+  }
+
   *im = IIM_base_16bit_direct;
   i_tags_new(&im->tags);
   im->xsize = x;
@@ -204,8 +213,15 @@ static int i_ppix_d16(i_img *im, int x, int y, i_color *val) {
     return -1;
 
   off = (x + y * im->xsize) * im->channels;
-  for (ch = 0; ch < im->channels; ++ch)
-    STORE8as16(im->idata, off+ch, val->channel[ch]);
+  if (I_ALL_CHANNELS_WRITABLE(im)) {
+    for (ch = 0; ch < im->channels; ++ch)
+      STORE8as16(im->idata, off+ch, val->channel[ch]);
+  }
+  else {
+    for (ch = 0; ch < im->channels; ++ch)
+      if (im->ch_mask & (1 << ch))
+	STORE8as16(im->idata, off+ch, val->channel[ch]);
+  }
 
   return 0;
 }
@@ -230,8 +246,15 @@ static int i_ppixf_d16(i_img *im, int x, int y, i_fcolor *val) {
     return -1;
 
   off = (x + y * im->xsize) * im->channels;
-  for (ch = 0; ch < im->channels; ++ch)
-    STORE16(im->idata, off+ch, SampleFTo16(val->channel[ch]));
+  if (I_ALL_CHANNELS_WRITABLE(im)) {
+    for (ch = 0; ch < im->channels; ++ch)
+      STORE16(im->idata, off+ch, SampleFTo16(val->channel[ch]));
+  }
+  else {
+    for (ch = 0; ch < im->channels; ++ch)
+      if (im->ch_mask & (1 << ch))
+	STORE16(im->idata, off+ch, SampleFTo16(val->channel[ch]));
+  }
 
   return 0;
 }
@@ -278,10 +301,21 @@ static int i_plin_d16(i_img *im, int l, int r, int y, i_color *vals) {
       r = im->xsize;
     off = (l+y*im->xsize) * im->channels;
     count = r - l;
-    for (i = 0; i < count; ++i) {
-      for (ch = 0; ch < im->channels; ++ch) {
-        STORE8as16(im->idata, off, vals[i].channel[ch]);
-        ++off;
+    if (I_ALL_CHANNELS_WRITABLE(im)) {
+      for (i = 0; i < count; ++i) {
+	for (ch = 0; ch < im->channels; ++ch) {
+	  STORE8as16(im->idata, off, vals[i].channel[ch]);
+	  ++off;
+	}
+      }
+    }
+    else {
+      for (i = 0; i < count; ++i) {
+	for (ch = 0; ch < im->channels; ++ch) {
+	  if (im->ch_mask & (1 << ch))
+	    STORE8as16(im->idata, off, vals[i].channel[ch]);
+	  ++off;
+	}
       }
     }
     return count;
@@ -320,10 +354,21 @@ static int i_plinf_d16(i_img *im, int l, int r, int y, i_fcolor *vals) {
       r = im->xsize;
     off = (l+y*im->xsize) * im->channels;
     count = r - l;
-    for (i = 0; i < count; ++i) {
-      for (ch = 0; ch < im->channels; ++ch) {
-        STORE16(im->idata, off, SampleFTo16(vals[i].channel[ch]));
-        ++off;
+    if (I_ALL_CHANNELS_WRITABLE(im)) {
+      for (i = 0; i < count; ++i) {
+	for (ch = 0; ch < im->channels; ++ch) {
+	  STORE16(im->idata, off, SampleFTo16(vals[i].channel[ch]));
+	  ++off;
+	}
+      }
+    }
+    else {
+      for (i = 0; i < count; ++i) {
+	for (ch = 0; ch < im->channels; ++ch) {
+	  if (im->ch_mask & (1 << ch))
+	    STORE16(im->idata, off, SampleFTo16(vals[i].channel[ch]));
+	  ++off;
+	}
       }
     }
     return count;

@@ -7,6 +7,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#ifdef HAVE_LIBT1
+#include <t1lib.h>
+#endif
+
+
 /*
 =head1 NAME
 
@@ -82,6 +87,9 @@ static char *t1_from_utf8(char const *in, int len, int *outlen);
 
 static void t1_push_error(void);
 
+static int t1_active_fonts = 0;
+static int t1_initialized = 0;
+
 /* 
 =item i_init_t1(t1log)
 
@@ -94,6 +102,15 @@ undef_int
 i_init_t1(int t1log) {
   int init_flags = IGNORE_CONFIGFILE|IGNORE_FONTDATABASE;
   mm_log((1,"init_t1()\n"));
+
+  if (t1_active_fonts) {
+    mm_log((1, "Cannot re-initialize T1 - active fonts\n"));
+    return 1;
+  }
+
+  if (t1_initialized) {
+    T1_CloseLib();
+  }
   
   if (t1log)
     init_flags |= LOGFILE;
@@ -103,6 +120,9 @@ i_init_t1(int t1log) {
   }
   T1_SetLogLevel(T1LOG_DEBUG);
   i_t1_set_aa(1); /* Default Antialias value */
+
+  ++t1_initialized;
+
   return(0);
 }
 
@@ -120,6 +140,7 @@ Shuts the t1lib font rendering engine down.
 void
 i_close_t1(void) {
   T1_CloseLib();
+  t1_initialized = 0;
 }
 
 
@@ -150,6 +171,8 @@ i_t1_new(char *pfb,char *afm) {
     if (T1_SetAfmFileName(font_id,afm)<0) mm_log((1,"i_t1_new: afm loading of '%s' failed.\n",afm));
   }
 
+  ++t1_active_fonts;
+
   return font_id;
 }
 
@@ -166,6 +189,9 @@ Frees resources for a t1 font with given font id.
 int
 i_t1_destroy(int font_id) {
   mm_log((1,"i_t1_destroy(font_id %d)\n",font_id));
+
+  --t1_active_fonts;
+
   return T1_DeleteFont(font_id);
 }
 
@@ -435,7 +461,8 @@ Sets *outlen to the number of bytes used in the output string.
 
 static char *
 t1_from_utf8(char const *in, int len, int *outlen) {
-  char *out = mymalloc(len+1);
+  /* at this point len is from a perl SV, so can't approach MAXINT */
+  char *out = mymalloc(len+1); /* checked 5Nov05 tonyc */
   char *p = out;
   unsigned long c;
 
@@ -709,18 +736,23 @@ t1_push_error(void) {
 /* Truetype font support */
 #ifdef HAVE_LIBTT
 
-/* This is enabled by default when configuring Freetype 1.x
+/* These are enabled by default when configuring Freetype 1.x
    I haven't a clue how to reliably detect it at compile time.
 
    We need a compilation probe in Makefile.PL
 */
 #define FTXPOST 1
+#define FTXERR18 1
 
 #include <freetype.h>
 #define TT_CHC 5
 
 #ifdef FTXPOST
 #include <ftxpost.h>
+#endif
+
+#ifdef FTXERR18
+#include <ftxerr18.h>
 #endif
 
 /* some versions of FT1.x don't seem to define this - it's font defined
@@ -767,6 +799,7 @@ struct TT_Fonthandle_ {
 #define USTRCT(x) ((x).z)
 #define TT_VALID( handle )  ( ( handle ).z != NULL )
 
+static void i_tt_push_error(TT_Error rc);
 
 /* Prototypes */
 
@@ -953,12 +986,14 @@ i_tt_new(char *fontname) {
   TT_Fonthandle *handle;
   unsigned short i,n;
   unsigned short platform,encoding;
+
+  i_clear_error();
   
   mm_log((1,"i_tt_new(fontname '%s')\n",fontname));
   
   /* allocate memory for the structure */
   
-  handle = mymalloc( sizeof(TT_Fonthandle) );
+  handle = mymalloc( sizeof(TT_Fonthandle) ); /* checked 5Nov05 tonyc */
 
   /* load the typeface */
   error = TT_Open_Face( engine, fontname, &handle->face );
@@ -970,6 +1005,7 @@ i_tt_new(char *fontname) {
       mm_log((1, "Error while opening %s, error code = 0x%x.\n",fontname, 
               error )); 
     }
+    i_tt_push_error(error);
     return NULL;
   }
   
@@ -1047,10 +1083,15 @@ i_tt_init_raster_map( TT_Raster_Map* bit, int width, int height, int smooth ) {
     bit->cols  = ( bit->width + 7 ) / 8;    /* convert to # of bytes     */
     bit->size  = bit->rows * bit->cols;     /* number of bytes in buffer */
   }
+
+  if (bit->size / bit->rows != bit->cols) {
+    m_fatal(0, "Integer overflow calculating bitmap size (%d, %d)\n",
+            bit->width, bit->rows);
+  }
   
   mm_log((1,"i_tt_init_raster_map: bit->width %d, bit->cols %d, bit->rows %d, bit->size %d)\n", bit->width, bit->cols, bit->rows, bit->size ));
 
-  bit->bitmap = (void *) mymalloc( bit->size );
+  bit->bitmap = (void *) mymalloc( bit->size ); /* checked 6Nov05 tonyc */
   if ( !bit->bitmap ) m_fatal(0,"Not enough memory to allocate bitmap (%d)!\n",bit->size );
 }
 
@@ -1926,6 +1967,24 @@ i_tt_glyph_name(TT_Fonthandle *handle, unsigned long ch, char *name_buf,
   i_push_error(0, "Use of FTXPOST extension disabled");
 
   return 0;
+#endif
+}
+
+/*
+=item i_tt_push_error(code)
+
+Push an error message and code onto the Imager error stack.
+
+=cut
+*/
+static void
+i_tt_push_error(TT_Error rc) {
+#ifdef FTXERR18
+  TT_String const *msg = TT_ErrToString18(rc);
+
+  i_push_error(rc, msg);
+#else
+  i_push_errorf(rc, "Error code 0x%04x", (unsigned)rc);
 #endif
 }
 

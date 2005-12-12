@@ -1,5 +1,8 @@
 package Imager::Matrix2d;
 use strict;
+use vars qw($VERSION);
+
+$VERSION = sprintf "%d.%03d", q$Revision: 1.8 $=~/\d+/g;
 
 =head1 NAME
 
@@ -288,6 +291,7 @@ newline.
 I tried to make it fairly nicely formatted.  You might disagree :)
 
 =cut
+
 sub _string {
   my ($m) = @_;
 

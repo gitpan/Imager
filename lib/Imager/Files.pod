@@ -18,6 +18,8 @@ Imager::Files - working with image files
   my @imgs = Imager->read_multi(file=>$filename)
     or die "Cannot read: ", Imager->errstr;
 
+  Imager->set_file_limits(width=>$max_width, height=>$max_height)
+
 =head1 DESCRIPTION
 
 You can read and write a variety of images formats, assuming you have
@@ -33,6 +35,10 @@ code snippet is sufficient:
 This will include some other information identifying libraries rather
 than file formats.
 
+=over 
+
+=item read
+
 Reading writing to and from files is simple, use the C<read()>
 method to read an image:
 
@@ -40,10 +46,14 @@ method to read an image:
   $img->read(file=>$filename, type=>$type)
     or die "Cannot read $filename: ", $img->errstr;
 
+=item write
+
 and the C<write()> method to write an image:
 
   $img->write(file=>$filename, type=>$type)
     or die "Cannot write $filename: ", $img->errstr;
+
+=item read_multi
 
 If you're reading from a format that supports multiple images per
 file, use the C<read_multi()> method:
@@ -51,11 +61,15 @@ file, use the C<read_multi()> method:
   my @imgs = Imager->read_multi(file=>$filename, type=>$type)
     or die "Cannot read $filename: ", Imager->errstr;
 
+=item write_multi
+
 and if you want to write multiple images to a single file use the
 C<write_multi()> method:
 
   Imager->write_multi({ file=> $filename, type=>$type }, @images)
     or die "Cannot write $filename: ", Imager->errstr;
+
+=back
 
 If the I<filename> includes an extension that Imager recognizes, then
 you don't need the I<type>, but you may want to provide one anyway.
@@ -167,6 +181,64 @@ Return either a valid Imager file type, or undef.
   # I'm writing jpegs to weird filenames
   local $Imager::FORMATGUESS = sub { 'jpeg' };
 
+=head2 Limiting the sizes of images you read
+
+In some cases you will be receiving images from an untested source,
+such as submissions via CGI.  To prevent such images from consuming
+large amounts of memory, you can set limits on the dimensions of
+images you read from files:
+
+=over
+
+=item *
+
+width - limit the width in pixels of the image
+
+=item *
+
+height - limit the height in pixels of the image
+
+=item *
+
+bytes - limits the amount of storage used by the image.  This depends
+on the width, height, channels and sample size of the image.  For
+paletted images this is calculated as if the image was expanded to a
+direct color image.
+
+=back
+
+To set the limits, call the class method set_file_limits:
+
+  Imager->set_file_limits(width=>$max_width, height=>$max_height);
+
+You can pass any or all of the limits above, any limits you do not
+pass are left as they were.
+
+Any limit of zero is treated as unlimited.
+
+By default, all of the limits are zero, or unlimited.
+
+You can reset all of the limited to their defaults by passing in the
+reset parameter as a true value:
+
+  # no limits
+  Imager->set_file_limits(reset=>1);
+
+This can be used with the other limits to reset all but the limit you
+pass:
+
+  # only width is limited
+  Imager->set_file_limits(reset=>1, width=>100);
+
+  # only bytes is limited
+  Imager->set_file_limits(reset=>1, bytes=>10_000_000);
+
+You can get the current limits with the get_file_limits() method:
+
+  my ($max_width, $max_height, $max_bytes) =
+     Imager->get_file_limits();
+
+
 =head1 TYPE SPECIFIC INFORMATION
 
 The different image formats can write different image type, and some have
@@ -218,7 +290,83 @@ JPEG as a 3 channel image.
 
   $img->read(file=>'foo.jpg') or die $img->errstr;
 
-PNM does not support the spatial resolution tags.
+The following tags are set in a JPEG image when read, and can be set
+to control output:
+
+=over
+
+=item jpeg_density_unit
+
+The value of the density unit field in the JFIF header.  This is
+ignored on writing if the i_aspect_only tag is non-zero.
+
+The C<i_xres> and C<i_yres> tags are expressed in pixels per inch no
+matter the value of this tag, they will be converted to/from the value
+stored in the JPEG file.
+
+=item jpeg_density_unit_name
+
+This is set when reading a JPEG file to the name of the unit given by
+C<jpeg_density_unit>.  Possible results include C<inch>,
+C<centimeter>, C<none> (the C<i_aspect_only> tag is also set reading
+these files).  If the value of jpeg_density_unit is unknown then this
+tag isn't set.
+
+=item jpeg_comment
+
+Text comment.
+
+=back
+
+JPEG supports the spatial resolution tags C<i_xres>, C<i_yres> and
+C<i_aspect_only>.
+
+If an APP1 block containing EXIF information is found, then any of the
+following tags can be set:
+
+=over
+
+exif_aperture exif_artist exif_brightness exif_color_space
+exif_contrast exif_copyright exif_custom_rendered exif_date_time
+exif_date_time_digitized exif_date_time_original
+exif_digital_zoom_ratio exif_exposure_bias exif_exposure_index
+exif_exposure_mode exif_exposure_program exif_exposure_time
+exif_f_number exif_flash exif_flash_energy exif_flashpix_version
+exif_focal_length exif_focal_length_in_35mm_film
+exif_focal_plane_resolution_unit exif_focal_plane_x_resolution
+exif_focal_plane_y_resolution exif_gain_control exif_image_description
+exif_image_unique_id exif_iso_speed_rating exif_make exif_max_aperture
+exif_metering_mode exif_model exif_orientation exif_related_sound_file
+exif_resolution_unit exif_saturation exif_scene_capture_type
+exif_sensing_method exif_sharpness exif_shutter_speed exif_software
+exif_spectral_sensitivity exif_sub_sec_time
+exif_sub_sec_time_digitized exif_sub_sec_time_original
+exif_subject_distance exif_subject_distance_range
+exif_subject_location exif_tag_light_source exif_user_comment
+exif_version exif_white_balance exif_x_resolution exif_y_resolution
+
+=back
+
+The following derived tags can also be set:
+
+=over
+
+exif_color_space_name exif_contrast_name exif_custom_rendered_name
+exif_exposure_mode_name exif_exposure_program_name exif_flash_name
+exif_focal_plane_resolution_unit_name exif_gain_control_name
+exif_light_source_name exif_metering_mode_name
+exif_resolution_unit_name exif_saturation_name
+exif_scene_capture_type_name exif_sensing_method_name
+exif_sharpness_name exif_subject_distance_range_name
+exif_white_balance_name
+
+=back
+
+The derived tags are for enumerated fields, when the value for the
+base field is valid then the text that appears in the EXIF
+specification for that value appears in the derived field.  So for
+example if C<exf_metering_mode> is C<5> then
+C<exif_metering_mode_name> is set to C<Pattern>.
 
 =head2 GIF (Graphics Interchange Format)
 
@@ -374,6 +522,25 @@ This is currently unimplemented due to some limitations in giflib.
 
 =back
 
+You can supply a C<page> parameter to the C<read()> method to read
+some page other than the first.  The page is 0 based:
+
+  # read the second image in the file
+  $image->read(file=>"example.gif", page=>1)
+    or die "Cannot read second page: ",$image->errstr,"\n";
+
+Before release 0.46, Imager would read multi-image GIF image files
+into a single image, overlaying each of the images onto the virtual
+GIF screen.
+
+As of 0.46 the default is to read the first image from the file, as if
+called with C<< page => 0 >>.
+
+You can return to the previous behaviour by calling read with the
+C<gif_consolidate> parameter set to a true value:
+
+  $img->read(file=>$some_gif_file, gif_consolidate=>1);
+
 =head2 TIFF (Tagged Image File Format)
 
 Imager can write images to either paletted or RGB TIFF images,
@@ -429,7 +596,7 @@ The value of the ResolutionUnit tag.  This is ignored on writing if
 the i_aspect_only tag is non-zero.
 
 The C<i_xres> and C<i_yres> tags are expressed in pixels per inch no
-matter tha value of this tag, they will be converted to/from the value
+matter the value of this tag, they will be converted to/from the value
 stored in the TIFF file.
 
 =item tiff_resolutionunit_name
@@ -438,6 +605,16 @@ This is set when reading a TIFF file to the name of the unit given by
 C<tiff_resolutionunit>.  Possible results include C<inch>,
 C<centimeter>, C<none> (the C<i_aspect_only> tag is also set reading
 these files) or C<unknown>.
+
+=item tiff_bitspersample
+
+Bits per sample from the image.  This value is not used when writing
+an image, it is only set on a read image.
+
+=item tiff_photometric
+
+Value of the PhotometricInterpretation tag from the image.  This value
+is not used when writing an image, it is only set on a read image.
 
 =item tiff_documentname
 
@@ -462,6 +639,13 @@ as "YYYY:MM:DD HH:MM:SS".  These correspond directly to the mixed case
 names in the TIFF specification.  These are set in images read from a
 TIFF and saved when writing a TIFF image.
 
+You can supply a C<page> parameter to the C<read()> method to read
+some page other than the first.  The page is 0 based:
+
+  # read the second image in the file
+  $image->read(file=>"example.tif", page=>1)
+    or die "Cannot read second page: ",$image->errstr,"\n";
+
 =back
 
 =head2 BMP (BitMaP)
@@ -479,7 +663,7 @@ BMP has no support for multi-image files.
 BMP files support the spatial resolution tags, but since BMP has no
 support for storing only an aspect ratio, if C<i_aspect_only> is set
 when you write the C<i_xres> and C<i_yres> values are scaled so the
-smaller it 72 DPI.
+smaller is 72 DPI.
 
 The following tags are set when you read an image from a BMP file:
 

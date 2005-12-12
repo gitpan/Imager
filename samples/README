@@ -12,6 +12,13 @@ anaglyph.pl
 
   Uses transform2() and convert().
 
+replace_color.pl
+
+  Example using Imager::transform2() to replace one color with another
+  in an image.
+
+  http://www.perlmonks.org/?node_id=497355
+
 interleave.pl
 
   Produce an interleaved image given the left and right images of a
@@ -50,3 +57,33 @@ samp-tags.cgi
 
   See the section "Parsing an image posted via CGI" in Imager::Cookbook
   for cautions and details on reading uploaded images.
+
+border.pl
+
+  Example of adding a border to an image.
+
+slant_text.pl
+
+  Example of drawing transformed text.
+
+  Draws slanted or rotated text to a new image and saves it to a file.
+
+  As part of this it demonstrates calculating the transformed bounding
+  box of the text.
+
+tk-photo.pl
+
+  Simple example of making a Tk::Photo object using Imager data.
+
+align-string.pl
+
+  Simple demonstration of the align_string() method.  Usage:
+
+   perl align-string.pl fontfile size outputfile text...
+
+  eg.
+
+   perl align-string.pl fontfiles/ImUgly.ttf 60 test.ppm .A.
+
+  This demonstrates how the various values of halign and valign
+  behave.

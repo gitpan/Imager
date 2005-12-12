@@ -1,15 +1,23 @@
 #include "image.h"
 #include "draw.h"
 #include "log.h"
+#include "imagei.h"
 
 #include <limits.h>
 
 void
 i_mmarray_cr(i_mmarray *ar,int l) {
   int i;
+  int alloc_size;
 
   ar->lines=l;
-  ar->data=mymalloc(sizeof(minmax)*l);
+  alloc_size = sizeof(minmax) * l;
+  /* check for overflow */
+  if (alloc_size / l != sizeof(minmax)) {
+    fprintf(stderr, "overflow calculating memory allocation");
+    exit(3);
+  }
+  ar->data=mymalloc(alloc_size); /* checked 5jul05 tonyc */
   for(i=0;i<l;i++) { ar->data[i].max=-1; ar->data[i].min=MAXINT; }
 }
 
@@ -50,10 +58,10 @@ void
 i_mmarray_render_fill(i_img *im,i_mmarray *ar,i_fill_t *fill) {
   int x, w, y;
   if (im->bits == i_8_bits && fill->fill_with_color) {
-    i_color *line = mymalloc(sizeof(i_color) * im->xsize);
+    i_color *line = mymalloc(sizeof(i_color) * im->xsize); /* checked 5jul05 tonyc */
     i_color *work = NULL;
     if (fill->combine)
-      work = mymalloc(sizeof(i_color) * im->xsize);
+      work = mymalloc(sizeof(i_color) * im->xsize); /* checked 5jul05 tonyc */
     for(y=0;y<ar->lines;y++) {
       if (ar->data[y].max!=-1) {
         x = ar->data[y].min;
@@ -76,10 +84,10 @@ i_mmarray_render_fill(i_img *im,i_mmarray *ar,i_fill_t *fill) {
       myfree(work);
   }
   else {
-    i_fcolor *line = mymalloc(sizeof(i_fcolor) * im->xsize);
+    i_fcolor *line = mymalloc(sizeof(i_fcolor) * im->xsize); /* checked 5jul05 tonyc */
     i_fcolor *work = NULL;
     if (fill->combinef)
-      work = mymalloc(sizeof(i_fcolor) * im->xsize);
+      work = mymalloc(sizeof(i_fcolor) * im->xsize); /* checked 5jul05 tonyc */
     for(y=0;y<ar->lines;y++) {
       if (ar->data[y].max!=-1) {
         x = ar->data[y].min;
@@ -111,14 +119,14 @@ i_arcdraw(int x1, int y1, int x2, int y2, i_mmarray *ar) {
   double dsec;
   int temp;
   alpha=(double)(y2-y1)/(double)(x2-x1);
-  if (fabs(alpha)<1) 
+  if (fabs(alpha) <= 1) 
     {
       if (x2<x1) { temp=x1; x1=x2; x2=temp; temp=y1; y1=y2; y2=temp; }
       dsec=y1;
-      while(x1<x2)
+      while(x1<=x2)
 	{
-	  dsec+=alpha;
 	  i_mmarray_add(ar,x1,(int)(dsec+0.5));
+	  dsec+=alpha;
 	  x1++;
 	}
     }
@@ -127,10 +135,10 @@ i_arcdraw(int x1, int y1, int x2, int y2, i_mmarray *ar) {
       alpha=1/alpha;
       if (y2<y1) { temp=x1; x1=x2; x2=temp; temp=y1; y1=y2; y2=temp; }
       dsec=x1;
-      while(y1<y2)
+      while(y1<=y2)
 	{
-	  dsec+=alpha;
 	  i_mmarray_add(ar,(int)(dsec+0.5),y1);
+	  dsec+=alpha;
 	  y1++;
 	}
     }
@@ -143,68 +151,183 @@ i_mmarray_info(i_mmarray *ar) {
   if (ar->data[i].max!=-1) printf("line %d: min=%d, max=%d.\n",i,ar->data[i].min,ar->data[i].max);
 }
 
+static void
+i_arc_minmax(i_int_hlines *hlines,int x,int y,float rad,float d1,float d2) {
+  i_mmarray dot;
+  float f,fx,fy;
+  int x1,y1;
+
+  /*mm_log((1,"i_arc(im* 0x%x,x %d,y %d,rad %.2f,d1 %.2f,d2 %.2f,val 0x%x)\n",im,x,y,rad,d1,d2,val));*/
+
+  i_mmarray_cr(&dot, hlines->limit_y);
+
+  x1=(int)(x+0.5+rad*cos(d1*PI/180.0));
+  y1=(int)(y+0.5+rad*sin(d1*PI/180.0));
+  fx=(float)x1; fy=(float)y1;
+
+  /*  printf("x1: %d.\ny1: %d.\n",x1,y1); */
+  i_arcdraw(x, y, x1, y1, &dot);
+
+  x1=(int)(x+0.5+rad*cos(d2*PI/180.0));
+  y1=(int)(y+0.5+rad*sin(d2*PI/180.0));
+
+  for(f=d1;f<=d2;f+=0.01) i_mmarray_add(&dot,(int)(x+0.5+rad*cos(f*PI/180.0)),(int)(y+0.5+rad*sin(f*PI/180.0)));
+  
+  /*  printf("x1: %d.\ny1: %d.\n",x1,y1); */
+  i_arcdraw(x, y, x1, y1, &dot);
+
+  /* render the minmax values onto the hlines */
+  for (y = 0; y < dot.lines; y++) {
+    if (dot.data[y].max!=-1) {
+      int minx, width;
+      minx = dot.data[y].min;
+      width = dot.data[y].max - dot.data[y].min + 1;
+      i_int_hlines_add(hlines, y, minx, width);
+    }
+  }
+
+  /*  dot.info(); */
+  i_mmarray_dst(&dot);
+}
+
+static void
+i_arc_hlines(i_int_hlines *hlines,int x,int y,float rad,float d1,float d2) {
+  if (d1 <= d2) {
+    i_arc_minmax(hlines, x, y, rad, d1, d2);
+  }
+  else {
+    i_arc_minmax(hlines, x, y, rad, d1, 360);
+    i_arc_minmax(hlines, x, y, rad, 0, d2);
+  }
+}
 
 void
 i_arc(i_img *im,int x,int y,float rad,float d1,float d2,i_color *val) {
-  i_mmarray dot;
-  float f,fx,fy;
-  int x1,y1;
+  i_int_hlines hlines;
 
-  mm_log((1,"i_arc(im* 0x%x,x %d,y %d,rad %.2f,d1 %.2f,d2 %.2f,val 0x%x)\n",im,x,y,rad,d1,d2,val));
+  i_int_init_hlines_img(&hlines, im);
 
-  i_mmarray_cr(&dot,im->ysize);
+  i_arc_hlines(&hlines, x, y, rad, d1, d2);
 
-  x1=(int)(x+0.5+rad*cos(d1*PI/180.0));
-  y1=(int)(y+0.5+rad*sin(d1*PI/180.0));
-  fx=(float)x1; fy=(float)y1;
+  i_int_hlines_fill_color(im, &hlines, val);
 
-  /*  printf("x1: %d.\ny1: %d.\n",x1,y1); */
-  i_arcdraw(x, y, x1, y1, &dot);
-
-  x1=(int)(x+0.5+rad*cos(d2*PI/180.0));
-  y1=(int)(y+0.5+rad*sin(d2*PI/180.0));
-
-  for(f=d1;f<=d2;f+=0.01) i_mmarray_add(&dot,(int)(x+0.5+rad*cos(f*PI/180.0)),(int)(y+0.5+rad*sin(f*PI/180.0)));
-  
-  /*  printf("x1: %d.\ny1: %d.\n",x1,y1); */
-  i_arcdraw(x, y, x1, y1, &dot);
-
-  /*  dot.info(); */
-  i_mmarray_render(im,&dot,val);
-  i_mmarray_dst(&dot);
+  i_int_hlines_destroy(&hlines);
 }
+
+#define MIN_CIRCLE_STEPS 8
+#define MAX_CIRCLE_STEPS 360
 
 void
 i_arc_cfill(i_img *im,int x,int y,float rad,float d1,float d2,i_fill_t *fill) {
-  i_mmarray dot;
-  float f,fx,fy;
-  int x1,y1;
+  i_int_hlines hlines;
 
-  mm_log((1,"i_arc_cfill(im* 0x%x,x %d,y %d,rad %.2f,d1 %.2f,d2 %.2f,fill 0x%x)\n",im,x,y,rad,d1,d2,fill));
+  i_int_init_hlines_img(&hlines, im);
 
-  i_mmarray_cr(&dot,im->ysize);
+  i_arc_hlines(&hlines, x, y, rad, d1, d2);
 
-  x1=(int)(x+0.5+rad*cos(d1*PI/180.0));
-  y1=(int)(y+0.5+rad*sin(d1*PI/180.0));
-  fx=(float)x1; fy=(float)y1;
+  i_int_hlines_fill_fill(im, &hlines, fill);
 
-  /*  printf("x1: %d.\ny1: %d.\n",x1,y1); */
-  i_arcdraw(x, y, x1, y1, &dot);
-
-  x1=(int)(x+0.5+rad*cos(d2*PI/180.0));
-  y1=(int)(y+0.5+rad*sin(d2*PI/180.0));
-
-  for(f=d1;f<=d2;f+=0.01) i_mmarray_add(&dot,(int)(x+0.5+rad*cos(f*PI/180.0)),(int)(y+0.5+rad*sin(f*PI/180.0)));
-  
-  /*  printf("x1: %d.\ny1: %d.\n",x1,y1); */
-  i_arcdraw(x, y, x1, y1, &dot);
-
-  /*  dot.info(); */
-  i_mmarray_render_fill(im,&dot,fill);
-  i_mmarray_dst(&dot);
+  i_int_hlines_destroy(&hlines);
 }
 
+static void
+arc_poly(int *count, double **xvals, double **yvals,
+	 double x, double y, double rad, double d1, double d2) {
+  double d1_rad, d2_rad;
+  double circum;
+  int steps, point_count;
+  double angle_inc;
 
+  /* normalize the angles */
+  d1 = fmod(d1, 360);
+  if (d1 == 0) {
+    if (d2 >= 360) { /* default is 361 */
+      d2 = 360;
+    }
+    else {
+      d2 = fmod(d2, 360);
+      if (d2 < d1)
+	d2 += 360;
+    }
+  }
+  else {
+    d2 = fmod(d2, 360);
+    if (d2 < d1)
+      d2 += 360;
+  }
+  d1_rad = d1 * PI / 180;
+  d2_rad = d2 * PI / 180;
+
+  /* how many segments for the curved part? 
+     we do a maximum of one per degree, with a minimum of 8/circle
+     we try to aim at having about one segment per 2 pixels
+     Work it out per circle to get a step size.
+
+     I was originally making steps = circum/2 but that looked horrible.
+
+     I think there might be an issue in the polygon filler.
+  */
+  circum = 2 * PI * rad;
+  steps = circum;
+  if (steps > MAX_CIRCLE_STEPS)
+    steps = MAX_CIRCLE_STEPS;
+  else if (steps < MIN_CIRCLE_STEPS)
+    steps = MIN_CIRCLE_STEPS;
+
+  angle_inc = 2 * PI / steps;
+
+  point_count = steps + 5; /* rough */
+  *xvals = mymalloc(point_count * sizeof(double));
+  *yvals = mymalloc(point_count * sizeof(double));
+
+  /* from centre to edge at d1 */
+  (*xvals)[0] = x;
+  (*yvals)[0] = y;
+  (*xvals)[1] = x + rad * cos(d1_rad);
+  (*yvals)[1] = y + rad * sin(d1_rad);
+  *count = 2;
+
+  /* step around the curve */
+  while (d1_rad < d2_rad) {
+    (*xvals)[*count] = x + rad * cos(d1_rad);
+    (*yvals)[*count] = y + rad * sin(d1_rad);
+    ++*count;
+    d1_rad += angle_inc;
+  }
+
+  /* finish off the curve */
+  (*xvals)[*count] = x + rad * cos(d2_rad);
+  (*yvals)[*count] = y + rad * sin(d2_rad);
+  ++*count;
+}
+
+void
+i_arc_aa(i_img *im, double x, double y, double rad, double d1, double d2,
+	 i_color *val) {
+  double *xvals, *yvals;
+  int count;
+
+  arc_poly(&count, &xvals, &yvals, x, y, rad, d1, d2);
+
+  i_poly_aa(im, count, xvals, yvals, val);
+
+  myfree(xvals);
+  myfree(yvals);
+}
+
+void
+i_arc_aa_cfill(i_img *im, double x, double y, double rad, double d1, double d2,
+	       i_fill_t *fill) {
+  double *xvals, *yvals;
+  int count;
+
+  arc_poly(&count, &xvals, &yvals, x, y, rad, d1, d2);
+
+  i_poly_aa_cfill(im, count, xvals, yvals, fill);
+
+  myfree(xvals);
+  myfree(yvals);
+}
 
 /* Temporary AA HACK */
 
@@ -376,11 +499,21 @@ i_box_cfill(i_img *im,int x1,int y1,int x2,int y2,i_fill_t *fill) {
   mm_log((1,"i_box_cfill(im* 0x%x,x1 %d,y1 %d,x2 %d,y2 %d,fill 0x%x)\n",im,x1,y1,x2,y2,fill));
 
   ++x2;
+  if (x1 < 0)
+    x1 = 0;
+  if (y1 < 0) 
+    y1 = 0;
+  if (x2 > im->xsize) 
+    x2 = im->xsize;
+  if (y2 >= im->ysize)
+    y2 = im->ysize-1;
+  if (x1 >= x2 || y1 > y2)
+    return;
   if (im->bits == i_8_bits && fill->fill_with_color) {
-    i_color *line = mymalloc(sizeof(i_color) * (x2 - x1));
+    i_color *line = mymalloc(sizeof(i_color) * (x2 - x1)); /* checked 5jul05 tonyc */
     i_color *work = NULL;
     if (fill->combine)
-      work = mymalloc(sizeof(i_color) * (x2-x1));
+      work = mymalloc(sizeof(i_color) * (x2-x1)); /* checked 5jul05 tonyc */
     while (y1 <= y2) {
       if (fill->combine) {
         i_glin(im, x1, x2, y1, line);
@@ -398,9 +531,9 @@ i_box_cfill(i_img *im,int x1,int y1,int x2,int y2,i_fill_t *fill) {
       myfree(work);
   }
   else {
-    i_fcolor *line = mymalloc(sizeof(i_fcolor) * (x2 - x1));
+    i_fcolor *line = mymalloc(sizeof(i_fcolor) * (x2 - x1)); /* checked 5jul05 tonyc */
     i_fcolor *work;
-    work = mymalloc(sizeof(i_fcolor) * (x2 - x1));
+    work = mymalloc(sizeof(i_fcolor) * (x2 - x1)); /* checked 5jul05 tonyc */
 
     while (y1 <= y2) {
       if (fill->combine) {
@@ -778,8 +911,8 @@ i_bezier_multi(i_img *im,int l,double *x,double *y,i_color *val) {
   int n=l-1;
   double itr,ccoef;
 
-
-  bzcoef=mymalloc(sizeof(double)*l);
+  /* this is the same size as the x and y arrays, so shouldn't overflow */
+  bzcoef=mymalloc(sizeof(double)*l); /* checked 5jul05 tonyc */
   for(k=0;k<l;k++) bzcoef[k]=perm(n,k);
   ICL_info(val);
 
@@ -809,16 +942,6 @@ i_bezier_multi(i_img *im,int l,double *x,double *y,i_color *val) {
   ICL_info(val);
   myfree(bzcoef);
 }
-
-
-
-
-
-
-
-
-
-
 
 /* Flood fill 
 
@@ -867,7 +990,7 @@ static
 struct stack_element*
 crdata(int left,int right,int dadl,int dadr,int y, int dir) {
   struct stack_element *ste;
-  ste              = mymalloc(sizeof(struct stack_element));
+  ste              = mymalloc(sizeof(struct stack_element)); /* checked 5jul05 tonyc */
   ste->myLx        = left;
   ste->myRx        = right;
   ste->dadLx       = dadl;
@@ -1115,10 +1238,11 @@ i_flood_cfill(i_img *im, int seedx, int seedy, i_fill_t *fill) {
   btm = i_flood_fill_low(im, seedx, seedy, &bxmin, &bxmax, &bymin, &bymax);
 
   if (im->bits == i_8_bits && fill->fill_with_color) {
-    i_color *line = mymalloc(sizeof(i_color) * (bxmax - bxmin));
+    /* bxmax/bxmin are inside the image, hence this won't overflow */
+    i_color *line = mymalloc(sizeof(i_color) * (bxmax - bxmin)); /* checked 5jul05 tonyc */
     i_color *work = NULL;
     if (fill->combine)
-      work = mymalloc(sizeof(i_color) * (bxmax - bxmin));
+      work = mymalloc(sizeof(i_color) * (bxmax - bxmin)); /* checked 5jul05 tonyc */
 
     for(y=bymin; y<=bymax; y++) {
       x = bxmin;
@@ -1150,10 +1274,11 @@ i_flood_cfill(i_img *im, int seedx, int seedy, i_fill_t *fill) {
       myfree(work);
   }
   else {
-    i_fcolor *line = mymalloc(sizeof(i_fcolor) * (bxmax - bxmin));
+    /* bxmax/bxmin are inside the image, hence this won't overflow */
+    i_fcolor *line = mymalloc(sizeof(i_fcolor) * (bxmax - bxmin)); /* checked 5jul05 tonyc */
     i_fcolor *work = NULL;
     if (fill->combinef)
-      work = mymalloc(sizeof(i_fcolor) * (bxmax - bxmin));
+      work = mymalloc(sizeof(i_fcolor) * (bxmax - bxmin)); /* checked 5jul05 tonyc */
     
     for(y=bymin;y<=bymax;y++) {
       x = bxmin;

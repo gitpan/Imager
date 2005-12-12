@@ -28,12 +28,16 @@ Reads and writes JPEG images
 #include <setjmp.h>
 
 #include "iolayer.h"
-#include "image.h"
+#include "imagei.h"
 #include "jpeglib.h"
 #include "jerror.h"
 #include <errno.h>
+#ifdef IMEXIF_ENABLE
+#include "imexif.h"
+#endif
 
 #define JPEG_APP13       0xED    /* APP13 marker code */
+#define JPEG_APP1 (JPEG_APP0 + 1)
 #define JPGS 16384
 
 static unsigned char fake_eoi[]={(JOCTET) 0xFF,(JOCTET) JPEG_EOI};
@@ -341,11 +345,15 @@ my_error_exit (j_common_ptr cinfo) {
 i_img*
 i_readjpeg_wiol(io_glue *data, int length, char** iptc_itext, int *itlength) {
   i_img *im;
+#ifdef IMEXIF_ENABLE
+  int seen_exif = 0;
+#endif
 
   struct jpeg_decompress_struct cinfo;
   struct my_error_mgr jerr;
   JSAMPARRAY buffer;		/* Output row buffer */
   int row_stride;		/* physical row width in output buffer */
+  jpeg_saved_marker_ptr markerp;
 
   mm_log((1,"i_readjpeg_wiol(data 0x%p, length %d,iptc_itext 0x%p)\n", data, iptc_itext));
 
@@ -366,10 +374,19 @@ i_readjpeg_wiol(io_glue *data, int length, char** iptc_itext, int *itlength) {
   
   jpeg_create_decompress(&cinfo);
   jpeg_set_marker_processor(&cinfo, JPEG_APP13, APP13_handler);
+  jpeg_save_markers(&cinfo, JPEG_APP1, 0xFFFF);
+  jpeg_save_markers(&cinfo, JPEG_COM, 0xFFFF);
   jpeg_wiol_src(&cinfo, data, length);
 
   (void) jpeg_read_header(&cinfo, TRUE);
   (void) jpeg_start_decompress(&cinfo);
+  if (!i_int_check_image_file_limits(cinfo.output_width, cinfo.output_height,
+				     cinfo.output_components, sizeof(i_sample_t))) {
+    mm_log((1, "i_readjpeg: image size exceeds limits\n"));
+
+    jpeg_destroy_decompress(&cinfo);
+    return NULL;
+  }
   im=i_img_empty_ch(NULL,cinfo.output_width,cinfo.output_height,cinfo.output_components);
   if (!im) {
     jpeg_destroy_decompress(&cinfo);
@@ -381,6 +398,48 @@ i_readjpeg_wiol(io_glue *data, int length, char** iptc_itext, int *itlength) {
     (void) jpeg_read_scanlines(&cinfo, buffer, 1);
     memcpy(im->idata+im->channels*im->xsize*(cinfo.output_scanline-1),buffer[0],row_stride);
   }
+
+  /* check for APP1 marker and save */
+  markerp = cinfo.marker_list;
+  while (markerp != NULL) {
+    if (markerp->marker == JPEG_COM) {
+      i_tags_add(&im->tags, "jpeg_comment", 0, markerp->data,
+		 markerp->data_length, 0);
+    }
+#ifdef IMEXIF_ENABLE
+    else if (markerp->marker == JPEG_APP1 && !seen_exif) {
+      seen_exif = i_int_decode_exif(im, markerp->data, markerp->data_length);
+    }
+#endif      
+
+    markerp = markerp->next;
+  }
+
+  if (cinfo.saw_JFIF_marker) {
+    double xres = cinfo.X_density;
+    double yres = cinfo.Y_density;
+    
+    i_tags_addn(&im->tags, "jpeg_density_unit", 0, cinfo.density_unit);
+    switch (cinfo.density_unit) {
+    case 0: /* values are just the aspect ratio */
+      i_tags_addn(&im->tags, "i_aspect_only", 0, 1);
+      i_tags_add(&im->tags, "jpeg_density_unit_name", 0, "none", -1, 0);
+      break;
+
+    case 1: /* per inch */
+      i_tags_add(&im->tags, "jpeg_density_unit_name", 0, "inch", -1, 0);
+      break;
+
+    case 2: /* per cm */
+      i_tags_add(&im->tags, "jpeg_density_unit_name", 0, "centimeter", -1, 0);
+      xres *= 2.54;
+      yres *= 2.54;
+      break;
+    }
+    i_tags_set_float2(&im->tags, "i_xres", 0, xres, 6);
+    i_tags_set_float2(&im->tags, "i_yres", 0, yres, 6);
+  }
+
   (void) jpeg_finish_decompress(&cinfo);
   jpeg_destroy_decompress(&cinfo);
   *itlength=tlength;
@@ -401,6 +460,9 @@ undef_int
 i_writejpeg_wiol(i_img *im, io_glue *ig, int qfactor) {
   JSAMPLE *image_buffer;
   int quality;
+  int got_xres, got_yres, aspect_only, resunit;
+  double xres, yres;
+  int comment_entry;
 
   struct jpeg_compress_struct cinfo;
   struct my_error_mgr jerr;
@@ -451,7 +513,37 @@ i_writejpeg_wiol(i_img *im, io_glue *ig, int qfactor) {
   jpeg_set_defaults(&cinfo);
   jpeg_set_quality(&cinfo, quality, TRUE);  /* limit to baseline-JPEG values */
 
+  got_xres = i_tags_get_float(&im->tags, "i_xres", 0, &xres);
+  got_yres = i_tags_get_float(&im->tags, "i_yres", 0, &yres);
+  if (!i_tags_get_int(&im->tags, "i_aspect_only", 0,&aspect_only))
+    aspect_only = 0;
+  if (!i_tags_get_int(&im->tags, "jpeg_density_unit", 0, &resunit))
+    resunit = 1; /* per inch */
+  if (resunit < 0 || resunit > 2) /* default to inch if invalid */
+    resunit = 1;
+  if (got_xres || got_yres) {
+    if (!got_xres)
+      xres = yres;
+    else if (!got_yres)
+      yres = xres;
+    if (aspect_only)
+      resunit = 0; /* standard tags override format tags */
+    if (resunit == 2) {
+      /* convert to per cm */
+      xres /= 2.54;
+      yres /= 2.54;
+    }
+    cinfo.density_unit = resunit;
+    cinfo.X_density = (int)(xres + 0.5);
+    cinfo.Y_density = (int)(yres + 0.5);
+  }
+
   jpeg_start_compress(&cinfo, TRUE);
+
+  if (i_tags_find(&im->tags, "jpeg_comment", 0, &comment_entry)) {
+    jpeg_write_marker(&cinfo, JPEG_COM, im->tags.tags[comment_entry].data,
+		      im->tags.tags[comment_entry].size);
+  }
 
   row_stride = im->xsize * im->channels;	/* JSAMPLEs per row in image_buffer */
 

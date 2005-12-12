@@ -207,7 +207,9 @@ void i_box_cfill(i_img *im, int x1, int y1, int x2, int y2, i_fill_t *fill);
 void i_line        (i_img *im,int x1,int y1,int x2,int y2,i_color *val, int endp);
 void i_line_aa     (i_img *im,int x1,int y1,int x2,int y2,i_color *val, int endp);
 void i_arc         (i_img *im,int x,int y,float rad,float d1,float d2,i_color *val);
+void i_arc_aa         (i_img *im, double x, double y, double rad, double d1, double d2,i_color *val);
 void i_arc_cfill(i_img *im,int x,int y,float rad,float d1,float d2,i_fill_t *fill);
+void i_arc_aa_cfill(i_img *im,double x,double y,double rad,double d1,double d2,i_fill_t *fill);
 void i_circle_aa   (i_img *im,float x, float y,float rad,i_color *val);
 void i_copyto      (i_img *im,i_img *src,int x1,int y1,int x2,int y2,int tx,int ty);
 void i_copyto_trans(i_img *im,i_img *src,int x1,int y1,int x2,int y2,int tx,int ty,i_color *trans);
@@ -271,7 +273,6 @@ typedef struct i_font_mm_tag {
 } i_font_mm;
 
 #ifdef HAVE_LIBT1
-#include <t1lib.h>
 
 undef_int i_init_t1( int t1log );
 int       i_t1_new( char *pfb, char *afm );
@@ -573,7 +574,7 @@ undef_int i_writejpeg_wiol(i_img *im, io_glue *ig, int qfactor);
 #endif /* HAVE_LIBJPEG */
 
 #ifdef HAVE_LIBTIFF
-i_img   * i_readtiff_wiol(io_glue *ig, int length);
+i_img   * i_readtiff_wiol(io_glue *ig, int length, int page);
 i_img  ** i_readtiff_multi_wiol(io_glue *ig, int length, int *count);
 undef_int i_writetiff_wiol(i_img *im, io_glue *ig);
 undef_int i_writetiff_multi_wiol(io_glue *ig, i_img **imgs, int count);
@@ -592,6 +593,7 @@ i_img *i_readgif(int fd, int **colour_table, int *colours);
 i_img *i_readgif_wiol(io_glue *ig, int **colour_table, int *colours);
 i_img *i_readgif_scalar(char *data, int length, int **colour_table, int *colours);
 i_img *i_readgif_callback(i_read_callback_t callback, char *userdata, int **colour_table, int *colours);
+i_img *i_readgif_single_wiol(io_glue *ig, int page);
 extern i_img **i_readgif_multi(int fd, int *count);
 extern i_img **i_readgif_multi_scalar(char *data, int length, int *count);
 extern i_img **i_readgif_multi_callback(i_read_callback_t callback, char *userdata, int *count);
@@ -792,5 +794,11 @@ extern int i_tags_get_color(i_img_tags *tags, char const *name, int code,
 extern int i_tags_set_color(i_img_tags *tags, char const *name, int code, 
                             i_color const *value);
 extern void i_tags_print(i_img_tags *tags);
+
+/* image file limits */
+extern int
+i_set_image_file_limits(int width, int height, int bytes);
+extern int
+i_get_image_file_limits(int *width, int *height, int *bytes);
 
 #endif

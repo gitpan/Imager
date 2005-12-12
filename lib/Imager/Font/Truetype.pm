@@ -1,7 +1,9 @@
 package Imager::Font::Truetype;
 use strict;
-use vars qw(@ISA);
+use vars qw(@ISA $VERSION);
 @ISA = qw(Imager::Font);
+
+$VERSION = sprintf "%d.%03d", q$Revision: 1.10 $=~/\d+/g;
 
 *_first = \&Imager::Font::_first;
 
@@ -24,8 +26,8 @@ sub new {
     return;
   }
   my $id = Imager::i_tt_new($hsh{file});
-  unless ($id >= 0) { # the low-level code may miss some error handling
-    $Imager::ERRSTR = "Could not load font ($id)";
+  unless ($id) { # the low-level code may miss some error handling
+    $Imager::ERRSTR = Imager::_error_as_msg();
     return;
   }
   return bless {
@@ -79,7 +81,8 @@ sub has_chars {
     $Imager::ERRSTR = "No string supplied to \$font->has_chars()";
     return;
   }
-  return Imager::i_tt_has_chars($self->{id}, $hsh{string}, $hsh{'utf8'} || 0);
+  return Imager::i_tt_has_chars($self->{id}, $hsh{string}, 
+				_first($hsh{'utf8'}, $self->{utf8}, 0));
 }
 
 sub face_name {

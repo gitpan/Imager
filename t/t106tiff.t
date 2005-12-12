@@ -1,7 +1,7 @@
 #!perl -w
 use strict;
 use lib 't';
-use Test::More tests => 77;
+use Test::More tests => 89;
 use Imager qw(:all);
 $^W=1; # warnings during command-line tests
 $|=1;  # give us some progress in the test harness
@@ -32,7 +32,7 @@ SKIP:
     $im = Imager->new(xsize=>2, ysize=>2);
     ok(!$im->write(file=>"testout/notiff.tif"), "should fail to write tiff");
     is($im->errstr, 'format not supported', "check no tiff message");
-    skip("no tiff support", 73);
+    skip("no tiff support", 85);
   }
 
   Imager::i_tags_add($img, "i_xres", 0, "300", 0);
@@ -65,6 +65,8 @@ SKIP:
   ok(abs($tags{i_yres} - 250) < 0.5, "i_yres in range");
   is($tags{tiff_resolutionunit}, 3, "tiff_resolutionunit");
   is($tags{tiff_software}, 't106tiff.t', "tiff_software");
+  is($tags{tiff_photometric}, 2, "tiff_photometric"); # PHOTOMETRIC_RGB is 2
+  is($tags{tiff_bitspersample}, 8, "tiff_bitspersample");
 
   $IO = Imager::io_new_bufchain();
   
@@ -119,6 +121,8 @@ SKIP:
   ok(!$tags{i_aspect_only}, "i_aspect_only");
   # resunit_inches
   is($tags{tiff_resolutionunit}, 2, "tiff_resolutionunit");
+  is($tags{tiff_bitspersample}, 1, "tiff_bitspersample");
+  is($tags{tiff_photometric}, 1, "tiff_photometric");
 
   ok($oofim->write(file=>'testout/t106_oo_fax.tiff', class=>'fax'),
      "write OO, faxable");
@@ -333,4 +337,33 @@ SKIP:
   my ($warning) = $warned->tags(name=>'i_warning');
   ok(defined $warning && $warning =~ /unknown field with tag 28712/,
      "check that warning tag set and correct");
+
+  { # support for reading a given page
+    # first build a simple test image
+    my $im1 = Imager->new(xsize=>50, ysize=>50);
+    $im1->box(filled=>1, color=>$blue);
+    $im1->addtag(name=>'tiff_pagename', value => "Page One");
+    my $im2 = Imager->new(xsize=>60, ysize=>60);
+    $im2->box(filled=>1, color=>$green);
+    $im2->addtag(name=>'tiff_pagename', value=>"Page Two");
+
+    # read second page
+    my $page_file = 'testout/t106_pages.tif';
+    ok(Imager->write_multi({ file=> $page_file}, $im1, $im2),
+       "build simple multiimage for page tests");
+    my $imwork = Imager->new;
+    ok($imwork->read(file=>$page_file, page=>1),
+       "read second page");
+    is($im2->getwidth, $imwork->getwidth, "check width");
+    is($im2->getwidth, $imwork->getheight, "check height");
+    is(i_img_diff($imwork->{IMG}, $im2->{IMG}), 0,
+       "check image content");
+    my ($page_name) = $imwork->tags(name=>'tiff_pagename');
+    is($page_name, 'Page Two', "check tag we set");
+
+    # try an out of range page
+    ok(!$imwork->read(file=>$page_file, page=>2),
+       "check out of range page");
+    is($imwork->errstr, "could not switch to page 2", "check message");
+  }
 }

@@ -2,7 +2,7 @@
 use strict;
 $|=1;
 use lib 't';
-use Test::More tests => 69;
+use Test::More tests => 107;
 use Imager qw(:all);
 BEGIN { require "t/testtools.pl"; }
 use Carp 'confess';
@@ -38,7 +38,7 @@ SKIP:
     $im = Imager->new(xsize=>2, ysize=>2);
     ok(!$im->write(file=>"testout/nogif.gif"), "should fail to write gif");
     is($im->errstr, 'format not supported', "check no gif message");
-    skip("no gif support", 65);
+    skip("no gif support", 103);
   }
     open(FH,">testout/t105.gif") || die "Cannot open testout/t105.gif\n";
     binmode(FH);
@@ -439,7 +439,8 @@ EOS
       my $ooim = Imager->new;
       ok($ooim->read(file=>"testout/t105.gif"), "read into object");
       ok($ooim->write(file=>"testout/t105_warn.gif", interlace=>1),
-        "save from object");
+        "save from object")
+	or print "# ", $ooim->errstr, "\n";
       ok(grep(/Obsolete .* interlace .* gif_interlace/, @warns),
         "check for warning");
       init(warn_obsolete=>0);
@@ -528,6 +529,113 @@ EOS
       my ($type) = $im->tags(name=>'i_format');
       is($type, 'gif', 'check i_format for single image read');
     }
+
+  { # check file limits are checked
+    my $limit_file = "testout/t105.gif";
+    ok(Imager->set_file_limits(reset=>1, width=>149), "set width limit 149");
+    my $im = Imager->new;
+    ok(!$im->read(file=>$limit_file),
+       "should fail read due to size limits");
+    print "# ",$im->errstr,"\n";
+    like($im->errstr, qr/image width/, "check message");
+    
+    ok(Imager->set_file_limits(reset=>1, height=>149), "set height limit 149");
+    ok(!$im->read(file=>$limit_file),
+       "should fail read due to size limits");
+    print "# ",$im->errstr,"\n";
+    like($im->errstr, qr/image height/, "check message");
+    
+    ok(Imager->set_file_limits(reset=>1, width=>150), "set width limit 150");
+    ok($im->read(file=>$limit_file),
+       "should succeed - just inside width limit");
+    ok(Imager->set_file_limits(reset=>1, height=>150), "set height limit 150");
+    ok($im->read(file=>$limit_file),
+       "should succeed - just inside height limit");
+    
+    # 150 x 150 x 3 channel image uses 67500 bytes
+    ok(Imager->set_file_limits(reset=>1, bytes=>67499),
+       "set bytes limit 67499");
+    ok(!$im->read(file=>$limit_file),
+       "should fail - too many bytes");
+    print "# ",$im->errstr,"\n";
+    like($im->errstr, qr/storage size/, "check error message");
+    ok(Imager->set_file_limits(reset=>1, bytes=>67500),
+       "set bytes limit 67500");
+    ok($im->read(file=>$limit_file),
+       "should succeed - just inside bytes limit");
+    Imager->set_file_limits(reset=>1);
+  }
+
+  {
+    print "# test OO interface reading of consolidated images\n";
+    my $im = Imager->new;
+    ok($im->read(file=>'testimg/screen2.gif', gif_consolidate=>1),
+       "read image to consolidate");
+    my $expected = Imager->new;
+    ok($expected->read(file=>'testimg/expected.gif'),
+       "read expected via OO");
+    is(i_img_diff($im->{IMG}, $expected->{IMG}), 0,
+       "compare them");
+
+    # check the default read doesn't match
+    ok($im->read(file=>'testimg/screen2.gif'),
+       "read same image without consolidate");
+    isnt(i_img_diff($im->{IMG}, $expected->{IMG}), 0,
+       "compare them - shouldn't include the overlayed second image");
+  }
+  {
+    print "# test the reading of single pages\n";
+    # build a test file
+    my $test_file = 'testout/t105_multi_sing.gif';
+    my $im1 = Imager->new(xsize=>100, ysize=>100);
+    $im1->box(filled=>1, color=>$blue);
+    $im1->addtag(name=>'gif_left', value=>10);
+    $im1->addtag(name=>'gif_top', value=>15);
+    $im1->addtag(name=>'gif_comment', value=>'First page');
+    my $im2 = Imager->new(xsize=>50, ysize=>50);
+    $im2->box(filled=>1, color=>$red);
+    $im2->addtag(name=>'gif_left', value=>30);
+    $im2->addtag(name=>'gif_top', value=>25);
+    $im2->addtag(name=>'gif_comment', value=>'Second page');
+    my $im3 = Imager->new(xsize=>25, ysize=>25);
+    $im3->box(filled=>1, color=>$green);
+    $im3->addtag(name=>'gif_left', value=>35);
+    $im3->addtag(name=>'gif_top', value=>45);
+    # don't set comment for $im3
+    ok(Imager->write_multi({ file=> $test_file}, $im1, $im2, $im3),
+       "write test file for single page reads");
+    
+    my $res = Imager->new;
+    # check we get the first image
+    ok($res->read(file=>$test_file), "read default (first) page");
+    is(i_img_diff($im1->{IMG}, $res->{IMG}), 0, "compare against first");
+    # check tags
+    is($res->tags(name=>'gif_left'), 10, "gif_left");
+    is($res->tags(name=>'gif_top'), 15, "gif_top");
+    is($res->tags(name=>'gif_comment'), 'First page', "gif_comment");
+
+    # get the second image
+    ok($res->read(file=>$test_file, page=>1), "read second page")
+      or print "# ",$res->errstr, "\n";
+    is(i_img_diff($im2->{IMG}, $res->{IMG}), 0, "compare against second");
+    # check tags
+    is($res->tags(name=>'gif_left'), 30, "gif_left");
+    is($res->tags(name=>'gif_top'), 25, "gif_top");
+    is($res->tags(name=>'gif_comment'), 'Second page', "gif_comment");
+
+    # get the third image
+    ok($res->read(file=>$test_file, page=>2), "read third page")
+      or print "# ",$res->errstr, "\n";
+    is(i_img_diff($im3->{IMG}, $res->{IMG}), 0, "compare against third");
+    is($res->tags(name=>'gif_left'), 35, "gif_left");
+    is($res->tags(name=>'gif_top'), 45, "gif_top");
+    is($res->tags(name=>'gif_comment'), undef, 'gif_comment undef');
+
+    # try to read a fourth page
+    ok(!$res->read(file=>$test_file, page=>3), "fail reading fourth page");
+    cmp_ok($res->errstr, "=~", 'page 3 not found',
+	   "check error message");
+  }
 }
 
 sub test_readgif_cb {

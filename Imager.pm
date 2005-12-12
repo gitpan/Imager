@@ -147,7 +147,7 @@ BEGIN {
   require Exporter;
   require DynaLoader;
 
-  $VERSION = '0.45';
+  $VERSION = '0.45_02';
   @ISA = qw(Exporter DynaLoader);
   bootstrap Imager $VERSION;
 }
@@ -1142,14 +1142,17 @@ sub read {
   if ( $input{'type'} eq 'jpeg' ) {
     ($self->{IMG},$self->{IPTCRAW}) = i_readjpeg_wiol( $IO );
     if ( !defined($self->{IMG}) ) {
-      $self->{ERRSTR}='unable to read jpeg image'; return undef;
+      $self->{ERRSTR}=$self->_error_as_msg(); return undef;
     }
     $self->{DEBUG} && print "loading a jpeg file\n";
     return $self;
   }
 
   if ( $input{'type'} eq 'tiff' ) {
-    $self->{IMG}=i_readtiff_wiol( $IO, -1 ); # Fixme, check if that length parameter is ever needed
+    my $page = $input{'page'};
+    defined $page or $page = 0;
+    # Fixme, check if that length parameter is ever needed
+    $self->{IMG}=i_readtiff_wiol( $IO, -1, $page ); 
     if ( !defined($self->{IMG}) ) {
       $self->{ERRSTR}=$self->_error_as_msg(); return undef;
     }
@@ -1169,7 +1172,7 @@ sub read {
   if ( $input{'type'} eq 'png' ) {
     $self->{IMG}=i_readpng_wiol( $IO, -1 ); # Fixme, check if that length parameter is ever needed
     if ( !defined($self->{IMG}) ) {
-      $self->{ERRSTR}='unable to read png image';
+      $self->{ERRSTR} = $self->_error_as_msg();
       return undef;
     }
     $self->{DEBUG} && print "loading a png file\n";
@@ -1190,16 +1193,28 @@ sub read {
       $self->{ERRSTR} = "option 'colors' must be a scalar reference";
       return undef;
     }
-    if ($input{colors}) {
-      my $colors;
-      ($self->{IMG}, $colors) =i_readgif_wiol( $IO );
-      if ($colors) {
-	${ $input{colors} } = [ map { NC(@$_) } @$colors ];
+    if ($input{'gif_consolidate'}) {
+      if ($input{colors}) {
+	my $colors;
+	($self->{IMG}, $colors) =i_readgif_wiol( $IO );
+	if ($colors) {
+	  ${ $input{colors} } = [ map { NC(@$_) } @$colors ];
+	}
+      }
+      else {
+	$self->{IMG} =i_readgif_wiol( $IO );
       }
     }
     else {
-      $self->{IMG} =i_readgif_wiol( $IO );
+      my $page = $input{'page'};
+      defined $page or $page = 0;
+      $self->{IMG} = i_readgif_single_wiol( $IO, $page );
+      if ($input{colors}) {
+	${ $input{colors} } =
+	  [ i_getcolors($self->{IMG}, 0, i_colorcount($self->{IMG})) ];
+      }
     }
+
     if ( !defined($self->{IMG}) ) {
       $self->{ERRSTR}=$self->_error_as_msg();
       return undef;
@@ -2069,8 +2084,6 @@ sub box {
   return $self;
 }
 
-# Draws an arc - this routine SUCKS and is buggy - it sometimes doesn't work when the arc is a convex polygon
-
 sub arc {
   my $self=shift;
   unless ($self->{IMG}) { $self->{ERRSTR}='empty input image'; return undef; }
@@ -2080,39 +2093,56 @@ sub arc {
 	    'x'=>$self->getwidth()/2,
 	    'y'=>$self->getheight()/2,
 	    'd1'=>0, 'd2'=>361, @_);
-  if ($opts{fill}) {
-    unless (UNIVERSAL::isa($opts{fill}, 'Imager::Fill')) {
-      # assume it's a hash ref
-      require 'Imager/Fill.pm';
-      unless ($opts{fill} = Imager::Fill->new(%{$opts{fill}})) {
-        $self->{ERRSTR} = $Imager::ERRSTR;
-        return;
+  if ($opts{aa}) {
+    if ($opts{fill}) {
+      unless (UNIVERSAL::isa($opts{fill}, 'Imager::Fill')) {
+	# assume it's a hash ref
+	require 'Imager/Fill.pm';
+	unless ($opts{fill} = Imager::Fill->new(%{$opts{fill}})) {
+	  $self->{ERRSTR} = $Imager::ERRSTR;
+	  return;
+	}
       }
-    }
-    i_arc_cfill($self->{IMG},$opts{'x'},$opts{'y'},$opts{'r'},$opts{'d1'},
-                $opts{'d2'}, $opts{fill}{fill});
-  }
-  else {
-    my $color = _color($opts{'color'});
-    unless ($color) { 
-      $self->{ERRSTR} = $Imager::ERRSTR; 
-      return; 
-    }
-    if ($opts{d1} == 0 && $opts{d2} == 361 && $opts{aa}) {
-      i_circle_aa($self->{IMG}, $opts{'x'}, $opts{'y'}, $opts{'r'}, 
-                  $color);
+      i_arc_aa_cfill($self->{IMG},$opts{'x'},$opts{'y'},$opts{'r'},$opts{'d1'},
+		     $opts{'d2'}, $opts{fill}{fill});
     }
     else {
-      if ($opts{'d1'} <= $opts{'d2'}) { 
-        i_arc($self->{IMG},$opts{'x'},$opts{'y'},$opts{'r'},
-              $opts{'d1'}, $opts{'d2'}, $color); 
+      my $color = _color($opts{'color'});
+      unless ($color) { 
+	$self->{ERRSTR} = $Imager::ERRSTR; 
+	return; 
+      }
+      if ($opts{d1} == 0 && $opts{d2} == 361 && $opts{aa}) {
+	i_circle_aa($self->{IMG}, $opts{'x'}, $opts{'y'}, $opts{'r'}, 
+		    $color);
       }
       else {
-        i_arc($self->{IMG},$opts{'x'},$opts{'y'},$opts{'r'},
-              $opts{'d1'}, 361,         $color);
-        i_arc($self->{IMG},$opts{'x'},$opts{'y'},$opts{'r'},
-              0,           $opts{'d2'}, $color); 
+	i_arc_aa($self->{IMG},$opts{'x'},$opts{'y'},$opts{'r'},
+		 $opts{'d1'}, $opts{'d2'}, $color); 
       }
+    }
+  }
+  else {
+    if ($opts{fill}) {
+      unless (UNIVERSAL::isa($opts{fill}, 'Imager::Fill')) {
+	# assume it's a hash ref
+	require 'Imager/Fill.pm';
+	unless ($opts{fill} = Imager::Fill->new(%{$opts{fill}})) {
+	  $self->{ERRSTR} = $Imager::ERRSTR;
+	  return;
+	}
+      }
+      i_arc_cfill($self->{IMG},$opts{'x'},$opts{'y'},$opts{'r'},$opts{'d1'},
+		  $opts{'d2'}, $opts{fill}{fill});
+    }
+    else {
+      my $color = _color($opts{'color'});
+      unless ($color) { 
+	$self->{ERRSTR} = $Imager::ERRSTR; 
+	return; 
+      }
+      i_arc($self->{IMG},$opts{'x'},$opts{'y'},$opts{'r'},
+	    $opts{'d1'}, $opts{'d2'}, $color); 
     }
   }
 
@@ -2383,6 +2413,111 @@ sub getpixel {
   $self;
 }
 
+sub getscanline {
+  my $self = shift;
+  my %opts = ( type => '8bit', x=>0, @_);
+
+  defined $opts{width} or $opts{width} = $self->getwidth - $opts{x};
+
+  unless (defined $opts{'y'}) {
+    $self->_set_error("missing y parameter");
+    return;
+  }
+
+  if ($opts{type} eq '8bit') {
+    return i_glin($self->{IMG}, $opts{x}, $opts{x}+$opts{width},
+		  $opts{y});
+  }
+  elsif ($opts{type} eq 'float') {
+    return i_glinf($self->{IMG}, $opts{x}, $opts{x}+$opts{width},
+		  $opts{y});
+  }
+  else {
+    $self->_set_error("invalid type parameter - must be '8bit' or 'float'");
+    return;
+  }
+}
+
+sub setscanline {
+  my $self = shift;
+  my %opts = ( x=>0, @_);
+
+  unless (defined $opts{'y'}) {
+    $self->_set_error("missing y parameter");
+    return;
+  }
+
+  if (!$opts{type}) {
+    if (ref $opts{pixels} && @{$opts{pixels}}) {
+      # try to guess the type
+      if ($opts{pixels}[0]->isa('Imager::Color')) {
+	$opts{type} = '8bit';
+      }
+      elsif ($opts{pixels}[0]->isa('Imager::Color::Float')) {
+	$opts{type} = 'float';
+      }
+      else {
+	$self->_set_error("missing type parameter and could not guess from pixels");
+	return;
+      }
+    }
+    else {
+      # default
+      $opts{type} = '8bit';
+    }
+  }
+
+  if ($opts{type} eq '8bit') {
+    if (ref $opts{pixels}) {
+      return i_plin($self->{IMG}, $opts{x}, $opts{'y'}, @{$opts{pixels}});
+    }
+    else {
+      return i_plin($self->{IMG}, $opts{x}, $opts{'y'}, $opts{pixels});
+    }
+  }
+  elsif ($opts{type} eq 'float') {
+    if (ref $opts{pixels}) {
+      return i_plinf($self->{IMG}, $opts{x}, $opts{'y'}, @{$opts{pixels}});
+    }
+    else {
+      return i_plinf($self->{IMG}, $opts{x}, $opts{'y'}, $opts{pixels});
+    }
+  }
+  else {
+    $self->_set_error("invalid type parameter - must be '8bit' or 'float'");
+    return;
+  }
+}
+
+sub getsamples {
+  my $self = shift;
+  my %opts = ( type => '8bit', x=>0, @_);
+
+  defined $opts{width} or $opts{width} = $self->getwidth - $opts{x};
+
+  unless (defined $opts{'y'}) {
+    $self->_set_error("missing y parameter");
+    return;
+  }
+  
+  unless ($opts{channels}) {
+    $opts{channels} = [ 0 .. $self->getchannels()-1 ];
+  }
+
+  if ($opts{type} eq '8bit') {
+    return i_gsamp($self->{IMG}, $opts{x}, $opts{x}+$opts{width},
+		   $opts{y}, @{$opts{channels}});
+  }
+  elsif ($opts{type} eq 'float') {
+    return i_gsampf($self->{IMG}, $opts{x}, $opts{x}+$opts{width},
+		    $opts{y}, @{$opts{channels}});
+  }
+  else {
+    $self->_set_error("invalid type parameter - must be '8bit' or 'float'");
+    return;
+  }
+}
+
 # make an identity matrix of the given size
 sub _identity {
   my ($size) = @_;
@@ -2591,8 +2726,17 @@ sub getmask {
 sub setmask {
   my $self = shift;
   my %opts = @_;
-  if (!defined($self->{IMG})) { $self->{ERRSTR} = 'image is empty'; return undef; }
+  if (!defined($self->{IMG})) { 
+    $self->{ERRSTR} = 'image is empty';
+    return undef;
+  }
+  unless (defined $opts{mask}) {
+    $self->_set_error("mask parameter required");
+    return;
+  }
   i_img_setmask( $self->{IMG} , $opts{mask} );
+
+  1;
 }
 
 # Get number of colors in an image
@@ -2614,7 +2758,7 @@ sub string {
   my %input=('x'=>0, 'y'=>0, @_);
   $input{string}||=$input{text};
 
-  unless(exists $input{string}) {
+  unless(defined $input{string}) {
     $self->{ERRSTR}="missing required parameter 'string'";
     return;
   }
@@ -2625,11 +2769,72 @@ sub string {
   }
 
   unless ($input{font}->draw(image=>$self, %input)) {
-    $self->{ERRSTR} = $self->_error_as_msg();
     return;
   }
 
   return $self;
+}
+
+sub align_string {
+  my $self = shift;
+
+  my $img;
+  if (ref $self) {
+    unless ($self->{IMG}) { 
+      $self->{ERRSTR}='empty input image'; 
+      return;
+    }
+    $img = $self;
+  }
+  else {
+    $img = undef;
+  }
+
+  my %input=('x'=>0, 'y'=>0, @_);
+  $input{string}||=$input{text};
+
+  unless(exists $input{string}) {
+    $self->_set_error("missing required parameter 'string'");
+    return;
+  }
+
+  unless($input{font}) {
+    $self->_set_error("missing required parameter 'font'");
+    return;
+  }
+
+  my @result;
+  unless (@result = $input{font}->align(image=>$img, %input)) {
+    return;
+  }
+
+  return wantarray ? @result : $result[0];
+}
+
+my @file_limit_names = qw/width height bytes/;
+
+sub set_file_limits {
+  shift;
+
+  my %opts = @_;
+  my %values;
+  
+  if ($opts{reset}) {
+    @values{@file_limit_names} = (0) x @file_limit_names;
+  }
+  else {
+    @values{@file_limit_names} = i_get_image_file_limits();
+  }
+
+  for my $key (keys %values) {
+    defined $opts{$key} and $values{$key} = $opts{$key};
+  }
+
+  i_set_image_file_limits($values{width}, $values{height}, $values{bytes});
+}
+
+sub get_file_limits {
+  i_get_image_file_limits();
 }
 
 # Shortcuts that can be exported
@@ -2817,6 +3022,10 @@ Overview.
 
 =item *
 
+L<Imager::Tutorial> - a brief introduction to Imager.
+
+=item *
+
 L<Imager::Cookbook> - how to do various things with Imager.
 
 =item *
@@ -2912,18 +3121,22 @@ L<Imager::ImageTypes>.
 
 Where to find information on methods for Imager class objects.
 
-addcolors() -  L<Imager::ImageTypes>
+addcolors() -  L<Imager::ImageTypes/addcolors>
 
-addtag() -  L<Imager::ImageTypes> - add image tags
+addtag() -  L<Imager::ImageTypes/addtag> - add image tags
 
 arc() - L<Imager::Draw/arc>
 
-bits() - L<Imager::ImageTypes> - number of bits per sample for the
+align_string() - L<Imager::Draw/align_string>
+
+bits() - L<Imager::ImageTypes/bits> - number of bits per sample for the
 image
 
 box() - L<Imager::Draw/box>
 
 circle() - L<Imager::Draw/circle>
+
+colorcount() - L<Imager::Draw/colorcount>
 
 convert() - L<Imager::Transformations/"Color transformations"> -
 transform the color space
@@ -2932,46 +3145,54 @@ copy() - L<Imager::Transformations/copy>
 
 crop() - L<Imager::Transformations/crop> - extract part of an image
 
-deltag() -  L<Imager::ImageTypes> - delete image tags
+deltag() -  L<Imager::ImageTypes/deltag> - delete image tags
 
 difference() - L<Imager::Filters/"Image Difference">
 
-errstr() - L<Imager/"Basic Overview">
+errstr() - L<"Basic Overview">
 
 filter() - L<Imager::Filters>
 
-findcolor() - L<Imager::ImageTypes> - search the image palette, if it
+findcolor() - L<Imager::ImageTypes/findcolor> - search the image palette, if it
 has one
 
 flip() - L<Imager::Transformations/flip>
 
 flood_fill() - L<Imager::Draw/flood_fill>
 
-getchannels() -  L<Imager::ImageTypes>
+getchannels() -  L<Imager::ImageTypes/getchannels>
 
-getcolorcount() -  L<Imager::ImageTypes>
+getcolorcount() -  L<Imager::ImageTypes/getcolorcount>
 
-getcolors() - L<Imager::ImageTypes> - get colors from the image
+getcolors() - L<Imager::ImageTypes/getcolors> - get colors from the image
 palette, if it has one
 
-getheight() - L<Imager::ImageTypes>
+get_file_limits() - L<Imager::Files/"Limiting the sizes of images you read">
 
-getpixel() - L<Imager::Draw/setpixel and getpixel>
+getheight() - L<Imager::ImageTypes/getwidth>
 
-getwidth() - L<Imager::ImageTypes>
+getpixel() - L<Imager::Draw/getpixel>
 
-img_set() - L<Imager::ImageTypes>
+getsamples() - L<Imager::Draw/getsamples>
+
+getscanline() - L<Imager::Draw/getscanline>
+
+getwidth() - L<Imager::ImageTypes/getwidth>
+
+img_set() - L<Imager::ImageTypes/img_set>
 
 line() - L<Imager::Draw/line>
 
 map() - L<Imager::Transformations/"Color Mappings"> - remap color
 channel values
 
-masked() -  L<Imager::ImageTypes> - make a masked image
+masked() -  L<Imager::ImageTypes/masked> - make a masked image
 
 matrix_transform() - L<Imager::Engines/"Matrix Transformations">
 
-new() - L<Imager::ImageTypes>
+maxcolors() - L<Imager::ImageTypes/maxcolors>
+
+new() - L<Imager::ImageTypes/new>
 
 open() - L<Imager::Files> - an alias for read()
 
@@ -2993,29 +3214,34 @@ image and use the alpha channel
 
 scale() - L<Imager::Transformations/scale>
 
+setscanline() - L<Imager::Draw/setscanline>
+
 scaleX() - L<Imager::Transformations/scaleX>
 
 scaleY() - L<Imager::Transformations/scaleY>
 
-setcolors() - L<Imager::ImageTypes> - set palette colors in a paletted image
+setcolors() - L<Imager::ImageTypes/setcolors> - set palette colors in
+a paletted image
 
-setpixel() - L<Imager::Draw/setpixel and getpixel>
+setpixel() - L<Imager::Draw/setpixel>
 
-string() - L<Imager::Font/string> - draw text on an image
+set_file_limits() - L<Imager::Files/"Limiting the sizes of images you read">
 
-tags() -  L<Imager::ImageTypes> - fetch image tags
+string() - L<Imager::Draw/string> - draw text on an image
 
-to_paletted() -  L<Imager::ImageTypes>
+tags() -  L<Imager::ImageTypes/tags> - fetch image tags
 
-to_rgb8() - L<Imager::ImageTypes>
+to_paletted() -  L<Imager::ImageTypes/to_paletted>
+
+to_rgb8() - L<Imager::ImageTypes/to_rgb8>
 
 transform() - L<Imager::Engines/"transform">
 
 transform2() - L<Imager::Engines/"transform2">
 
-type() -  L<Imager::ImageTypes> - type of image (direct vs paletted)
+type() -  L<Imager::ImageTypes/type> - type of image (direct vs paletted)
 
-virtual() - L<Imager::ImageTypes> - whether the image has it's own
+virtual() - L<Imager::ImageTypes/virtual> - whether the image has it's own
 data
 
 write() - L<Imager::Files> - write an image to a file
@@ -3034,11 +3260,15 @@ blur - L<Imager::Filters/guassian>, L<Imager::Filters/conv>
 
 boxes, drawing - L<Imager::Draw/box>
 
+changes between image - L<Imager::Filter/"Image Difference">
+
 color - L<Imager::Color>
 
 color names - L<Imager::Color>, L<Imager::Color::Table>
 
 combine modes - L<Imager::Fill/combine>
+
+compare images - L<Imager::Filter/"Image Difference">
 
 contrast - L<Imager::Filter/contrast>, L<Imager::Filter/autolevels>
 
@@ -3046,15 +3276,17 @@ convolution - L<Imager::Filter/conv>
 
 cropping - L<Imager::Transformations/crop>
 
+C<diff> images - L<Imager::Filter/"Image Difference">
+
 dpi - L<Imager::ImageTypes/i_xres>
 
 drawing boxes - L<Imager::Draw/box>
 
 drawing lines - L<Imager::Draw/line>
 
-drawing text - L<Imager::Font/string>
+drawing text - L<Imager::Font/string>, L<Imager::Font/align>
 
-error message - L<Imager/"Basic Overview">
+error message - L<"Basic Overview">
 
 files, font - L<Imager::Font>
 
@@ -3097,6 +3329,8 @@ invert image - L<Imager::Filter/hardinvert>
 
 JPEG - L<Imager::Files/"JPEG">
 
+limiting image sizes - L<Imager::Files/"Limiting the sizes of images you read">
+
 lines, drawing - L<Imager::Draw/line>
 
 matrix - L<Imager::Matrix2d>, 
@@ -3112,11 +3346,14 @@ noise, filter - L<Imager::Filter/noise>
 noise, rendered - L<Imager::Filter/turbnoise>,
 L<Imager::Filter/radnoise>
 
+pseudo-color image - L<Imager::ImageTypes/to_paletted>,
+L<Imager::ImageTypes/new>
+
 posterize - L<Imager::Filter/postlevels>
 
 png files - L<Imager::Files>, L<Imager::Files/"PNG">
 
-pnm - L<Imager::Files/"PNM (Portable aNy Map">
+pnm - L<Imager::Files/"PNM (Portable aNy Map)">
 
 rectangles, drawing - L<Imager::Draw/box>
 
@@ -3134,7 +3371,9 @@ L<Imager::ImageTypes/getheight>
 
 size, text - L<Imager::Font/bounding_box>
 
-text, drawing - L<Imager::Font/string>, L<Imager::Font/align>,
+tags, image metadata - L<Imager::ImageTypes/"Tags">
+
+text, drawing - L<Imager::Draw/string>, L<Imager::Draw/align_string>,
 L<Imager::Font::Wrap>
 
 text, wrapping text in an area - L<Imager::Font::Wrap>
@@ -3147,7 +3386,7 @@ unsharp mask - L<Imager::Filter/unsharpmask>
 
 watermark - L<Imager::Filter/watermark>
 
-writing an image - L<Imager::Files>
+writing an image to a file - L<Imager::Files>
 
 =head1 SUPPORT
 
@@ -3160,8 +3399,11 @@ To subscribe send a message with C<subscribe> in the body to:
 
 or use the form at:
 
-   http://www.molar.is/en/lists/imager-devel/
-   (annonymous is temporarily off due to spam)
+=over
+
+L<http://www.molar.is/en/lists/imager-devel/>
+
+=back
 
 where you can also find the mailing list archive.
 
@@ -3171,7 +3413,11 @@ occupied or asleep, so please be patient.
 
 You can report bugs by pointing your browser at:
 
-  https://rt.cpan.org/NoAuth/ReportBug.html?Queue=Imager
+=over
+
+L<https://rt.cpan.org/NoAuth/ReportBug.html?Queue=Imager>
+
+=back
 
 Please remember to include the versions of Imager, perl, supporting
 libraries, and any relevant code.  If you have specific images that
@@ -3183,17 +3429,23 @@ Bugs are listed individually for relevant pod pages.
 
 =head1 AUTHOR
 
-Arnar M. Hrafnkelsson (addi@imager.perl.org) and Tony Cook
-(tony@imager.perl.org) See the README for a complete list.
+Arnar M. Hrafnkelsson and Tony Cook (tony@imager.perl.org) among
+others. See the README for a complete list.
 
 =head1 SEE ALSO
 
-perl(1), Imager::ImageTypes(3), Imager::Files(3), Imager::Draw(3),
-Imager::Color(3), Imager::Fill(3), Imager::Font(3),
-Imager::Transformations(3), Imager::Engines(3), Imager::Filters(3),
-Imager::Expr(3), Imager::Matrix2d(3), Imager::Fountain(3)
+L<perl>(1), L<Imager::ImageTypes>(3), L<Imager::Files>(3),
+L<Imager::Draw>(3), L<Imager::Color>(3), L<Imager::Fill>(3),
+L<Imager::Font>(3), L<Imager::Transformations>(3),
+L<Imager::Engines>(3), L<Imager::Filters>(3), L<Imager::Expr>(3),
+L<Imager::Matrix2d>(3), L<Imager::Fountain>(3)
 
-Affix::Infix2Postfix(3), Parse::RecDescent(3)
-http://imager.perl.org/
+L<http://imager.perl.org/>
+
+L<Affix::Infix2Postfix>(3), L<Parse::RecDescent>(3)
+
+Other perl imaging modules include:
+
+L<GD>(3), L<Image::Magick>(3), L<Graphics::Magick>(3).
 
 =cut

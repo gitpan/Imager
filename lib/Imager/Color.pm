@@ -2,7 +2,9 @@ package Imager::Color;
 
 use Imager;
 use strict;
-use vars qw();
+use vars qw($VERSION);
+
+$VERSION = sprintf "%d.%03d", q$Revision: 1.10 $=~/\d+/g;
 
 # It's just a front end to the XS creation functions.
 
@@ -109,6 +111,8 @@ sub _get_gimp_color {
     # or set the palette parameter
     for my $attempt (@gimp_search) {
       my $work = $attempt; # don't modify the source array
+      $work =~ /\$HOME/ && !defined $ENV{HOME}
+	and next;
       $work =~ s/\$HOME/$ENV{HOME}/;
       if (-e $work) {
         $filename = $work;

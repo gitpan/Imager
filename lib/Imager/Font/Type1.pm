@@ -1,8 +1,10 @@
 package Imager::Font::Type1;
 use strict;
 use Imager::Color;
-use vars qw(@ISA);
+use vars qw(@ISA $VERSION);
 @ISA = qw(Imager::Font);
+
+$VERSION = sprintf "%d.%03d", q$Revision: 1.10 $=~/\d+/g;
 
 *_first = \&Imager::Font::_first;
 
@@ -109,7 +111,8 @@ sub has_chars {
     $Imager::ERRSTR = "No string supplied to \$font->has_chars()";
     return;
   }
-  return Imager::i_t1_has_chars($self->{id}, $hsh{string}, $hsh{'utf8'} || 0);
+  return Imager::i_t1_has_chars($self->{id}, $hsh{string}, 
+				_first($hsh{'utf8'}, $self->{utf8}, 0));
 }
 
 sub utf8 {
@@ -156,6 +159,8 @@ By default Imager no longer creates the F<t1lib.log> log file.  You
 can re-enable that by calling Imager::init() with the C<t1log> option:
 
   Imager::init(t1log=>1);
+
+This must be called before creating any fonts.
 
 Currently specific to Imager::Font::Type1, you can use the following
 flags when drawing text or calculating a bounding box:

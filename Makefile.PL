@@ -22,21 +22,45 @@ use Getopt::Long;
 # IM_DFLAGS       Extra flags to pass to the preprocessor
 # IM_SUPPRESS_PROMPT  Suppress the prompt asking about gif support
 
+getenv();     # get environment variables
+
 my $help;
 my @enable;
 my @disable;
 my @incpaths;
 my @libpaths;
 my $noprobe;
+my $noexif;
 GetOptions("help" => \$help,
            "enable=s" => \@enable,
            "disable=s" => \@disable,
            "incpath=s", \@incpaths,
            "libpath=s" => \@libpaths,
-           "noprobe" => \$noprobe);
+           "noprobe" => \$noprobe,
+           "verbose|v" => \$VERBOSE,
+           "nolog" => \$NOLOG,
+	   "noexif" => \$noexif);
+
+if ($VERBOSE) { 
+  print "Verbose mode\n"; 
+  require Data::Dumper; 
+  import Data::Dumper qw(Dumper);
+}
 
 if ($help) {
   usage();
+}
+
+my @defines;
+
+if ($NOLOG)   { print "Logging not compiled into module\n"; }
+else { 
+  push @defines, [ IMAGER_LOG => 1, "Logging system" ];
+}
+
+if ($DEBUG_MALLOC) {
+  push @defines, [ IMAGER_DEBUG_MALLOC => 1, "Use Imager's DEBUG malloc()" ];
+  print "Malloc debugging enabled\n";
 }
 
 if (@enable && @disable) {
@@ -44,7 +68,6 @@ if (@enable && @disable) {
   exit 1;
 }
 
-getenv();     # get environment variables
 init();       # initialize global data
 pathcheck();  # Check if directories exist
 
@@ -63,8 +86,6 @@ if (@enable) {
 elsif (@disable) {
   delete @formats{map { split /,/ } @disable};
 }
-
-my @defines;
 
 # Pick what libraries are used
 if ($MANUAL) {
@@ -86,6 +107,11 @@ for my $frmkey (keys %formats) {
   $F_OBJECT .= ' '  .$frm->{objfiles};
   $lib_cflags   .= ' '  .$frm->{cflags} if $frm->{cflags};
 }
+unless ($noexif) {
+  print "EXIF support enabled\n";
+  push @defines, [ 'IMEXIF_ENABLE', 1, "Enable experimental EXIF support" ];
+  $F_OBJECT .= ' imexif.o';
+}
 
 $F_INC  = join ' ', map "-I$_", map / / ? qq{"$_"} : $_, 
   grep !exists $definc{$_}, @incs;
@@ -102,7 +128,7 @@ if (defined $Config{'d_dlsymun'}) { $OSDEF  .= ' -DDLSYMUN'; }
 	   filters.o dynaload.o stackmach.o datatypes.o
 	   regmach.o trans2.o quant.o error.o convert.o
 	   map.o tags.o palimg.o maskimg.o img16.o rotate.o
-           bmp.o tga.o rgb.o color.o fills.o imgdouble.o);
+           bmp.o tga.o rgb.o color.o fills.o imgdouble.o limits.o hlines.o);
 
 %opts=(
        'NAME'         => 'Imager',
@@ -322,7 +348,7 @@ sub pathcheck {
 
   if ($VERBOSE) {
     print "\nLibrary paths:\n";
-    for (@incs) { print $_,"\n"; }
+    for (@libs) { print $_,"\n"; }
   }
   @libs=grep { -d $_ && -r _ && -x _ or ( print("  $_ doesnt exist or is unaccessible - removed.\n"),0) } @libs;
   print "\ndone.\n";
@@ -371,7 +397,7 @@ sub init {
   }
   if ($^O eq 'cygwin') {
     push(@libs, '/usr/lib/w32api') if -d '/usr/lib/w32api';
-    push(@incs, '/usr/include/w32api') if -d '/usr/lib/w32api';
+    push(@incs, '/usr/include/w32api') if -d '/usr/include/w32api';
   }
 
   my $lext=$Config{'so'};   # Get extensions of libraries
@@ -501,6 +527,7 @@ scalable.  It also supports a variety of other fonts.
 DOCS
                            code => \&freetype2_probe,
                           };
+
   # Make fix indent
   for (keys %formats) { $formats{$_}->{docs} =~ s/^\s+/  /mg; }
 }
@@ -534,18 +561,6 @@ sub getenv {
 				IM_CFLAGS
 				IM_LFLAGS
 				IM_DFLAGS);
-
-  if ($VERBOSE) { print "Verbose mode\n"; require Data::Dumper; import Data::Dumper qw(Dumper);}
-
-  if ($NOLOG)   { print "Logging not compiled into module\n"; }
-  else { 
-    push @defines, [ IMAGER_LOG => 1, "Logging system" ];
-  }
-
-  if ($DEBUG_MALLOC) {
-    push @defines, [ IMAGER_DEBUG_MALLOC => 1, "Use Imager's DEBUG malloc()" ];
-    print "Malloc debugging enabled\n";
-  }
 
 }
 
@@ -652,11 +667,22 @@ sub is_exe {
 
 sub usage {
   print STDERR <<EOS;
-Usage: $0 [--enable feature1,feature2,...] [--incpath ...] [--libpath ...]
-       $0 [--disable feature1,feature2,...] [--incpath ...] [--libpath ...]
+Usage: $0 [--enable feature1,feature2,...] [other options]
+       $0 [--disable feature1,feature2,...]  [other options]
        $0 --help
 Possible feature names are:
   png gif ungif jpeg tiff T1-fonts TT-fonts freetype2
+Other options:
+  --verbose | -v
+    Verbose library probing (or set IM_VERBOSE in the environment)
+  --nolog
+    Disable logging (or set IM_NOLOG in the environment)
+  --incpath dir
+    Add to the include search path
+  --libpath dir
+    Add to the library search path
+  --noprobe
+    Don't use pkg-config or freetype2-config to probe for freetype2 and libpng
 EOS
   exit 1;
 

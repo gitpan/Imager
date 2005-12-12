@@ -1,8 +1,10 @@
 package Imager::Font::FreeType2;
 use strict;
 use Imager::Color;
-use vars qw(@ISA);
+use vars qw(@ISA $VERSION);
 @ISA = qw(Imager::Font);
+
+$VERSION = sprintf "%d.%03d", q$Revision: 1.13 $=~/\d+/g;
 
 *_first = \&Imager::Font::_first;
 
@@ -114,7 +116,8 @@ sub has_chars {
     $Imager::ERRSTR = "No string supplied to \$font->has_chars()";
     return;
   }
-  return i_ft2_has_chars($self->{id}, $hsh{string}, $hsh{'utf8'} || 0);
+  return i_ft2_has_chars($self->{id}, $hsh{string}, 
+			 _first($hsh{'utf8'}, $self->{utf8}, 0));
 }
 
 sub face_name {

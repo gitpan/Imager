@@ -9,10 +9,16 @@ extern "C" {
 
 #endif
 
+#define i_int_hlines_testing() 1
+
 #include "image.h"
 #include "feat.h"
 #include "dynaload.h"
 #include "regmach.h"
+
+#if i_int_hlines_testing()
+#include "imagei.h"
+#endif
 
 typedef io_glue* Imager__IO;
 typedef i_color* Imager__Color;
@@ -559,32 +565,6 @@ static struct value_name orddith_names[] =
   { "custom", od_custom, },
 };
 
-#if 0
-static int
-hv_fetch_bool(HV *hv, char *name, int def) {
-  SV **sv;
-
-  sv = hv_fetch(hv, name, strlen(name), 0);
-  if (sv && *sv) {
-    return SvTRUE(*sv);
-  }
-  else
-    return def;
-}
-
-static int
-hv_fetch_int(HV *hv, char *name, int def) {
-  SV **sv;
-
-  sv = hv_fetch(hv, name, strlen(name), 0);
-  if (sv && *sv) {
-    return SvIV(*sv);
-  }
-  else
-    return def;
-}
-#endif
-
 /* look through the hash for quantization options */
 static void handle_quant_opts(i_quantize *quant, HV *hv)
 {
@@ -723,90 +703,6 @@ static void cleanup_quant_opts(i_quantize *quant) {
     myfree(quant->ed_map);
 }
 
-#if 0
-/* look through the hash for options to add to opts */
-static void handle_gif_opts(i_gif_opts *opts, HV *hv)
-{
-  SV **sv;
-  int i;
-  /**((char *)0) = '\0';*/
-  opts->each_palette = hv_fetch_bool(hv, "gif_each_palette", 0);
-  opts->interlace = hv_fetch_bool(hv, "interlace", 0);
-
-  sv = hv_fetch(hv, "gif_delays", 10, 0);
-  if (sv && *sv && SvROK(*sv) && SvTYPE(SvRV(*sv)) == SVt_PVAV) {
-    AV *av = (AV*)SvRV(*sv);
-    opts->delay_count = av_len(av)+1;
-    opts->delays = mymalloc(sizeof(int) * opts->delay_count);
-    for (i = 0; i < opts->delay_count; ++i) {
-      SV *sv1 = *av_fetch(av, i, 0);
-      opts->delays[i] = SvIV(sv1);
-    }
-  }
-  sv = hv_fetch(hv, "gif_user_input", 14, 0);
-  if (sv && *sv && SvROK(*sv) && SvTYPE(SvRV(*sv)) == SVt_PVAV) {
-    AV *av = (AV*)SvRV(*sv);
-    opts->user_input_count = av_len(av)+1;
-    opts->user_input_flags = mymalloc(opts->user_input_count);
-    for (i = 0; i < opts->user_input_count; ++i) {
-      SV *sv1 = *av_fetch(av, i, 0);
-      opts->user_input_flags[i] = SvIV(sv1) != 0;
-    }
-  }
-  sv = hv_fetch(hv, "gif_disposal", 12, 0);
-  if (sv && *sv && SvROK(*sv) && SvTYPE(SvRV(*sv)) == SVt_PVAV) {
-    AV *av = (AV*)SvRV(*sv);
-    opts->disposal_count = av_len(av)+1;
-    opts->disposal = mymalloc(opts->disposal_count);
-    for (i = 0; i < opts->disposal_count; ++i) {
-      SV *sv1 = *av_fetch(av, i, 0);
-      opts->disposal[i] = SvIV(sv1);
-    }
-  }
-  sv = hv_fetch(hv, "gif_tran_color", 14, 0);
-  if (sv && *sv && SvROK(*sv) && sv_derived_from(*sv, "Imager::Color")) {
-    i_color *col = INT2PTR(i_color *, SvIV((SV *)SvRV(*sv)));
-    opts->tran_color = *col;
-  }
-  sv = hv_fetch(hv, "gif_positions", 13, 0);
-  if (sv && *sv && SvROK(*sv) && SvTYPE(SvRV(*sv)) == SVt_PVAV) {
-    AV *av = (AV *)SvRV(*sv);
-    opts->position_count = av_len(av) + 1;
-    opts->positions = mymalloc(sizeof(i_gif_pos) * opts->position_count);
-    for (i = 0; i < opts->position_count; ++i) {
-      SV **sv2 = av_fetch(av, i, 0);
-      opts->positions[i].x = opts->positions[i].y = 0;
-      if (sv && *sv && SvROK(*sv) && SvTYPE(SvRV(*sv)) == SVt_PVAV) {
-	AV *av2 = (AV*)SvRV(*sv2);
-	SV **sv3;
-	sv3 = av_fetch(av2, 0, 0);
-	if (sv3 && *sv3)
-	  opts->positions[i].x = SvIV(*sv3);
-	sv3 = av_fetch(av2, 1, 0);
-	if (sv3 && *sv3)
-	  opts->positions[i].y = SvIV(*sv3);
-      }
-    }
-  }
-  /* Netscape2.0 loop count extension */
-  opts->loop_count = hv_fetch_int(hv, "gif_loop_count", 0);
-
-  opts->eliminate_unused = hv_fetch_bool(hv, "gif_eliminate_unused", 1);
-}
-
-static void cleanup_gif_opts(i_gif_opts *opts) {
-  if (opts->delays)
-    myfree(opts->delays);
-  if (opts->user_input_flags)
-    myfree(opts->user_input_flags);
-  if (opts->disposal)
-    myfree(opts->disposal);
-  if (opts->positions) 
-    myfree(opts->positions);
-}
-
-#endif
-
 /* copies the color map from the hv into the colors member of the HV */
 static void copy_colors_back(HV *hv, i_quantize *quant) {
   SV **sv;
@@ -931,6 +827,73 @@ typedef i_fill_t* Imager__FillHandle;
     potential naming conflicts */
 #define init_log m_init_log
 
+#if i_int_hlines_testing()
+
+typedef i_int_hlines *Imager__Internal__Hlines;
+
+static i_int_hlines *
+i_int_hlines_new(int start_y, int count_y, int start_x, int count_x) {
+  i_int_hlines *result = mymalloc(sizeof(i_int_hlines));
+  i_int_init_hlines(result, start_y, count_y, start_x, count_x);
+
+  return result;
+}
+
+static i_int_hlines *
+i_int_hlines_new_img(i_img *im) {
+  i_int_hlines *result = mymalloc(sizeof(i_int_hlines));
+  i_int_init_hlines_img(result, im);
+
+  return result;
+}
+
+static void
+i_int_hlines_DESTROY(i_int_hlines *hlines) {
+  i_int_hlines_destroy(hlines);
+  myfree(hlines);
+}
+
+static int seg_compare(const void *vleft, const void *vright) {
+  const i_int_hline_seg *left = vleft;
+  const i_int_hline_seg *right = vright;
+
+  return left->minx - right->minx;
+}
+
+static SV *
+i_int_hlines_dump(i_int_hlines *hlines) {
+  SV *dump = newSVpvf("start_y: %d limit_y: %d start_x: %d limit_x: %d\n",
+	hlines->start_y, hlines->limit_y, hlines->start_x, hlines->limit_x);
+  int y;
+  
+  for (y = hlines->start_y; y < hlines->limit_y; ++y) {
+    i_int_hline_entry *entry = hlines->entries[y-hlines->start_y];
+    if (entry) {
+      int i;
+      /* sort the segments, if any */
+      if (entry->count)
+        qsort(entry->segs, entry->count, sizeof(i_int_hline_seg), seg_compare);
+
+      sv_catpvf(dump, " %d (%d):", y, entry->count);
+      for (i = 0; i < entry->count; ++i) {
+        sv_catpvf(dump, " [%d, %d)", entry->segs[i].minx, 
+                  entry->segs[i].x_limit);
+      }
+      sv_catpv(dump, "\n");
+    }
+  }
+
+  return dump;
+}
+
+#endif
+
+#ifdef IMEXIF_ENABLE
+#define i_exif_enabled() 1
+#else
+#define i_exif_enabled() 0
+#endif
+
 MODULE = Imager		PACKAGE = Imager::Color	PREFIX = ICL_
 
 Imager::Color
@@ -1053,7 +1016,6 @@ i_rgb_to_hsv(c)
         i_rgb_to_hsvf(RETVAL);
       OUTPUT:
         RETVAL
-        
 
 MODULE = Imager		PACKAGE = Imager::ImgRaw	PREFIX = IIM_
 
@@ -1135,6 +1097,24 @@ io_slurp(ig)
               PUSHs(sv_2mortal(newSVpv((char *)data,tlength)));
               myfree(data);
 
+
+undef_int
+i_set_image_file_limits(width, height, bytes)
+	int width
+	int height
+	int bytes
+
+void
+i_get_image_file_limits()
+      PREINIT:
+        int width, height, bytes;
+      PPCODE:
+        if (i_get_image_file_limits(&width, &height, &bytes)) {
+	  EXTEND(SP, 3);
+          PUSHs(sv_2mortal(newSViv(width)));
+          PUSHs(sv_2mortal(newSViv(height)));
+          PUSHs(sv_2mortal(newSViv(bytes)));
+        }
 
 MODULE = Imager		PACKAGE = Imager::IO	PREFIX = io_glue_
 
@@ -1310,6 +1290,16 @@ i_arc(im,x,y,rad,d1,d2,val)
 	   Imager::Color    val
 
 void
+i_arc_aa(im,x,y,rad,d1,d2,val)
+    Imager::ImgRaw     im
+	    double     x
+	    double     y
+            double     rad
+            double     d1
+            double     d2
+	   Imager::Color    val
+
+void
 i_arc_cfill(im,x,y,rad,d1,d2,fill)
     Imager::ImgRaw     im
 	       int     x
@@ -1319,6 +1309,15 @@ i_arc_cfill(im,x,y,rad,d1,d2,fill)
              float     d2
 	   Imager::FillHandle    fill
 
+void
+i_arc_aa_cfill(im,x,y,rad,d1,d2,fill)
+    Imager::ImgRaw     im
+	    double     x
+	    double     y
+            double     rad
+            double     d1
+            double     d2
+	   Imager::FillHandle	fill
 
 
 void
@@ -2114,6 +2113,8 @@ i_readjpeg_wiol(ig)
                     myfree(iptc_itext);
 	      }
 
+int
+i_exif_enabled()
 
 #endif
 
@@ -2128,9 +2129,10 @@ i_test_format_probe(ig, length)
 #ifdef HAVE_LIBTIFF
 
 Imager::ImgRaw
-i_readtiff_wiol(ig, length)
+i_readtiff_wiol(ig, length, page=0)
         Imager::IO     ig
 	       int     length
+               int     page
 
 void
 i_readtiff_multi_wiol(ig, length)
@@ -2569,6 +2571,11 @@ i_readgif_wiol(ig)
             PUSHs(r);
             PUSHs(newRV_noinc((SV*)ct));
         }
+
+Imager::ImgRaw
+i_readgif_single_wiol(ig, page=0)
+	Imager::IO	ig
+        int		page
 
 void
 i_readgif_scalar(...)
@@ -3468,7 +3475,7 @@ i_addcolors(im, ...)
           }
           else {
             myfree(colors);
-            croak("i_plin: pixels must be Imager::Color objects");
+            croak("i_addcolor: pixels must be Imager::Color objects");
           }
         }
         index = i_addcolors(im, colors, items-1);
@@ -3649,23 +3656,35 @@ i_plin(im, l, y, ...)
       PREINIT:
         i_color *work;
         int i;
+        STRLEN len;
+        int count;
       CODE:
         if (items > 3) {
-          work = mymalloc(sizeof(i_color) * (items-3));
-          for (i=0; i < items-3; ++i) {
-            if (sv_isobject(ST(i+3)) 
-                && sv_derived_from(ST(i+3), "Imager::Color")) {
-              IV tmp = SvIV((SV *)SvRV(ST(i+3)));
-              work[i] = *INT2PTR(i_color *, tmp);
+          if (items == 4 && SvOK(ST(3)) && !SvROK(ST(3))) {
+	    /* supplied as a byte string */
+            work = (i_color *)SvPV(ST(3), len);
+            count = len / sizeof(i_color);
+	    if (count * sizeof(i_color) != len) {
+              croak("i_plin: length of scalar argument must be multiple of sizeof i_color");
             }
-            else {
-              myfree(work);
-              croak("i_plin: pixels must be Imager::Color objects");
-            }
+            RETVAL = i_plin(im, l, l+count, y, work);
           }
-          /**(char *)0 = 1;*/
-          RETVAL = i_plin(im, l, l+items-3, y, work);
-          myfree(work);
+	  else {
+            work = mymalloc(sizeof(i_color) * (items-3));
+            for (i=0; i < items-3; ++i) {
+              if (sv_isobject(ST(i+3)) 
+                  && sv_derived_from(ST(i+3), "Imager::Color")) {
+                IV tmp = SvIV((SV *)SvRV(ST(i+3)));
+                work[i] = *INT2PTR(i_color *, tmp);
+              }
+              else {
+                myfree(work);
+                croak("i_plin: pixels must be Imager::Color objects");
+              }
+            }
+            RETVAL = i_plin(im, l, l+items-3, y, work);
+            myfree(work);
+          }
         }
         else {
           RETVAL = 0;
@@ -3726,23 +3745,36 @@ i_plinf(im, l, y, ...)
       PREINIT:
         i_fcolor *work;
         int i;
+        STRLEN len;
+        int count;
       CODE:
         if (items > 3) {
-          work = mymalloc(sizeof(i_fcolor) * (items-3));
-          for (i=0; i < items-3; ++i) {
-            if (sv_isobject(ST(i+3)) 
-                && sv_derived_from(ST(i+3), "Imager::Color::Float")) {
-              IV tmp = SvIV((SV *)SvRV(ST(i+3)));
-              work[i] = *INT2PTR(i_fcolor *, tmp);
+          if (items == 4 && SvOK(ST(3)) && !SvROK(ST(3))) {
+	    /* supplied as a byte string */
+            work = (i_fcolor *)SvPV(ST(3), len);
+            count = len / sizeof(i_fcolor);
+	    if (count * sizeof(i_fcolor) != len) {
+              croak("i_plin: length of scalar argument must be multiple of sizeof i_fcolor");
             }
-            else {
-              myfree(work);
-              croak("i_plin: pixels must be Imager::Color::Float objects");
-            }
+            RETVAL = i_plinf(im, l, l+count, y, work);
           }
-          /**(char *)0 = 1;*/
-          RETVAL = i_plinf(im, l, l+items-3, y, work);
-          myfree(work);
+	  else {
+            work = mymalloc(sizeof(i_fcolor) * (items-3));
+            for (i=0; i < items-3; ++i) {
+              if (sv_isobject(ST(i+3)) 
+                  && sv_derived_from(ST(i+3), "Imager::Color::Float")) {
+                IV tmp = SvIV((SV *)SvRV(ST(i+3)));
+                work[i] = *INT2PTR(i_fcolor *, tmp);
+              }
+              else {
+                myfree(work);
+                croak("i_plinf: pixels must be Imager::Color::Float objects");
+              }
+            }
+            /**(char *)0 = 1;*/
+            RETVAL = i_plinf(im, l, l+items-3, y, work);
+            myfree(work);
+          }
         }
         else {
           RETVAL = 0;
@@ -3783,14 +3815,20 @@ i_glin(im, l, r, y)
         if (l < r) {
           vals = mymalloc((r-l) * sizeof(i_color));
           count = i_glin(im, l, r, y, vals);
-          EXTEND(SP, count);
-          for (i = 0; i < count; ++i) {
-            SV *sv;
-            i_color *col = mymalloc(sizeof(i_color));
-            *col = vals[i];
-            sv = sv_newmortal();
-            sv_setref_pv(sv, "Imager::Color", (void *)col);
-            PUSHs(sv);
+	  if (GIMME_V == G_ARRAY) {
+            EXTEND(SP, count);
+            for (i = 0; i < count; ++i) {
+              SV *sv;
+              i_color *col = mymalloc(sizeof(i_color));
+              *col = vals[i];
+              sv = sv_newmortal();
+              sv_setref_pv(sv, "Imager::Color", (void *)col);
+              PUSHs(sv);
+            }
+          }
+          else if (count) {
+	    EXTEND(SP, 1);
+	    PUSHs(sv_2mortal(newSVpv((void *)vals, count * sizeof(i_color))));
           }
           myfree(vals);
         }
@@ -3808,14 +3846,20 @@ i_glinf(im, l, r, y)
         if (l < r) {
           vals = mymalloc((r-l) * sizeof(i_fcolor));
           count = i_glinf(im, l, r, y, vals);
-          EXTEND(SP, count);
-          for (i = 0; i < count; ++i) {
-            SV *sv;
-            i_fcolor *col = mymalloc(sizeof(i_fcolor));
-            *col = vals[i];
-            sv = sv_newmortal();
-            sv_setref_pv(sv, "Imager::Color::Float", (void *)col);
-            PUSHs(sv);
+          if (GIMME_V == G_ARRAY) {
+            EXTEND(SP, count);
+            for (i = 0; i < count; ++i) {
+              SV *sv;
+              i_fcolor *col = mymalloc(sizeof(i_fcolor));
+              *col = vals[i];
+              sv = sv_newmortal();
+              sv_setref_pv(sv, "Imager::Color::Float", (void *)col);
+              PUSHs(sv);
+            }
+          }
+          else if (count) {
+            EXTEND(SP, 1);
+            PUSHs(sv_2mortal(newSVpv((void *)vals, count * sizeof(i_fcolor))));
           }
           myfree(vals);
         }
@@ -4480,3 +4524,39 @@ i_new_fill_image(src, matrix, xoff, yoff, combine)
       OUTPUT:
         RETVAL
 
+MODULE = Imager  PACKAGE = Imager::Internal::Hlines  PREFIX=i_int_hlines_
+
+# this class is only exposed for testing
+
+int
+i_int_hlines_testing()
+
+#if i_int_hlines_testing()
+
+Imager::Internal::Hlines
+i_int_hlines_new(start_y, count_y, start_x, count_x)
+	int start_y
+	int count_y
+	int start_x
+	int count_x
+
+Imager::Internal::Hlines
+i_int_hlines_new_img(im)
+	Imager::ImgRaw im
+
+void
+i_int_hlines_add(hlines, y, minx, width)
+	Imager::Internal::Hlines hlines
+	int y
+	int minx
+	int width
+
+void
+i_int_hlines_DESTROY(hlines)
+	Imager::Internal::Hlines hlines
+
+SV *
+i_int_hlines_dump(hlines)
+	Imager::Internal::Hlines hlines
+
+#endif

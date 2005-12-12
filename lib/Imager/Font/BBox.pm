@@ -1,5 +1,8 @@
 package Imager::Font::BBox;
 use strict;
+use vars qw($VERSION);
+
+$VERSION = sprintf "%d.%03d", q$Revision: 1.5 $=~/\d+/g;
 
 =head1 NAME
 
