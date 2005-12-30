@@ -2,7 +2,7 @@ package Imager::Matrix2d;
 use strict;
 use vars qw($VERSION);
 
-$VERSION = sprintf "%d.%03d", q$Revision: 1.8 $=~/\d+/g;
+$VERSION = "1.008";
 
 =head1 NAME
 

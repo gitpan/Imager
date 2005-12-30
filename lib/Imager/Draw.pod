@@ -972,6 +972,6 @@ L<Imager>(3), L<Imager::Cookbook>(3)
 
 =head1 REVISION
 
-$Revision: 1.11 $
+$Revision: 847 $
 
 =cut

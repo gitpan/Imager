@@ -4,7 +4,7 @@ use Imager::Color;
 use strict;
 use vars qw($VERSION);
 
-$VERSION = sprintf "%d.%03d", q$Revision: 1.33 $=~/\d+/g;
+$VERSION = "1.033";
 
 # the aim here is that we can:
 #  - add file based types in one place: here
@@ -930,7 +930,7 @@ of the above.
 
 =head1 REVISION
 
-$Revision: 1.33 $
+$Revision: 868 $
 
 =head1 SEE ALSO
 

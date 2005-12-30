@@ -897,7 +897,7 @@ color table.
 
 =head1 REVISION
 
-$Revision: 1.13 $
+$Revision: 828 $
 
 =head1 AUTHORS
 

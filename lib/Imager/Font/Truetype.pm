@@ -3,7 +3,7 @@ use strict;
 use vars qw(@ISA $VERSION);
 @ISA = qw(Imager::Font);
 
-$VERSION = sprintf "%d.%03d", q$Revision: 1.10 $=~/\d+/g;
+$VERSION = "1.010";
 
 *_first = \&Imager::Font::_first;
 

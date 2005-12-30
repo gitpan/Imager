@@ -58,7 +58,7 @@ See samp-form.cgi for more detail.
 
 =head1 REVISION
 
-$Revision: 1.1 $
+$Revision: 725 $
 
 =head1 AUTHOR
 
