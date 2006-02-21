@@ -28,7 +28,7 @@
 #define MAXINT 2147483647
 #endif
 
-#include "datatypes.h"
+#include "imdatatypes.h"
 
 undef_int i_has_format(char *frmt);
 
@@ -36,7 +36,7 @@ undef_int i_has_format(char *frmt);
 
 i_color *ICL_new_internal(            unsigned char r,unsigned char g,unsigned char b,unsigned char a);
 i_color *ICL_set_internal(i_color *cl,unsigned char r,unsigned char g,unsigned char b,unsigned char a);
-void     ICL_info        (i_color *cl);
+void     ICL_info        (const i_color *cl);
 void     ICL_DESTROY     (i_color *cl);
 void     ICL_add         (i_color *dst, i_color *src, int ch);
 
@@ -49,6 +49,7 @@ extern void i_rgb_to_hsv(i_color *color);
 extern void i_hsv_to_rgb(i_color *color);
 
 i_img *IIM_new(int x,int y,int ch);
+#define i_img_8_new IIM_new
 void   IIM_DESTROY(i_img *im);
 i_img *i_img_new( void );
 i_img *i_img_empty(i_img *im,int x,int y);
@@ -71,24 +72,33 @@ int    i_img_getchannels(i_img *im);
 
 /* Base functions */
 
-#if 0
-int i_ppix(i_img *im,int x,int y,i_color *val);
-int i_gpix(i_img *im,int x,int y,i_color *val);
-int i_ppixf(i_img *im,int x,int y,i_color *val);
-int i_gpixf(i_img *im,int x,int y,i_color *val);
-#endif
+extern int i_ppix(i_img *im,int x,int y, const i_color *val);
+extern int i_gpix(i_img *im,int x,int y,i_color *val);
+extern int i_ppixf(i_img *im,int x,int y, const i_fcolor *val);
+extern int i_gpixf(i_img *im,int x,int y,i_fcolor *val);
 
 #define i_ppix(im, x, y, val) (((im)->i_f_ppix)((im), (x), (y), (val)))
 #define i_gpix(im, x, y, val) (((im)->i_f_gpix)((im), (x), (y), (val)))
 #define i_ppixf(im, x, y, val) (((im)->i_f_ppixf)((im), (x), (y), (val)))
 #define i_gpixf(im, x, y, val) (((im)->i_f_gpixf)((im), (x), (y), (val)))
 
-#if 0
-int i_ppix_d(i_img *im,int x,int y,i_color *val);
-int i_gpix_d(i_img *im,int x,int y,i_color *val);
-int i_plin_d(i_img *im,int l, int r, int y, i_color *val);
-int i_glin_d(i_img *im,int l, int r, int y, i_color *val);
-#endif
+extern int i_plin(i_img *im, int l, int r, int y, const i_color *vals);
+extern int i_glin(i_img *im, int l, int r, int y, i_color *vals);
+extern int i_plinf(i_img *im, int l, int r, int y, const i_fcolor *vals);
+extern int i_glinf(i_img *im, int l, int r, int y, i_fcolor *vals);
+extern int i_gsamp(i_img *im, int l, int r, int y, i_sample_t *samp, 
+                   const int *chans, int chan_count);
+extern int i_gsampf(i_img *im, int l, int r, int y, i_fsample_t *samp, 
+                   const int *chans, int chan_count);
+extern int i_gpal(i_img *im, int x, int r, int y, i_palidx *vals);
+extern int i_ppal(i_img *im, int x, int r, int y, const i_palidx *vals);
+extern int i_addcolors(i_img *im, const i_color *colors, int count);
+extern int i_getcolors(i_img *im, int i, i_color *, int count);
+extern int i_colorcount(i_img *im);
+extern int i_maxcolors(i_img *im);
+extern int i_findcolor(i_img *im, const i_color *color, i_palidx *entry);
+extern int i_setcolors(i_img *im, int index, const i_color *colors, 
+                       int count);
 
 #define i_plin(im, l, r, y, val) (((im)->i_f_plin)(im, l, r, y, val))
 #define i_glin(im, l, r, y, val) (((im)->i_f_glin)(im, l, r, y, val))
@@ -99,14 +109,6 @@ int i_glin_d(i_img *im,int l, int r, int y, i_color *val);
   (((im)->i_f_gsamp)((im), (l), (r), (y), (samps), (chans), (count)))
 #define i_gsampf(im, l, r, y, samps, chans, count) \
   (((im)->i_f_gsampf)((im), (l), (r), (y), (samps), (chans), (count)))
-
-#define i_psamp(im, l, r, y, samps, chans, count) \
-  (((im)->i_f_gsamp)((im), (l), (r), (y), (samps), (chans), (count)))
-#define i_psampf(im, l, r, y, samps, chans, count) \
-  (((im)->i_f_gsampf)((im), (l), (r), (y), (samps), (chans), (count)))
-
-
-
 
 #define i_findcolor(im, color, entry) \
   (((im)->i_f_findcolor) ? ((im)->i_f_findcolor)((im), (color), (entry)) : 0)
@@ -134,112 +136,61 @@ int i_glin_d(i_img *im,int l, int r, int y, i_color *val);
 #define i_img_type(im) ((im)->type)
 #define i_img_bits(im) ((im)->bits)
 
-/* Generic fills */
-struct i_fill_tag;
-
-typedef void (*i_fill_with_color_f)
-     (struct i_fill_tag *fill, int x, int y, int width, int channels, 
-      i_color *data);
-typedef void (*i_fill_with_fcolor_f)
-     (struct i_fill_tag *fill, int x, int y, int width, int channels,
-      i_fcolor *data);
-typedef void (*i_fill_destroy_f)(struct i_fill_tag *fill);
-typedef void (*i_fill_combine_f)(i_color *out, i_color *in, int channels, 
-                                 int count);
-typedef void (*i_fill_combinef_f)(i_fcolor *out, i_fcolor *in, int channels,
-                                  int count);
-
-
-typedef struct i_fill_tag
-{
-  /* called for 8-bit/sample image (and maybe lower) */
-  /* this may be NULL, if so call fill_with_fcolor */
-  i_fill_with_color_f fill_with_color;
-
-  /* called for other sample sizes */
-  /* this must be non-NULL */
-  i_fill_with_fcolor_f fill_with_fcolor;
-
-  /* called if non-NULL to release any extra resources */
-  i_fill_destroy_f destroy;
-
-  /* if non-zero the caller will fill data with the original data
-     from the image */
-  i_fill_combine_f combine;
-  i_fill_combinef_f combinef;
-} i_fill_t;
-
-typedef enum {
-  ic_none,
-  ic_normal,
-  ic_multiply,
-  ic_dissolve,
-  ic_add,
-  ic_subtract,
-  ic_diff,
-  ic_lighten,
-  ic_darken,
-  ic_hue,
-  ic_sat,
-  ic_value,
-  ic_color
-} i_combine_t;
-
-extern i_fill_t *i_new_fill_solidf(i_fcolor *c, int combine);
-extern i_fill_t *i_new_fill_solid(i_color *c, int combine);
+extern i_fill_t *i_new_fill_solidf(const i_fcolor *c, int combine);
+extern i_fill_t *i_new_fill_solid(const i_color *c, int combine);
 extern i_fill_t *
-i_new_fill_hatch(i_color *fg, i_color *bg, int combine, int hatch, 
-                 unsigned char *cust_hatch, int dx, int dy);
+i_new_fill_hatch(const i_color *fg, const i_color *bg, int combine, int hatch, 
+                 const unsigned char *cust_hatch, int dx, int dy);
 extern i_fill_t *
-i_new_fill_hatchf(i_fcolor *fg, i_fcolor *bg, int combine, int hatch, 
-                  unsigned char *cust_hatch, int dx, int dy);
+i_new_fill_hatchf(const i_fcolor *fg, const i_fcolor *bg, int combine, int hatch, 
+                  const unsigned char *cust_hatch, int dx, int dy);
 extern i_fill_t *
-i_new_fill_image(i_img *im, double *matrix, int xoff, int yoff, int combine);
+i_new_fill_image(i_img *im, const double *matrix, int xoff, int yoff, int combine);
 extern void i_fill_destroy(i_fill_t *fill);
 
 float i_gpix_pch(i_img *im,int x,int y,int ch);
 
 /* functions for drawing primitives */
 
-void i_box         (i_img *im,int x1,int y1,int x2,int y2,i_color *val);
-void i_box_filled  (i_img *im,int x1,int y1,int x2,int y2,i_color *val);
+void i_box         (i_img *im,int x1,int y1,int x2,int y2,const i_color *val);
+void i_box_filled  (i_img *im,int x1,int y1,int x2,int y2,const i_color *val);
 void i_box_cfill(i_img *im, int x1, int y1, int x2, int y2, i_fill_t *fill);
-void i_line        (i_img *im,int x1,int y1,int x2,int y2,i_color *val, int endp);
-void i_line_aa     (i_img *im,int x1,int y1,int x2,int y2,i_color *val, int endp);
-void i_arc         (i_img *im,int x,int y,float rad,float d1,float d2,i_color *val);
-void i_arc_aa         (i_img *im, double x, double y, double rad, double d1, double d2,i_color *val);
+void i_line        (i_img *im,int x1,int y1,int x2,int y2,const i_color *val, int endp);
+void i_line_aa     (i_img *im,int x1,int y1,int x2,int y2,const i_color *val, int endp);
+void i_arc         (i_img *im,int x,int y,float rad,float d1,float d2,const i_color *val);
+void i_arc_aa         (i_img *im, double x, double y, double rad, double d1, double d2, const i_color *val);
 void i_arc_cfill(i_img *im,int x,int y,float rad,float d1,float d2,i_fill_t *fill);
 void i_arc_aa_cfill(i_img *im,double x,double y,double rad,double d1,double d2,i_fill_t *fill);
-void i_circle_aa   (i_img *im,float x, float y,float rad,i_color *val);
+void i_circle_aa   (i_img *im,float x, float y,float rad,const i_color *val);
 void i_copyto      (i_img *im,i_img *src,int x1,int y1,int x2,int y2,int tx,int ty);
-void i_copyto_trans(i_img *im,i_img *src,int x1,int y1,int x2,int y2,int tx,int ty,i_color *trans);
-void i_copy        (i_img *im,i_img *src);
+void i_copyto_trans(i_img *im,i_img *src,int x1,int y1,int x2,int y2,int tx,int ty,const i_color *trans);
+i_img* i_copy        (i_img *src);
 int  i_rubthru     (i_img *im, i_img *src, int tx, int ty, int src_minx, int src_miny, int src_maxx, int src_maxy);
 
 
 undef_int i_flipxy (i_img *im, int direction);
 extern i_img *i_rotate90(i_img *im, int degrees);
 extern i_img *i_rotate_exact(i_img *im, double amount);
-extern i_img *i_rotate_exact_bg(i_img *im, double amount, i_color *backp, i_fcolor *fbackp);
-extern i_img *i_matrix_transform(i_img *im, int xsize, int ysize, double *matrix);
-extern i_img *i_matrix_transform_bg(i_img *im, int xsize, int ysize, double *matrix,  i_color *backp, i_fcolor *fbackp);
+extern i_img *i_rotate_exact_bg(i_img *im, double amount, const i_color *backp, const i_fcolor *fbackp);
+extern i_img *i_matrix_transform(i_img *im, int xsize, int ysize, const double *matrix);
+extern i_img *i_matrix_transform_bg(i_img *im, int xsize, int ysize, const double *matrix,  const i_color *backp, const i_fcolor *fbackp);
 
-void i_bezier_multi(i_img *im,int l,double *x,double *y,i_color *val);
-void i_poly_aa     (i_img *im,int l,double *x,double *y,i_color *val);
-void i_poly_aa_cfill(i_img *im,int l,double *x,double *y,i_fill_t *fill);
+void i_bezier_multi(i_img *im,int l,const double *x,const double *y,const i_color *val);
+void i_poly_aa     (i_img *im,int l,const double *x,const double *y,const i_color *val);
+void i_poly_aa_cfill(i_img *im,int l,const double *x,const double *y,i_fill_t *fill);
 
-undef_int i_flood_fill  (i_img *im,int seedx,int seedy,i_color *dcol);
+undef_int i_flood_fill  (i_img *im,int seedx,int seedy, const i_color *dcol);
 undef_int i_flood_cfill(i_img *im, int seedx, int seedy, i_fill_t *fill);
 
 
 /* image processing functions */
 
 void i_gaussian    (i_img *im,float stdev);
-void i_conv        (i_img *im,float *coeff,int len);
+void i_conv        (i_img *im,const float *coeff,int len);
 void i_unsharp_mask(i_img *im, double stddev, double scale);
 
 /* colour manipulation */
-extern int i_convert(i_img *im, i_img *src, float *coeff, int outchan, int inchan);
+extern int i_convert(i_img *im, i_img *src, const float *coeff, int outchan, int inchan);
 extern void i_map(i_img *im, unsigned char (*maps)[256], unsigned int mask);
 
 float i_img_diff   (i_img *im1,i_img *im2);
@@ -248,38 +199,14 @@ float i_img_diff   (i_img *im1,i_img *im2);
 
 undef_int i_init_fonts( int t1log );
 
-/*
-   describes an axis of a MM font.
-   Modelled on FT2's FT_MM_Axis.
-   It would be nice to have a default entry too, but FT2 
-   doesn't support it.
-*/
-typedef struct i_font_mm_axis_tag {
-  char const *name;
-  int minimum;
-  int maximum;
-} i_font_mm_axis;
-
-#define IM_FONT_MM_MAX_AXES 4
-
-/* 
-   multiple master information for a font, if any 
-   modelled on FT2's FT_Multi_Master.
-*/
-typedef struct i_font_mm_tag {
-  int num_axis;
-  int num_designs; /* provided but not necessarily useful */
-  i_font_mm_axis axis[IM_FONT_MM_MAX_AXES];
-} i_font_mm;
-
 #ifdef HAVE_LIBT1
 
 undef_int i_init_t1( int t1log );
 int       i_t1_new( char *pfb, char *afm );
 int       i_t1_destroy( int font_id );
 undef_int i_t1_cp( i_img *im, int xb, int yb, int channel, int fontnum, float points, char* str, int len, int align, int utf8, char const *flags );
-undef_int i_t1_text( i_img *im, int xb, int yb, i_color *cl, int fontnum, float points, char* str, int len, int align, int utf8, char const *flags );
-int      i_t1_bbox( int fontnum, float point, char *str, int len, int cords[6], int utf8, char const *flags );
+undef_int i_t1_text( i_img *im, int xb, int yb, const i_color *cl, int fontnum, float points, const char* str, int len, int align, int utf8, char const *flags );
+int      i_t1_bbox( int fontnum, float point, const char *str, int len, int cords[6], int utf8, char const *flags );
 void      i_t1_set_aa( int st );
 void      close_t1( void );
 int       i_t1_has_chars(int font_num, char const *text, int len, int utf8, char *out);
@@ -290,16 +217,12 @@ extern int i_t1_glyph_name(int font_num, unsigned long ch, char *name_buf,
 
 #ifdef HAVE_LIBTT
 
-struct TT_Fonthandle_;
-
-typedef struct TT_Fonthandle_ TT_Fonthandle;
-
 undef_int i_init_tt( void );
-TT_Fonthandle* i_tt_new(char *fontname);
+TT_Fonthandle* i_tt_new(const char *fontname);
 void i_tt_destroy( TT_Fonthandle *handle );
 undef_int i_tt_cp( TT_Fonthandle *handle,i_img *im,int xb,int yb,int channel,float points,char const* txt,int len,int smooth, int utf8, int align);
-undef_int i_tt_text( TT_Fonthandle *handle, i_img *im, int xb, int yb, i_color *cl, float points, char const* txt, int len, int smooth, int utf8, int align);
-undef_int i_tt_bbox( TT_Fonthandle *handle, float points,char *txt,int len,int cords[6], int utf8);
+undef_int i_tt_text( TT_Fonthandle *handle, i_img *im, int xb, int yb, const i_color *cl, float points, char const* txt, int len, int smooth, int utf8, int align);
+undef_int i_tt_bbox( TT_Fonthandle *handle, float points,const char *txt,int len,int cords[6], int utf8);
 int i_tt_has_chars(TT_Fonthandle *handle, char const *text, int len, int utf8, char *out);
 void i_tt_dump_names(TT_Fonthandle *handle);
 int i_tt_face_name(TT_Fonthandle *handle, char *name_buf, 
@@ -311,20 +234,19 @@ int i_tt_glyph_name(TT_Fonthandle *handle, unsigned long ch, char *name_buf,
 
 #ifdef HAVE_FT2
 
-typedef struct FT2_Fonthandle FT2_Fonthandle;
 extern int i_ft2_init(void);
-extern FT2_Fonthandle * i_ft2_new(char *name, int index);
+extern FT2_Fonthandle * i_ft2_new(const char *name, int index);
 extern void i_ft2_destroy(FT2_Fonthandle *handle);
 extern int i_ft2_setdpi(FT2_Fonthandle *handle, int xdpi, int ydpi);
 extern int i_ft2_getdpi(FT2_Fonthandle *handle, int *xdpi, int *ydpi);
-extern int i_ft2_settransform(FT2_Fonthandle *handle, double *matrix);
+extern int i_ft2_settransform(FT2_Fonthandle *handle, const double *matrix);
 extern int i_ft2_sethinting(FT2_Fonthandle *handle, int hinting);
 extern int i_ft2_bbox(FT2_Fonthandle *handle, double cheight, double cwidth, 
                       char const *text, int len, int *bbox, int utf8);
 extern int i_ft2_bbox_r(FT2_Fonthandle *handle, double cheight, double cwidth, 
 		      char const *text, int len, int vlayout, int utf8, int *bbox);
 extern int i_ft2_text(FT2_Fonthandle *handle, i_img *im, int tx, int ty, 
-                      i_color *cl, double cheight, double cwidth, 
+                      const i_color *cl, double cheight, double cwidth, 
                       char const *text, int len, int align, int aa, 
                       int vlayout, int utf8);
 extern int i_ft2_cp(FT2_Fonthandle *handle, i_img *im, int tx, int ty, 
@@ -347,16 +269,16 @@ extern int i_ft2_get_multiple_masters(FT2_Fonthandle *handle,
 extern int
 i_ft2_is_multiple_master(FT2_Fonthandle *handle);
 extern int
-i_ft2_set_mm_coords(FT2_Fonthandle *handle, int coord_count, long *coords);
+i_ft2_set_mm_coords(FT2_Fonthandle *handle, int coord_count, const long *coords);
 #endif
 
 #ifdef WIN32
 
-extern int i_wf_bbox(char *face, int size, char *text, int length, int *bbox);
-extern int i_wf_text(char *face, i_img *im, int tx, int ty, i_color *cl, 
-		     int size, char *text, int len, int align, int aa);
-extern int i_wf_cp(char *face, i_img *im, int tx, int ty, int channel, 
-		   int size, char *text, int len, int align, int aa);
+extern int i_wf_bbox(const char *face, int size, const char *text, int length, int *bbox);
+extern int i_wf_text(const char *face, i_img *im, int tx, int ty, const i_color *cl, 
+		     int size, const char *text, int len, int align, int aa);
+extern int i_wf_cp(const char *face, i_img *im, int tx, int ty, int channel, 
+		   int size, const char *text, int len, int align, int aa);
 extern int i_wf_addfont(char const *file);
 
 #endif
@@ -413,144 +335,9 @@ extern int i_gen_writer(i_gen_write_data *info, char const *data, int size);
 extern i_gen_write_data *i_gen_write_data_new(i_write_callback_t cb, char *userdata, int maxlength);
 extern int i_free_gen_write_data(i_gen_write_data *, int flush);
 
-/* transparency handling for quantized output */
-typedef enum i_transp_tag {
-  tr_none, /* ignore any alpha channel */
-  tr_threshold, /* threshold the transparency - uses tr_threshold */
-  tr_errdiff, /* error diffusion */
-  tr_ordered /* an ordered dither */
-} i_transp;
-
-/* controls how we build the colour map */
-typedef enum i_make_colors_tag {
-  mc_none, /* user supplied colour map only */
-  mc_web_map, /* Use the 216 colour web colour map */
-  mc_addi, /* Addi's algorithm */
-  mc_median_cut, /* median cut - similar to giflib, hopefully */
-  mc_mask = 0xFF /* (mask for generator) */
-} i_make_colors;
-
-/* controls how we translate the colours */
-typedef enum i_translate_tag {
-  pt_giflib, /* get gif lib to do it (ignores make_colours) */
-  pt_closest, /* just use the closest match within the hashbox */
-  pt_perturb, /* randomly perturb the data - uses perturb_size*/
-  pt_errdiff /* error diffusion dither - uses errdiff */
-} i_translate;
-
-/* Which error diffusion map to use */
-typedef enum i_errdiff_tag {
-  ed_floyd, /* floyd-steinberg */
-  ed_jarvis, /* Jarvis, Judice and Ninke */
-  ed_stucki, /* Stucki */
-  ed_custom, /* the map found in ed_map|width|height|orig */
-  ed_mask = 0xFF, /* mask to get the map */
-  ed_bidir = 0x100 /* change direction for each row */
-} i_errdiff;
-
-/* which ordered dither map to use
-   currently only available for transparency
-   I don't know of a way to do ordered dither of an image against some 
-   general palette
- */
-typedef enum i_ord_dith_tag
-{
-  od_random, /* sort of random */
-  od_dot8, /* large dot */
-  od_dot4,
-  od_hline,
-  od_vline,
-  od_slashline, /* / line dither */
-  od_backline, /* \ line dither */
-  od_tiny, /* small checkerbox */
-  od_custom /* custom 8x8 map */
-} i_ord_dith;
-
-typedef struct i_gif_pos_tag {
-  int x, y;
-} i_gif_pos;
-
-/* passed into i_writegif_gen() to control quantization */
-typedef struct i_quantize_tag {
-  /* how to handle transparency */
-  i_transp transp;
-  /* the threshold at which to make pixels opaque */
-  int tr_threshold;
-  i_errdiff tr_errdiff;
-  i_ord_dith tr_orddith;
-  unsigned char tr_custom[64];
-  
-  /* how to make the colour map */
-  i_make_colors make_colors;
-
-  /* any existing colours 
-     mc_existing is an existing colour table
-     mc_count is the number of existing colours
-     mc_size is the total size of the array that mc_existing points
-     at - this must be at least 256
-  */
-  i_color *mc_colors;
-  int mc_size;
-  int mc_count;
-
-  /* how we translate the colours */
-  i_translate translate;
-
-  /* the error diffusion map to use if translate is mc_errdiff */
-  i_errdiff errdiff;
-  /* the following define the error diffusion values to use if 
-     errdiff is ed_custom.  ed_orig is the column on the top row that
-     represents the current 
-  */
-  int *ed_map;
-  int ed_width, ed_height, ed_orig;
-
-  /* the amount of perturbation to use for translate is mc_perturb */
-  int perturb;
-} i_quantize;
-
-typedef struct i_gif_opts {
-  /* each image has a local color map */
-  int each_palette;
-
-  /* images are interlaced */
-  int interlace;
-
-  /* time for which image is displayed 
-   (in 1/100 seconds)
-   default: 0
-  */
-  int delay_count;
-  int *delays;
-
-  /* user input flags 
-     default: 0
-   */
-  int user_input_count;
-  char *user_input_flags;
-
-  /* disposal
-     default: 0 */
-  int disposal_count;
-  char *disposal;
-
-  /* this is added to the color table when we make an image transparent */
-  i_color tran_color;
-
-  /* image positions */
-  int position_count;
-  i_gif_pos *positions;
-
-  /* Netscape loop extension - number of loops */
-  int loop_count;
-
-  /* should be eliminate unused colors? */
-  int eliminate_unused;
-} i_gif_opts;
-
-extern void quant_makemap(i_quantize *quant, i_img **imgs, int count);
-extern i_palidx *quant_translate(i_quantize *quant, i_img *img);
-extern void quant_transparent(i_quantize *quant, i_palidx *indices, i_img *img, i_palidx trans_index);
+extern void i_quant_makemap(i_quantize *quant, i_img **imgs, int count);
+extern i_palidx *i_quant_translate(i_quantize *quant, i_img *img);
+extern void i_quant_transparent(i_quantize *quant, i_palidx *indices, i_img *img, i_palidx trans_index);
 
 extern i_img *i_img_pal_new(int x, int y, int channels, int maxpal);
 extern i_img *i_img_pal_new_low(i_img *im, int x, int y, int channels, int maxpal);
@@ -655,54 +442,13 @@ void i_autolevels(i_img *im,float lsat,float usat,float skew);
 void i_radnoise(i_img *im,int xo,int yo,float rscale,float ascale);
 void i_turbnoise(i_img *im,float xo,float yo,float scale);
 void i_gradgen(i_img *im, int num, int *xo, int *yo, i_color *ival, int dmeasure);
-void i_nearest_color(i_img *im, int num, int *xo, int *yo, i_color *ival, int dmeasure);
+int i_nearest_color(i_img *im, int num, int *xo, int *yo, i_color *ival, int dmeasure);
 i_img *i_diff_image(i_img *im, i_img *im2, int mindist);
-typedef enum {
-  i_fst_linear,
-  i_fst_curved,
-  i_fst_sine,
-  i_fst_sphere_up,
-  i_fst_sphere_down,
-  i_fst_end
-} i_fountain_seg_type;
-typedef enum {
-  i_fc_direct,
-  i_fc_hue_up,
-  i_fc_hue_down,
-  i_fc_end
-} i_fountain_color;
-typedef struct {
-  double start, middle, end;
-  i_fcolor c[2];
-  i_fountain_seg_type type;
-  i_fountain_color color;
-} i_fountain_seg;
-typedef enum {
-  i_fr_none,
-  i_fr_sawtooth,
-  i_fr_triangle,
-  i_fr_saw_both,
-  i_fr_tri_both
-} i_fountain_repeat;
-typedef enum {
-  i_ft_linear,
-  i_ft_bilinear,
-  i_ft_radial,
-  i_ft_radial_square,
-  i_ft_revolution,
-  i_ft_conical,
-  i_ft_end
-} i_fountain_type;
-typedef enum {
-  i_fts_none,
-  i_fts_grid,
-  i_fts_random,
-  i_fts_circle
-} i_ft_supersample;
-void i_fountain(i_img *im, double xa, double ya, double xb, double yb, 
-                i_fountain_type type, i_fountain_repeat repeat, 
-                int combine, int super_sample, double ssample_param,
-                int count, i_fountain_seg *segs);
+int
+i_fountain(i_img *im, double xa, double ya, double xb, double yb, 
+           i_fountain_type type, i_fountain_repeat repeat, 
+           int combine, int super_sample, double ssample_param,
+           int count, i_fountain_seg *segs);
 extern i_fill_t *
 i_new_fill_fount(double xa, double ya, double xb, double yb, 
                  i_fountain_type type, i_fountain_repeat repeat, 
@@ -718,7 +464,7 @@ void malloc_state( void );
 typedef struct {
   undef_int (*i_has_format)(char *frmt);
   i_color*(*ICL_set)(i_color *cl,unsigned char r,unsigned char g,unsigned char b,unsigned char a);
-  void (*ICL_info)(i_color *cl);
+  void (*ICL_info)(const i_color *cl);
 
   i_img*(*i_img_new)( void );
   i_img*(*i_img_empty)(i_img *im,int x,int y);
@@ -734,37 +480,16 @@ typedef struct {
   int (*i_ppix)(i_img *im,int x,int y,i_color *val);
   int (*i_gpix)(i_img *im,int x,int y,i_color *val);
   */
-  void(*i_box)(i_img *im,int x1,int y1,int x2,int y2,i_color *val);
-  void(*i_line)(i_img *im,int x1,int y1,int x2,int y2,i_color *val,int endp);
-  void(*i_arc)(i_img *im,int x,int y,float rad,float d1,float d2,i_color *val);
+  void(*i_box)(i_img *im,int x1,int y1,int x2,int y2,const i_color *val);
+  void(*i_line)(i_img *im,int x1,int y1,int x2,int y2,const i_color *val,int endp);
+  void(*i_arc)(i_img *im,int x,int y,float rad,float d1,float d2,const i_color *val);
   void(*i_copyto)(i_img *im,i_img *src,int x1,int y1,int x2,int y2,int tx,int ty);
-  void(*i_copyto_trans)(i_img *im,i_img *src,int x1,int y1,int x2,int y2,int tx,int ty,i_color *trans);
-  int(*i_rubthru)(i_img *im,i_img *src,int tx,int ty);
+  void(*i_copyto_trans)(i_img *im,i_img *src,int x1,int y1,int x2,int y2,int tx,int ty,const i_color *trans);
+  int(*i_rubthru)(i_img *im,i_img *src,int tx,int ty, int src_minx, int src_miny, int src_maxx, int src_maxy);
 
 } symbol_table_t;
 
-/* error handling 
-   see error.c for documentation
-   the error information is currently global
-*/
-typedef struct {
-  char *msg;
-  int code;
-} i_errmsg;
-
-typedef void (*i_error_cb)(int code, char const *msg);
-typedef void (*i_failed_cb)(i_errmsg *msgs);
-extern i_error_cb i_set_error_cb(i_error_cb);
-extern i_failed_cb i_set_failed_cb(i_failed_cb);
-extern void i_set_argv0(char const *);
-extern int i_set_errors_fatal(int new_fatal);
-extern i_errmsg *i_errors(void);
-
-extern void i_push_error(int code, char const *msg);
-extern void i_push_errorf(int code, char const *fmt, ...);
-extern void i_push_errorvf(int code, char const *fmt, va_list);
-extern void i_clear_error(void);
-extern int i_failed(int code, char const *msg);
+#include "imerror.h"
 
 /* image tag processing */
 extern void i_tags_new(i_img_tags *tags);
@@ -772,6 +497,10 @@ extern int i_tags_addn(i_img_tags *tags, char const *name, int code,
                        int idata);
 extern int i_tags_add(i_img_tags *tags, char const *name, int code, 
                       char const *data, int size, int idata);
+extern int i_tags_set(i_img_tags *tags, char const *name,
+                      char const *data, int size);
+extern int i_tags_setn(i_img_tags *tags, char const *name, int idata);
+                       
 extern void i_tags_destroy(i_img_tags *tags);
 extern int i_tags_find(i_img_tags *tags, char const *name, int start, 
                        int *entry);
@@ -800,5 +529,30 @@ extern int
 i_set_image_file_limits(int width, int height, int bytes);
 extern int
 i_get_image_file_limits(int *width, int *height, int *bytes);
+
+/* memory allocation */
+void* mymalloc(int size);
+void  myfree(void *p);
+void* myrealloc(void *p, size_t newsize);
+void* mymalloc_file_line (size_t size, char* file, int line);
+void  myfree_file_line   (void *p, char*file, int line);
+void* myrealloc_file_line(void *p, size_t newsize, char* file,int line);
+
+#ifdef IMAGER_DEBUG_MALLOC
+
+#define mymalloc(x) (mymalloc_file_line((x), __FILE__, __LINE__))
+#define myrealloc(x,y) (myrealloc_file_line((x),(y), __FILE__, __LINE__))
+#define myfree(x) (myfree_file_line((x), __FILE__, __LINE__))
+
+void  malloc_state       (void);
+void* mymalloc_comm      (int size, char *comm);
+void  bndcheck_all       (void);
+
+#else
+
+#define malloc_comm(a,b) (mymalloc(a))
+void  malloc_state(void);
+
+#endif /* IMAGER_MALLOC_DEBUG */
 
 #endif

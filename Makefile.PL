@@ -1,9 +1,13 @@
 #!perl -w
+use strict;
 use ExtUtils::MakeMaker;
 use Cwd;
 use Config;
 use File::Spec;
 use Getopt::Long;
+use vars qw(%Recommends);
+use ExtUtils::Manifest qw(maniread);
+use vars qw(%formats $VERBOSE $INCPATH $LIBPATH $NOLOG $DEBUG_MALLOC $MANUAL $CFLAGS $LFLAGS $DFLAGS);
 
 #
 # IM_INCPATH      colon seperated list of paths to extra include paths
@@ -24,13 +28,16 @@ use Getopt::Long;
 
 getenv();     # get environment variables
 
-my $help;
-my @enable;
-my @disable;
-my @incpaths;
-my @libpaths;
-my $noprobe;
-my $noexif;
+my $lext=$Config{'so'};   # Get extensions of libraries
+my $aext=$Config{'_a'};
+
+my $help; # display help if set
+my @enable; # list of drivers to enable
+my @disable; # or list of drivers to disable
+my @incpaths; # places to look for headers
+my @libpaths; # places to look for libraries
+my $noprobe; # non-zero to disable newer probes
+my $noexif; # non-zero to disable EXIF parsing of JPEGs
 GetOptions("help" => \$help,
            "enable=s" => \@enable,
            "disable=s" => \@disable,
@@ -68,6 +75,11 @@ if (@enable && @disable) {
   exit 1;
 }
 
+my %definc;
+my %deflib;
+my @incs; # all the places to look for headers
+my @libs; # all the places to look for libraries
+
 init();       # initialize global data
 pathcheck();  # Check if directories exist
 
@@ -100,61 +112,80 @@ gifcheck();
 my $lib_cflags = '';
 my $F_LIBS = '';
 my $F_OBJECT = '';
-for my $frmkey (keys %formats) {
+for my $frmkey (sort { $formats{$a}{order} <=> $formats{$b}{order} } keys %formats) {
   my $frm = $formats{$frmkey};
   push @defines, [ $frm->{def}, 1, "$frmkey available" ];
   $F_LIBS   .= ' '  .$frm->{libfiles};
   $F_OBJECT .= ' '  .$frm->{objfiles};
-  $lib_cflags   .= ' '  .$frm->{cflags} if $frm->{cflags};
+  if ($frm->{cflags}) {
+    $lib_cflags   .= ' '  .$frm->{cflags};
+    ++$definc{$_} for map { /^-I(.*)$/ ? ($1) : () }
+      grep /^-I./, split ' ', $frm->{cflags};
+  }
 }
+
 unless ($noexif) {
   print "EXIF support enabled\n";
   push @defines, [ 'IMEXIF_ENABLE', 1, "Enable experimental EXIF support" ];
   $F_OBJECT .= ' imexif.o';
 }
 
-$F_INC  = join ' ', map "-I$_", map / / ? qq{"$_"} : $_, 
-  grep !exists $definc{$_}, @incs;
-$F_LIBS = join(' ',map "-L$_", map / / ? qq{"$_"} : $_, @libs) . $F_LIBS;
+my $F_INC  = join ' ', map "-I$_", map / / ? qq{"$_"} : $_, 
+  grep !$definc{$_}, @incs;
+$F_LIBS = join(' ',map "-L$_", map / / ? qq{"$_"} : $_, 
+	       grep !$deflib{$_}++, @libs) . $F_LIBS;
 
-$OSLIBS = '';
-$OSDEF  = "-DOS_$^O";
+my $OSLIBS = '';
+my $OSDEF  = "-DOS_$^O";
 
 if ($^O eq 'hpux')                { $OSLIBS .= ' -ldld'; }
 if (defined $Config{'d_dlsymun'}) { $OSDEF  .= ' -DDLSYMUN'; }
 
-@objs = qw(Imager.o draw.o polygon.o image.o io.o iolayer.o
-           log.o gaussian.o conv.o pnm.o raw.o feat.o font.o
-	   filters.o dynaload.o stackmach.o datatypes.o
-	   regmach.o trans2.o quant.o error.o convert.o
-	   map.o tags.o palimg.o maskimg.o img16.o rotate.o
-           bmp.o tga.o rgb.o color.o fills.o imgdouble.o limits.o hlines.o);
+my @objs = qw(Imager.o draw.o polygon.o image.o io.o iolayer.o
+              log.o gaussian.o conv.o pnm.o raw.o feat.o font.o
+              filters.o dynaload.o stackmach.o datatypes.o
+              regmach.o trans2.o quant.o error.o convert.o
+              map.o tags.o palimg.o maskimg.o img16.o rotate.o
+              bmp.o tga.o rgb.o color.o fills.o imgdouble.o limits.o hlines.o
+              imext.o);
 
-%opts=(
-       'NAME'         => 'Imager',
-       'VERSION_FROM' => 'Imager.pm',
-       'LIBS'         => "$LFLAGS -lm $OSLIBS $F_LIBS",
-       'DEFINE'       => "$OSDEF $CFLAGS",
-       'INC'          => "$lib_cflags $DFLAGS $F_INC",
-       'OBJECT'       => join(' ', @objs, $F_OBJECT),
-       clean          => { FILES=>'testout meta.tmp' },
-      );
+$Recommends{Imager} =
+  { 'Parse::RecDescent' => 0 };
+
+my %opts=(
+          'NAME'         => 'Imager',
+          'VERSION_FROM' => 'Imager.pm',
+          'LIBS'         => "$LFLAGS -lm $OSLIBS $F_LIBS",
+          'DEFINE'       => "$OSDEF $CFLAGS",
+          'INC'          => "$lib_cflags $DFLAGS $F_INC",
+          'OBJECT'       => join(' ', @objs, $F_OBJECT),
+          clean          => { FILES=>'testout meta.tmp' },
+          PM             => gen_PM(),
+         );
 
 if ($ExtUtils::MakeMaker::VERSION > 6.06) {
   $opts{AUTHOR} = 'Tony Cook <tony@imager.perl.org>, Arnar M. Hrafnkelsson';
   $opts{ABSTRACT} = 'Perl extension for Generating 24 bit Images';
+}
+if ($ExtUtils::MakeMaker::VERSION > 6.10) {
+  $opts{NO_META} = 1;
 }
 
 make_imconfig(\@defines);
 
 if ($VERBOSE) { print Dumper(\%opts); }
 mkdir('testout',0777); # since we cannot include it in the archive.
+
+make_metafile(\%opts);
+
 WriteMakefile(%opts);
 
 exit;
 
 
 sub MY::postamble {
+    my $self = shift;
+    my $perl = $self->{PERLRUN} ? '$(PERLRUN)' : '$(PERL)';
 '
 dyntest.$(MYEXTLIB) : dynfilt/Makefile
 	cd dynfilt && $(MAKE) $(PASTHRU)
@@ -162,36 +193,16 @@ dyntest.$(MYEXTLIB) : dynfilt/Makefile
 lib/Imager/Regops.pm : regmach.h regops.perl
 	$(PERL) regops.perl regmach.h lib/Imager/Regops.pm
 
-imconfig.h: Makefile.PL
+imconfig.h : Makefile.PL
 	$(ECHO) "imconfig.h out-of-date with respect to $?"
 	$(PERLRUN) Makefile.PL
 	$(ECHO) "==> Your Makefile has been rebuilt - re-run your make command <=="
-';
-}
+'.qq!
+lib/Imager/APIRef.pm : \$(C_FILES) apidocs.perl
+	$perl apidocs.perl lib/Imager/APIRef.pm
 
-sub MY::metafile {
-  my ($self) = @_;
+!;
 
-  my $meta = <<YAML;
---- #YAML:1.0
-name: Imager
-version: $self->{VERSION}
-version_from: $self->{VERSION_FROM}
-author: $self->{AUTHOR}
-abstract: $self->{ABSTRACT}
-installdirs: $self->{INSTALLDIRS}
-recommends:
-  Parse::RecDescent: 0
-license: perl
-dynamic_config: 1
-distribution_type: module
-generated_by: Imager version $self->{VERSION}
-YAML
-  open META, "> meta.tmp" or die "Cannot create meta.tmp: $!";
-  print META $meta;
-  close META;
-  
-  return sprintf "metafile :\n\t\$(CP) meta.tmp META.yml\n";
 }
 
 # manual configuration of helper libraries
@@ -211,7 +222,7 @@ EOF
   SWX:
     if ($formats{$frm}{docs}) { print "\n",$formats{$frm}{docs},"\n\n"; }
     print "Enable $frm support: ";
-    $gz = <STDIN>;
+    my $gz = <STDIN>;
     chomp($gz);
     if ($gz =~ m/^(y|yes|n|no)/i) {
       $gz=substr(lc($gz),0,1);
@@ -226,7 +237,8 @@ EOF
 # automatic configuration of helper libraries
 
 sub automatic {
-  for $frm(keys %formats) {
+  print "Automatic probing:\n" if $VERBOSE;
+  for my $frm (sort { $formats{$a}{order} <=> $formats{$b}{order} } keys %formats) {
     delete $formats{$frm} if !checkformat($frm);	
   }
 }
@@ -290,8 +302,8 @@ EOFF
 
   # we need the version in a #ifdefable form
 
-  push @defines, [ IM_GIFMAJOR, $major, "Parsed giflib version" ];
-  push @defines, [ IM_GIFMINOR, $minor ];
+  push @defines, [ IM_GIFMAJOR => $major, "Parsed giflib version" ];
+  push @defines, [ IM_GIFMINOR => $minor ];
 }
 
 
@@ -312,9 +324,12 @@ sub gd {
 
 sub checkformat {
   my $frm=shift;
+
+  print "  checkformat($frm)\n" if $VERBOSE;
   
   my $code = $formats{$frm}{'code'};
   if ($code && !$noprobe) {
+    print "    Calling probe function\n" if $VERBOSE;
     return 1 if $code->($formats{$frm}, $frm);
   }
 
@@ -369,7 +384,8 @@ sub pathcheck {
 
 sub init {
 
-  @definc{'/usr/include'}=();
+  my @definc = qw(/usr/include);
+  @definc{@definc}=(1) x @definc;
   @incs=(split(/\Q$Config{path_sep}/, $INCPATH),
         map { split /\Q$Config{path_sep}/} @incpaths );
   if ($Config{locincpth}) {
@@ -385,13 +401,20 @@ sub init {
          /usr/local/include/freetype1/freetype
          /usr/include /usr/local/include /usr/include/freetype
          /usr/local/include/freetype);
+  if ($Config{ccflags}) {
+    my @hidden = map { /^-I(.*)$/ ? ($1) : () } split ' ', $Config{ccflags};
+    push @incs, @hidden;
+    @definc{@hidden} = (1) x @hidden;
+  }
 
   @libs= ( split(/\Q$Config{path_sep}/,$LIBPATH),
     map { split /\Q$Config{path_sep}/} @libpaths );
   if ($Config{loclibpth}) {
     push @libs, grep -d, split ' ', $Config{loclibpth};
   }
+  
   push @libs, grep -d, qw(/sw/lib),  split(/ /, $Config{'libpth'});
+  push @libs, grep -d, split / /, $Config{libspath} if $Config{libspath};
   if ($^O =~ /win32/i && $Config{cc} =~ /\bcl\b/i) {
     push(@libs, split /;/, $ENV{LIB}) if exists $ENV{LIB};
   }
@@ -399,9 +422,16 @@ sub init {
     push(@libs, '/usr/lib/w32api') if -d '/usr/lib/w32api';
     push(@incs, '/usr/include/w32api') if -d '/usr/include/w32api';
   }
-
-  my $lext=$Config{'so'};   # Get extensions of libraries
-  my $aext=$Config{'_a'};
+  if ($Config{ldflags}) {
+    # some builds of perl put -Ldir into ldflags without putting it in
+    # loclibpth, let's extract them
+    my @hidden = grep -d, map { /^-L(.*)$/ ? ($1) : () }
+      split ' ', $Config{ldflags};
+    push @libs, @hidden;
+    # don't mark them as seen - EU::MM will remove any libraries
+    # it can't find and it doesn't look for -L in ldflags
+    #@deflib{@hidden} = @hidden;
+  }
 
   $formats{'jpeg'}={
 		    order=>'21',
@@ -493,6 +523,7 @@ sub init {
      libcheck=>sub { $_[0] eq "libttf$aext" or $_[0] eq "libttf.$lext" },
      libfiles=>'-lttf',
      objfiles=>'',
+     code => \&freetype1_probe,
      docs=>q{
 Truetype fonts are scalable fonts. They can include 
 kerning and hinting information and generally yield good
@@ -598,6 +629,54 @@ sub _pkg_probe {
   !system("pkg-config $pkg --exists $redir");
 }
 
+# probes for freetype1 by scanning @incs for the includes and 
+# @libs for the libs.  This is done separately because freetype's headers
+# are stored in a freetype or freetype1 directory under PREFIX/include.
+#
+# we could find the files with the existing mechanism, but it won't set
+# -I flags correctly.
+#
+# This could be extended to freetype2 too, but freetype-config catches
+# that
+sub freetype1_probe {
+  my ($frm, $frmkey) = @_;
+
+  my $found_inc;
+ INCS:
+  for my $inc (@incs) {
+    for my $subdir (qw/freetype freetype1/) {
+      my $path = File::Spec->catfile($inc, $subdir, 'freetype.h');
+      -e $path or next;
+      $path = File::Spec->catfile($inc, $subdir, 'fterrors.h');
+      -e $path and next;
+
+      $found_inc = File::Spec->catdir($inc, $subdir);
+      last INCS;
+    }
+  }
+
+  my $found_lib;
+ LIBS:
+  for my $lib (@libs) {
+    my $a_path = File::Spec->catfile($lib, "libttf$aext");
+    my $l_path = File::Spec->catfile($lib, "libttf.$lext");
+    if (-e $a_path || -e $l_path) {
+      $found_lib = $lib;
+      last LIBS;
+    }
+  }
+
+  return unless $found_inc && $found_lib;
+  printf("%10s: includes %s - libraries %s\n", $frmkey,
+	 ($found_inc ? 'found' : 'not found'), 
+	 ($found_lib ? 'found' : 'not found'));
+
+  $frm->{cflags} = "-I$found_inc";
+  $frm->{libfiles} = "-lttf";
+
+  return 1;
+}
+
 # probes for freetype2 by trying to run freetype-config
 sub freetype2_probe {
   my ($frm, $frmkey) = @_;
@@ -607,11 +686,30 @@ sub freetype2_probe {
   my $cflags = `freetype-config --cflags`
     and !$? or return;
   chomp $cflags;
-  
-  $frm->{cflags} = $cflags;
+
   my $lflags = `freetype-config --libs`
     and !$? or return;
   chomp $lflags;
+
+  # before 2.1.5 freetype-config --cflags could output
+  # the -I options in the wrong order, causing a conflict with
+  # freetype1.x installed with the same --prefix
+  #
+  # can happen iff:
+  #  - both -Iprefix/include and -Iprefix/include/freetype2 are in cflags
+  #    in that order
+  #  - freetype 1.x headers are in prefix/include/freetype
+  my @incdirs = map substr($_, 2), grep /^-I/, split ' ', $cflags;
+  if (@incdirs == 2 
+      && $incdirs[1] eq "$incdirs[0]/freetype2"
+      && -e "$incdirs[0]/freetype/freetype.h"
+      && -e "$incdirs[0]/freetype/fterrid.h") {
+    print "** freetype-config provided -I options out of order, correcting\n"
+      if $VERBOSE;
+    $cflags = join(' ', grep(!/-I/, split ' ', $cflags),
+		   map "-I$_", reverse @incdirs);
+  }
+  $frm->{cflags} = $cflags;
   $frm->{libfiles} = $lflags;
 
   printf "%10s: configured via freetype-config\n", $frmkey;
@@ -686,4 +784,85 @@ Other options:
 EOS
   exit 1;
 
+}
+
+# generate the PM MM argument
+# I'd prefer to modify the public version, but there doesn't seem to be 
+# a public API to do that
+sub gen_PM {
+  my %pm;
+  my $instbase = '$(INST_LIBDIR)';
+
+  # first the basics, .pm and .pod files
+  $pm{"Imager.pm"} = "$instbase/Imager.pm";
+
+  my $mani = maniread();
+
+  for my $filename (keys %$mani) {
+    if ($filename =~ m!^lib/! && $filename =~ /\.(pm|pod)$/) {
+      (my $work = $filename) =~ s/^lib//;
+      $pm{$filename} = $instbase . $work;
+    }
+  }
+
+  # need the typemap
+  $pm{typemap} = $instbase . '/Imager/typemap';
+
+  # and the core headers
+  for my $filename (keys %$mani) {
+    if ($filename =~ /^\w+\.h$/) {
+      $pm{$filename} = $instbase . '/Imager/include/' . $filename;
+    }
+  }
+
+  # and the generated header
+  $pm{"imconfig.h"} = $instbase . '/Imager/include/imconfig.h';
+
+  \%pm;
+}
+
+sub make_metafile {
+  my ($opts) = @_;
+
+  # extract the version
+  my $version = MM->parse_version($opts->{VERSION_FROM})
+    or die "Could not extract version number from $opts->{VERSION_FROM}\n";
+
+  my $meta = <<YAML;
+--- #YAML:1.0
+name: $opts->{NAME}
+version: $version
+version_from: $opts->{VERSION_FROM}
+author: $opts->{AUTHOR}
+abstract: $opts->{ABSTRACT}
+installdirs: site
+YAML
+  if (keys %{$Recommends{$opts->{NAME}}}) {
+    $meta .= "recommends:\n";
+    while (my ($module, $version) = each %{$Recommends{$opts->{NAME}}}) {
+      $meta .= "  $module: $version\n";
+    }
+  }
+  $meta .= <<YAML;
+license: perl
+dynamic_config: 1
+distribution_type: module
+generated_by: $opts->{NAME} version $version
+YAML
+  my $save_meta;
+  if (open META, "< META.yml") {
+    my $old_meta = do { local $/; <META> };
+    close META;
+
+    $save_meta = $old_meta ne $meta;
+  }
+  else {
+    ++$save_meta;
+  }
+  if ($save_meta) {
+    print "Updating META.yml\n";
+    open META, "> META.yml" or die "Cannot create META.yml: $!";
+    print META $meta;
+    close META;
+  }
 }

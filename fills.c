@@ -1,5 +1,5 @@
-#include "image.h"
-#include "imagei.h"
+#include "imager.h"
+#include "imageri.h"
 
 /*
 =head1 NAME
@@ -104,7 +104,7 @@ regmach - use the register machine to generate colors
 =cut
 */
 
-static i_color fcolor_to_color(i_fcolor *c) {
+static i_color fcolor_to_color(const i_fcolor *c) {
   int ch;
   i_color out;
 
@@ -114,7 +114,7 @@ static i_color fcolor_to_color(i_fcolor *c) {
   return out;
 }
 
-static i_fcolor color_to_fcolor(i_color *c) {
+static i_fcolor color_to_fcolor(const i_color *c) {
   int ch;
   i_fcolor out;
 
@@ -195,6 +195,8 @@ static i_fill_solid_t base_solid_fill_comb =
 /*
 =item i_fill_destroy(fill)
 
+=category Fills
+
 Call to destroy any fill object.
 
 =cut
@@ -210,6 +212,8 @@ i_fill_destroy(i_fill_t *fill) {
 /*
 =item i_new_fill_solidf(color, combine)
 
+=category Fills
+
 Create a solid fill based on a float color.
 
 If combine is non-zero then alpha values will be combined.
@@ -218,7 +222,7 @@ If combine is non-zero then alpha values will be combined.
 */
 
 i_fill_t *
-i_new_fill_solidf(i_fcolor *c, int combine) {
+i_new_fill_solidf(const i_fcolor *c, int combine) {
   int ch;
   i_fill_solid_t *fill = mymalloc(sizeof(i_fill_solid_t)); /* checked 14jul05 tonyc */
   
@@ -239,7 +243,9 @@ i_new_fill_solidf(i_fcolor *c, int combine) {
 /*
 =item i_new_fill_solid(color, combine)
 
-Create a solid fill based.
+=category Fills
+
+Create a solid fill based on an 8-bit color.
 
 If combine is non-zero then alpha values will be combined.
 
@@ -247,7 +253,7 @@ If combine is non-zero then alpha values will be combined.
 */
 
 i_fill_t *
-i_new_fill_solid(i_color *c, int combine) {
+i_new_fill_solid(const i_color *c, int combine) {
   int ch;
   i_fill_solid_t *fill = mymalloc(sizeof(i_fill_solid_t)); /* checked 14jul05 tonyc */
 
@@ -413,12 +419,14 @@ static void fill_hatchf(i_fill_t *fill, int x, int y, int width, int channels,
                         i_fcolor *data);
 static
 i_fill_t *
-i_new_hatch_low(i_color *fg, i_color *bg, i_fcolor *ffg, i_fcolor *fbg, 
-                int combine, int hatch, unsigned char *cust_hatch,
+i_new_hatch_low(const i_color *fg, const i_color *bg, const i_fcolor *ffg, const i_fcolor *fbg, 
+                int combine, int hatch, const unsigned char *cust_hatch,
                 int dx, int dy);
 
 /*
 =item i_new_fill_hatch(fg, bg, combine, hatch, cust_hatch, dx, dy)
+
+=category Fills
 
 Creates a new hatched fill with the fg color used for the 1 bits in
 the hatch and bg for the 0 bits.  If combine is non-zero alpha values
@@ -434,8 +442,8 @@ If cust_hatch is NULL then one of the standard hatches is used.
 =cut
 */
 i_fill_t *
-i_new_fill_hatch(i_color *fg, i_color *bg, int combine, int hatch, 
-            unsigned char *cust_hatch, int dx, int dy) {
+i_new_fill_hatch(const i_color *fg, const i_color *bg, int combine, int hatch, 
+            const unsigned char *cust_hatch, int dx, int dy) {
   return i_new_hatch_low(fg, bg, NULL, NULL, combine, hatch, cust_hatch, 
                          dx, dy);
 }
@@ -443,6 +451,8 @@ i_new_fill_hatch(i_color *fg, i_color *bg, int combine, int hatch,
 /*
 =item i_new_fill_hatchf(fg, bg, combine, hatch, cust_hatch, dx, dy)
 
+=category Fills
+
 Creates a new hatched fill with the fg color used for the 1 bits in
 the hatch and bg for the 0 bits.  If combine is non-zero alpha values
 will be combined.
@@ -457,8 +467,8 @@ If cust_hatch is NULL then one of the standard hatches is used.
 =cut
 */
 i_fill_t *
-i_new_fill_hatchf(i_fcolor *fg, i_fcolor *bg, int combine, int hatch, 
-            unsigned char *cust_hatch, int dx, int dy) {
+i_new_fill_hatchf(const i_fcolor *fg, const i_fcolor *bg, int combine, int hatch, 
+		  const unsigned char *cust_hatch, int dx, int dy) {
   return i_new_hatch_low(NULL, NULL, fg, bg, combine, hatch, cust_hatch, 
                          dx, dy);
 }
@@ -478,12 +488,18 @@ struct i_fill_image_t {
 /*
 =item i_new_fill_image(im, matrix, xoff, yoff, combine)
 
+=category Fills
+
 Create an image based fill.
+
+matrix is an array of 9 doubles representing a transformation matrix.
+
+xoff and yoff are the offset into the image to start filling from.
 
 =cut
 */
 i_fill_t *
-i_new_fill_image(i_img *im, double *matrix, int xoff, int yoff, int combine) {
+i_new_fill_image(i_img *im, const double *matrix, int xoff, int yoff, int combine) {
   struct i_fill_image_t *fill = mymalloc(sizeof(*fill)); /* checked 14jul05 tonyc */
 
   fill->base.fill_with_color = fill_image;
@@ -596,8 +612,9 @@ Implements creation of hatch fill objects.
 */
 static
 i_fill_t *
-i_new_hatch_low(i_color *fg, i_color *bg, i_fcolor *ffg, i_fcolor *fbg, 
-                int combine, int hatch, unsigned char *cust_hatch,
+i_new_hatch_low(const i_color *fg, const i_color *bg, 
+		const i_fcolor *ffg, const i_fcolor *fbg, 
+                int combine, int hatch, const unsigned char *cust_hatch,
                 int dx, int dy) {
   i_fill_hatch_t *fill = mymalloc(sizeof(i_fill_hatch_t)); /* checked 14jul05 tonyc */
 

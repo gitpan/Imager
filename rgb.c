@@ -1,4 +1,4 @@
-#include "image.h"
+#include "imager.h"
 #include "log.h"
 #include "iolayer.h"
 
@@ -143,7 +143,7 @@ destination is compressed.
 static
 int
 rgb_dest_write(rgb_dest *s, unsigned char *buf, size_t pixels) {
-
+  return -1;
 }
 
 

@@ -1242,6 +1242,130 @@ Revision history for Perl extension Imager.
 0.47 Fri 30 Dec 2005
 - bump to 0.47
 
+0.47_01 Tue 21 Feb 2006
+- set the locale to "C" properly when testing ft1.x error messages
+- don't destroy image before creating it in error handling in bmp.c
+- extra concept index entries
+- Imager::Draw - align_string()'s valign parameter was invalid in the 
+  synopsis
+- start of external Imager API access:
+  - rename headers to avoid conflicts:
+    - image.h to imager.h
+    - imagei.h to imageri.h
+    - datatypes.h to imdatatypes.h
+    - config.h to imconfig.h (created by Makefile.PL)
+  - moved all public types defined in imager.h to imdatatypes.h
+  - supply the PM parameter to WriteMakefile(), to install headers 
+    under Imager/include, and the Imager typemap in Imager/typemap.
+    We scan the MANIFEST for files to add to PM.
+  - add "i_" prefix on some functions useful as public at the C level.
+  - moved the typedefs that support the typemap from Imager.xs to 
+    imperl.h
+  - set the global callbacks hook in the Imager.xs BOOT section
+  - API cleanup:
+    - define i_tags_set(), i_tags_setn() - we might not allow multiple 
+      values for a tag in the future
+    - i_copy() now returns a new image instead of doing horrible inplace
+      things to an existing image
+    - provide actual functions for all of the macros we define in imager.h
+      so we can put them in the global callbacks structure
+  - define global functions structure (imexttypes.h)
+    and initialize it (imext.c)
+  - add API include header with macros to setup the define and
+    initialize the local callbacks pointer, and macros to call the API
+    functions.
+  - build Imager::APIRef from C sources, including updating the sources
+    to include documentation for each API function.
+  - convert dyntest and mandelbrot dynfilts into XS modules (too easy)
+  - simple Imager::CountColor example
+- support Inline::C :
+  - typemap changes to accept Imager or Imager::ImgRaw objects as 
+    image parameters
+  - define Imager output type for trivial cases of returning an i_img as
+    a full Imager object
+  - Inline WITH hook to filter Imager XS types into types Inline::C can
+    accept, supply appropriate headers and initialization.
+  - test script t/t82inline.t
+- try to use XSLoader instead of DynaLoader (but fallback if necessary)
+- paste() can now paste a subset of the source image.
+- paste() now has better tests
+- paste() should now be faster for larger pastes
+- added sample files missing from MANIFEST
+- added t/t92samples.t to check samples/README against MANIFEST
+- added inline_replace_color.pl to samples
+- constify the Imager API
+- document Imager::Filter::Mandelbrot
+- convert dynfilt/flines.c to Imager::Filter::Flines
+- minor changes for older perl/ExtUtils::MM
+- deal with freetype-config --cflags returning the directories
+  in the wrong order (Freetype 2.1.4 and earlier)
+  Thanks to David Wheeler for his help in tracking this down.
+- reword and provide an example for non-proportionally scaling an
+  image.  Wording from Simon Cozens.
+- error messages when writing TIFF images were always 
+  'Could not write to buffer', more useful messages are now reported.
+- error messages when writing PNM images were always
+  'unable to write pnm image', more useful messages are now reported.
+- convert t/t103raw.t to Test::More
+- reading a raw image no longer exits on a short read or read error,
+  and returns an appropriate error message in $im->errstr
+- write failures when writing a raw image now return a useful
+  message in $im->errstr
+- added typemap type names to types in Imager::API.
+- make skip when Inline::C not available less verbose
+- convert t/t07iolayer.t to Test::More
+- handle the possibility of strerror() returning NULL.
+- supply C<imager> parameter to filters so we can register filters
+  implemented in perl.
+- document register_filter() and add test for it
+- add example to SYNOPSIS of samples/inline_replace_color.pl
+- minor POD fix in Imager::Color::Table
+- eliminate many -Wall warnings
+- update README to match unbuggy giflib
+- document index parameter of Imager::Font->new()
+- change faxable output to use a more fax natural PHOTOMETRIC_MINISWHITE, 
+  since T.4 normally works that way, and MINISBLACK confuses some readers.
+- clean up scale() method for readability
+- make scale() fail if an invalid type is supplied (previously
+  documented as undefined behaviour)
+- add error handling tests for scale()
+- smarter warning removal
+- handle effects of byte ordering when testing tiff error messages
+- scale() can now expect an Image::Math::Constrain object as a scaling
+  constraint via the constrain parameter.
+- added tests for the various ways we can specify scaling size
+- documented scale()'s scalefactor parameter
+- sick of $opts{scalefactor} in scale(), give it a scalar to call it's
+  own.
+- check $Config{ldflags} and $Config{ccflags} for places to search for
+  headers and libraries.  This deals with the way the fink build of perl
+  puts -L/sw/lib in ldflags rather than using loclibpth
+- eliminate some of the duplication of -I and -L options in LIBS and INC
+- Makefile.PL now uses strict.
+- the search for freetype1.x headers is now smarter
+- add tests for scaleX()/scaleY()
+- expand documentation of scaleX()/scaleY()
+- rotate()s back parameter now accepts color names like other methods
+- convert t/t69rubthru.t to Test::More
+- minor clean up of rubthrough() method
+- error handling tests for rubthrough()
+- expand Imager::Transformations:
+  - document parameters more explicitly
+  - document return values
+  - add examples
+  - add AUTHOR, SEE ALSO, REVISION
+- eliminate sign warning from image.c
+- make TIFF detection stricter
+- more memory allocation integer overflow auditing
+- IM_DEBUG_MALLOC wasn't interacting well with the API
+- make win32.c const happy
+- make raw.c C89 compliant
+- added version/level to the API function table structure
+- fix/simplify META.yml generation - we now generate META.yml at
+  Makefile.PL time, since trying to work with EU::MM to generate a 
+  custom META.yml was a waste.
+- bump to 0.47_01
+
 =================================================================
 
         For latest versions check the Imager-devel pages:

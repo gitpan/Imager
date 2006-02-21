@@ -1,5 +1,5 @@
-#include "image.h"
-#include "imagei.h"
+#include "imager.h"
+#include "imageri.h"
 
 /*
 =head1 NAME
@@ -39,14 +39,14 @@ Some of these functions are internal.
 /* Hack around an obscure linker bug on solaris - probably due to builtin gcc thingies */
 static void fake(void) { ceil(1); }
 
-static int i_ppix_d(i_img *im, int x, int y, i_color *val);
+static int i_ppix_d(i_img *im, int x, int y, const i_color *val);
 static int i_gpix_d(i_img *im, int x, int y, i_color *val);
 static int i_glin_d(i_img *im, int l, int r, int y, i_color *vals);
-static int i_plin_d(i_img *im, int l, int r, int y, i_color *vals);
-static int i_ppixf_d(i_img *im, int x, int y, i_fcolor *val);
+static int i_plin_d(i_img *im, int l, int r, int y, const i_color *vals);
+static int i_ppixf_d(i_img *im, int x, int y, const i_fcolor *val);
 static int i_gpixf_d(i_img *im, int x, int y, i_fcolor *val);
 static int i_glinf_d(i_img *im, int l, int r, int y, i_fcolor *vals);
-static int i_plinf_d(i_img *im, int l, int r, int y, i_fcolor *vals);
+static int i_plinf_d(i_img *im, int l, int r, int y, const i_fcolor *vals);
 static int i_gsamp_d(i_img *im, int l, int r, int y, i_sample_t *samps, const int *chans, int chan_count);
 static int i_gsampf_d(i_img *im, int l, int r, int y, i_fsample_t *samps, const int *chans, int chan_count);
 /*static int i_psamp_d(i_img *im, int l, int r, int y, i_sample_t *samps, int *chans, int chan_count);
@@ -142,7 +142,7 @@ Dump color information to log - strictly for debugging.
 */
 
 void
-ICL_info(i_color *cl) {
+ICL_info(i_color const *cl) {
   mm_log((1,"i_color_info(cl* %p)\n",cl));
   mm_log((1,"i_color_info: (%d,%d,%d,%d)\n",cl->rgba.r,cl->rgba.g,cl->rgba.b,cl->rgba.a));
 }
@@ -254,7 +254,12 @@ static i_img IIM_base_8bit_direct =
 /*
 =item IIM_new(x, y, ch)
 
-Creates a new image object I<x> pixels wide, and I<y> pixels high with I<ch> channels.
+=item i_img_8_new(x, y, ch)
+
+=category Image creation
+
+Creates a new image object I<x> pixels wide, and I<y> pixels high with
+I<ch> channels.
 
 =cut
 */
@@ -278,8 +283,6 @@ IIM_DESTROY(i_img *im) {
   i_img_destroy(im);
   /*   myfree(cl); */
 }
-
-
 
 /* 
 =item i_img_new()
@@ -420,6 +423,8 @@ i_img_exorcise(i_img *im) {
 /* 
 =item i_img_destroy(im)
 
+=category Image
+
 Destroy image and free data via exorcise.
 
    im - Image pointer
@@ -436,6 +441,8 @@ i_img_destroy(i_img *im) {
 
 /* 
 =item i_img_info(im, info)
+
+=category Image
 
 Return image information
 
@@ -507,6 +514,8 @@ i_img_getchannels(i_img *im) { return im->channels; }
 /*
 =item i_copyto_trans(im, src, x1, y1, x2, y2, tx, ty, trans)
 
+=category Image
+
 (x1,y1) (x2,y2) specifies the region to copy (in the source coordinates)
 (tx,ty) specifies the upper left corner for the target image.
 pass NULL in trans for non transparent i_colors.
@@ -515,7 +524,7 @@ pass NULL in trans for non transparent i_colors.
 */
 
 void
-i_copyto_trans(i_img *im,i_img *src,int x1,int y1,int x2,int y2,int tx,int ty,i_color *trans) {
+i_copyto_trans(i_img *im,i_img *src,int x1,int y1,int x2,int y2,int tx,int ty,const i_color *trans) {
   i_color pv;
   int x,y,t,ttx,tty,tt,ch;
 
@@ -547,6 +556,8 @@ i_copyto_trans(i_img *im,i_img *src,int x1,int y1,int x2,int y2,int tx,int ty,i_
 /*
 =item i_copyto(dest, src, x1, y1, x2, y2, tx, ty)
 
+=category Image
+
 Copies image data from the area (x1,y1)-[x2,y2] in the source image to
 a rectangle the same size with it's top-left corner at (tx,ty) in the
 destination image.
@@ -562,22 +573,39 @@ i_copyto(i_img *im, i_img *src, int x1, int y1, int x2, int y2, int tx, int ty) 
   
   if (x2<x1) { t=x1; x1=x2; x2=t; }
   if (y2<y1) { t=y1; y1=y2; y2=t; }
-  
+  if (tx < 0) {
+    /* adjust everything equally */
+    x1 += -tx;
+    x2 += -tx;
+    tx = 0;
+  }
+  if (ty < 0) {
+    y1 += -ty;
+    y2 += -ty;
+    ty = 0;
+  }
+  if (x1 >= src->xsize || y1 >= src->ysize)
+    return; /* nothing to do */
+  if (x2 > src->xsize)
+    x2 = src->xsize;
+  if (y2 > src->ysize)
+    y2 = src->ysize;
+  if (x1 == x2 || y1 == y2)
+    return; /* nothing to do */
+
   mm_log((1,"i_copyto(im* %p, src %p, x1 %d, y1 %d, x2 %d, y2 %d, tx %d, ty %d)\n",
 	  im, src, x1, y1, x2, y2, tx, ty));
   
   if (im->bits == i_8_bits) {
-    i_color pv;
+    i_color *row = mymalloc(sizeof(i_color) * (x2-x1));
     tty = ty;
     for(y=y1; y<y2; y++) {
       ttx = tx;
-      for(x=x1; x<x2; x++) {
-        i_gpix(src, x,   y,   &pv);
-        i_ppix(im,  ttx, tty, &pv);
-        ttx++;
-      }
+      i_glin(src, x1, x2, y, row);
+      i_plin(im, tx, tx+x2-x1, tty, row);
       tty++;
     }
+    myfree(row);
   }
   else {
     i_fcolor pv;
@@ -595,25 +623,34 @@ i_copyto(i_img *im, i_img *src, int x1, int y1, int x2, int y2, int tx, int ty) 
 }
 
 /*
-=item i_copy(im, src)
+=item i_copy(src)
 
-Copies the contents of the image I<src> over the image I<im>.
+=category Image
+
+Creates a new image that is a copy of src.
+
+Tags are not copied, only the image data.
+
+Returns: i_img *
 
 =cut
 */
 
-void
-i_copy(i_img *im, i_img *src) {
+i_img *
+i_copy(i_img *src) {
   int y, y1, x1;
+  i_img *im = i_sametype(src, src->xsize, src->ysize);
 
-  mm_log((1,"i_copy(im* %p,src %p)\n", im, src));
+  mm_log((1,"i_copy(src %p)\n", src));
+
+  if (!im)
+    return NULL;
 
   x1 = src->xsize;
   y1 = src->ysize;
   if (src->type == i_direct_type) {
     if (src->bits == i_8_bits) {
       i_color *pv;
-      i_img_empty_ch(im, x1, y1, src->channels);
       pv = mymalloc(sizeof(i_color) * x1);
       
       for (y = 0; y < y1; ++y) {
@@ -624,14 +661,6 @@ i_copy(i_img *im, i_img *src) {
     }
     else {
       i_fcolor *pv;
-      if (src->bits == i_16_bits)
-	i_img_16_new_low(im, x1, y1, src->channels);
-      else if (src->bits == i_double_bits)
-	i_img_double_new_low(im, x1, y1, src->channels);
-      else {
-	fprintf(stderr, "i_copy(): Unknown image bit size %d\n", src->bits);
-	return; /* I dunno */
-      }
 
       pv = mymalloc(sizeof(i_fcolor) * x1);
       for (y = 0; y < y1; ++y) {
@@ -663,11 +692,15 @@ i_copy(i_img *im, i_img *src) {
     }
     myfree(vals);
   }
+
+  return im;
 }
 
 
 /*
 =item i_rubthru(im, src, tx, ty, src_minx, src_miny, src_maxx, src_maxy )
+
+=category Image
 
 Takes the sub image I<src[src_minx, src_maxx)[src_miny, src_maxy)> and
 overlays it at (I<tx>,I<ty>) on the image object.
@@ -1073,6 +1106,8 @@ i_scale_nn(i_img *im, float scx, float scy) {
 /*
 =item i_sametype(i_img *im, int xsize, int ysize)
 
+=category Image creation
+
 Returns an image of the same type (sample size, channels, paletted/direct).
 
 For paletted images the palette is copied from the source.
@@ -1112,6 +1147,8 @@ i_img *i_sametype(i_img *src, int xsize, int ysize) {
 
 /*
 =item i_sametype_chans(i_img *im, int xsize, int ysize, int channels)
+
+=category Image creation
 
 Returns an image of the same type (sample size).
 
@@ -1328,7 +1365,7 @@ Returns 0 if the pixel could be set, -1 otherwise.
 */
 static
 int
-i_ppix_d(i_img *im, int x, int y, i_color *val) {
+i_ppix_d(i_img *im, int x, int y, const i_color *val) {
   int ch;
   
   if ( x>-1 && x<im->xsize && y>-1 && y<im->ysize ) {
@@ -1420,7 +1457,7 @@ Returns the number of pixels copied (eg. if r, l or y is out of range)
 */
 static
 int
-i_plin_d(i_img *im, int l, int r, int y, i_color *vals) {
+i_plin_d(i_img *im, int l, int r, int y, const i_color *vals) {
   int ch, count, i;
   unsigned char *data;
   if (y >=0 && y < im->ysize && l < im->xsize && l >= 0) {
@@ -1449,7 +1486,7 @@ i_plin_d(i_img *im, int l, int r, int y, i_color *vals) {
 */
 static
 int
-i_ppixf_d(i_img *im, int x, int y, i_fcolor *val) {
+i_ppixf_d(i_img *im, int x, int y, const i_fcolor *val) {
   int ch;
   
   if ( x>-1 && x<im->xsize && y>-1 && y<im->ysize ) {
@@ -1537,7 +1574,7 @@ Returns the number of pixels copied (eg. if r, l or y is out of range)
 */
 static
 int
-i_plinf_d(i_img *im, int l, int r, int y, i_fcolor *vals) {
+i_plinf_d(i_img *im, int l, int r, int y, const i_fcolor *vals) {
   int ch, count, i;
   unsigned char *data;
   if (y >=0 && y < im->ysize && l < im->xsize && l >= 0) {
@@ -1693,7 +1730,7 @@ i_sample_t versions.
 =cut
 */
 
-int i_ppixf_fp(i_img *im, int x, int y, i_fcolor *pix) {
+int i_ppixf_fp(i_img *im, int x, int y, const i_fcolor *pix) {
   i_color temp;
   int ch;
 
@@ -1726,7 +1763,7 @@ int i_gpixf_fp(i_img *im, int x, int y, i_fcolor *pix) {
 
 =cut
 */
-int i_plinf_fp(i_img *im, int l, int r, int y, i_fcolor *pix) {
+int i_plinf_fp(i_img *im, int l, int r, int y, const i_fcolor *pix) {
   i_color *work;
 
   if (y >= 0 && y < im->ysize && l < im->xsize && l >= 0) {
@@ -1831,11 +1868,11 @@ im->ext_data points at.
 
 =over
 
-=item i_addcolors_forward(i_img *im, i_color *colors, int count)
+=item i_addcolors_forward(i_img *im, const i_color *colors, int count)
 
 =cut
 */
-int i_addcolors_forward(i_img *im, i_color *colors, int count) {
+int i_addcolors_forward(i_img *im, const i_color *colors, int count) {
   return i_addcolors(*(i_img **)im->ext_data, colors, count);
 }
 
@@ -1849,11 +1886,11 @@ int i_getcolors_forward(i_img *im, int i, i_color *color, int count) {
 }
 
 /*
-=item i_setcolors_forward(i_img *im, int i, i_color *color, int count)
+=item i_setcolors_forward(i_img *im, int i, const i_color *color, int count)
 
 =cut
 */
-int i_setcolors_forward(i_img *im, int i, i_color *color, int count) {
+int i_setcolors_forward(i_img *im, int i, const i_color *color, int count) {
   return i_setcolors(*(i_img **)im->ext_data, i, color, count);
 }
 
@@ -1876,11 +1913,11 @@ int i_maxcolors_forward(i_img *im) {
 }
 
 /*
-=item i_findcolor_forward(i_img *im, i_color *color, i_palidx *entry)
+=item i_findcolor_forward(i_img *im, const i_color *color, i_palidx *entry)
 
 =cut
 */
-int i_findcolor_forward(i_img *im, i_color *color, i_palidx *entry) {
+int i_findcolor_forward(i_img *im, const i_color *color, i_palidx *entry) {
   return i_findcolor(*(i_img **)im->ext_data, color, entry);
 }
 
@@ -2082,30 +2119,33 @@ Check the beginning of the supplied file for a 'magic number'
 =cut
 */
 
+#define FORMAT_ENTRY(magic, type) \
+  { (unsigned char *)(magic ""), sizeof(magic)-1, type }
 
 char *
 i_test_format_probe(io_glue *data, int length) {
-
   static struct {
-    char *magic;
+    unsigned char *magic;
+    size_t magic_size;
     char *name;
   } formats[] = {
-    {"\xFF\xD8", "jpeg"},
-    {"GIF87a", "gif"},
-    {"GIF89a", "gif"},
-    {"MM\0*", "tiff"},
-    {"II*\0", "tiff"},
-    {"BM", "bmp"},
-    {"\x89PNG\x0d\x0a\x1a\x0a", "png"},
-    {"P1", "pnm"},
-    {"P2", "pnm"},
-    {"P3", "pnm"},
-    {"P4", "pnm"},
-    {"P5", "pnm"},
-    {"P6", "pnm"},
+    FORMAT_ENTRY("\xFF\xD8", "jpeg"),
+    FORMAT_ENTRY("GIF87a", "gif"),
+    FORMAT_ENTRY("GIF89a", "gif"),
+    FORMAT_ENTRY("MM\0*", "tiff"),
+    FORMAT_ENTRY("II*\0", "tiff"),
+    FORMAT_ENTRY("BM", "bmp"),
+    FORMAT_ENTRY("\x89PNG\x0d\x0a\x1a\x0a", "png"),
+    FORMAT_ENTRY("P1", "pnm"),
+    FORMAT_ENTRY("P2", "pnm"),
+    FORMAT_ENTRY("P3", "pnm"),
+    FORMAT_ENTRY("P4", "pnm"),
+    FORMAT_ENTRY("P5", "pnm"),
+    FORMAT_ENTRY("P6", "pnm"),
   };
+
   unsigned int i;
-  char head[18];
+  unsigned char head[18];
   char *match = NULL;
   ssize_t rc;
 
@@ -2116,9 +2156,9 @@ i_test_format_probe(io_glue *data, int length) {
 
   for(i=0; i<sizeof(formats)/sizeof(formats[0]); i++) { 
     int c;
-    ssize_t len = strlen(formats[i].magic);
-    if (rc<len) continue;
-    c = !strncmp(formats[i].magic, head, len);
+    if (rc < formats[i].magic_size)
+      continue;
+    c = !memcmp(formats[i].magic, head, formats[i].magic_size);
     if (c) {
       match = formats[i].name;
       break;
@@ -2139,7 +2179,9 @@ i_test_format_probe(io_glue *data, int length) {
 
   if (!match && 
       (rc == 18) &&
-      tga_header_verify(head)) return "tga";
+      tga_header_verify(head))
+    return "tga";
+
   return match;
 }
 

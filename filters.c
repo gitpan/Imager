@@ -1,5 +1,5 @@
-#include "image.h"
-#include "imagei.h"
+#include "imager.h"
+#include "imageri.h"
 #include <stdlib.h>
 #include <math.h>
 
@@ -109,21 +109,25 @@ i_hardinvert(i_img *im) {
   int x, y;
   unsigned char ch;
   
-  i_color rcolor;
+  i_color *row, *entry;
   
-    mm_log((1,"i_hardinvert(im %p)\n", im));
+  mm_log((1,"i_hardinvert(im %p)\n", im));
+
+  /* always rooms to allocate a single line of i_color */
+  row = mymalloc(sizeof(i_color) * im->xsize); /* checked 17feb2005 tonyc */
 
   for(y = 0; y < im->ysize; y++) {
+    i_glin(im, 0, im->xsize, y, row);
+    entry = row;
     for(x = 0; x < im->xsize; x++) {
-      i_gpix(im, x, y, &rcolor);
-      
       for(ch = 0; ch < im->channels; ch++) {
-	rcolor.channel[ch] = 255 - rcolor.channel[ch];
+	entry->channel[ch] = 255 - entry->channel[ch];
       }
-      
-      i_ppix(im, x, y, &rcolor);
+      ++entry;
     }
+    i_plin(im, 0, im->xsize, y, row);
   }  
+  myfree(row);
 }
 
 
@@ -1127,7 +1131,8 @@ An invalid value causes an error exit (the program is aborted).
 
 =cut
  */
-void
+
+int
 i_nearest_color(i_img *im, int num, int *xo, int *yo, i_color *oval, int dmeasure) {
   i_color *ival;
   float *tval;
@@ -1137,12 +1142,35 @@ i_nearest_color(i_img *im, int num, int *xo, int *yo, i_color *oval, int dmeasur
   int xsize    = im->xsize;
   int ysize    = im->ysize;
   int *cmatch;
+  int ival_bytes, tval_bytes;
 
   mm_log((1,"i_nearest_color(im %p, num %d, xo %p, yo %p, oval %p, dmeasure %d)\n", im, num, xo, yo, oval, dmeasure));
 
-  tval   = mymalloc( sizeof(float)*num*im->channels );
-  ival   = mymalloc( sizeof(i_color)*num );
-  cmatch = mymalloc( sizeof(int)*num     );
+  i_clear_error();
+
+  if (num <= 0) {
+    i_push_error(0, "no points supplied to nearest_color filter");
+    return 0;
+  }
+
+  if (dmeasure < 0 || dmeasure > i_dmeasure_limit) {
+    i_push_error(0, "distance measure invalid");
+    return 0;
+  }
+
+  tval_bytes = sizeof(float)*num*im->channels;
+  if (tval_bytes / num != sizeof(float) * im->channels) {
+    i_push_error(0, "integer overflow calculating memory allocation");
+    return 0;
+  }
+  ival_bytes  = sizeof(i_color) * num;
+  if (ival_bytes / sizeof(i_color) != num) {
+    i_push_error(0, "integer overflow calculating memory allocation");
+    return 0;
+  }
+  tval   = mymalloc( tval_bytes ); /* checked 17feb2005 tonyc */
+  ival   = mymalloc( ival_bytes ); /* checked 17feb2005 tonyc */
+  cmatch = mymalloc( sizeof(int)*num     ); /* checked 17feb2005 tonyc */
 
   for(p = 0; p<num; p++) {
     for(ch = 0; ch<im->channels; ch++) tval[ p * im->channels + ch] = 0;
@@ -1165,7 +1193,7 @@ i_nearest_color(i_img *im, int num, int *xo, int *yo, i_color *oval, int dmeasur
     case 1: /* euclidean squared */
       mindist = xd*xd + yd*yd; /* euclidean distance */
       break;
-    case 2: /* euclidean squared */
+    case 2: /* manhatten distance */
       mindist = i_max(xd*xd, yd*yd); /* manhattan distance */
       break;
     default:
@@ -1209,6 +1237,8 @@ i_nearest_color(i_img *im, int num, int *xo, int *yo, i_color *oval, int dmeasur
     ival[p].channel[ch] = tval[p*im->channels + ch];
 
   i_nearest_color_foo(im, num, xo, yo, ival, dmeasure);
+
+  return 1;
 }
 
 /*
@@ -1219,8 +1249,10 @@ image from double the original.
 
 =cut
 */
-void i_unsharp_mask(i_img *im, double stddev, double scale) {
-  i_img copy;
+
+void
+i_unsharp_mask(i_img *im, double stddev, double scale) {
+  i_img *copy;
   int x, y, ch;
 
   if (scale < 0)
@@ -1229,14 +1261,14 @@ void i_unsharp_mask(i_img *im, double stddev, double scale) {
   if (scale > 100)
     scale = 100;
 
-  i_copy(&copy, im);
-  i_gaussian(&copy, stddev);
+  copy = i_copy(im);
+  i_gaussian(copy, stddev);
   if (im->bits == i_8_bits) {
-    i_color *blur = mymalloc(im->xsize * sizeof(i_color) * 2);
-    i_color *out = blur + im->xsize;
+    i_color *blur = mymalloc(im->xsize * sizeof(i_color)); /* checked 17feb2005 tonyc */
+    i_color *out = mymalloc(im->xsize * sizeof(i_color)); /* checked 17feb2005 tonyc */
 
     for (y = 0; y < im->ysize; ++y) {
-      i_glin(&copy, 0, copy.xsize, y, blur);
+      i_glin(copy, 0, copy->xsize, y, blur);
       i_glin(im, 0, im->xsize, y, out);
       for (x = 0; x < im->xsize; ++x) {
         for (ch = 0; ch < im->channels; ++ch) {
@@ -1254,13 +1286,14 @@ void i_unsharp_mask(i_img *im, double stddev, double scale) {
     }
 
     myfree(blur);
+    myfree(out);
   }
   else {
-    i_fcolor *blur = mymalloc(im->xsize * sizeof(i_fcolor) * 2);
-    i_fcolor *out = blur + im->xsize;
+    i_fcolor *blur = mymalloc(im->xsize * sizeof(i_fcolor)); /* checked 17feb2005 tonyc */
+    i_fcolor *out = mymalloc(im->xsize * sizeof(i_fcolor)); /* checked 17feb2005 tonyc */
 
     for (y = 0; y < im->ysize; ++y) {
-      i_glinf(&copy, 0, copy.xsize, y, blur);
+      i_glinf(copy, 0, copy->xsize, y, blur);
       i_glinf(im, 0, im->xsize, y, out);
       for (x = 0; x < im->xsize; ++x) {
         for (ch = 0; ch < im->channels; ++ch) {
@@ -1277,8 +1310,9 @@ void i_unsharp_mask(i_img *im, double stddev, double scale) {
     }
 
     myfree(blur);
+    myfree(out);
   }
-  i_img_exorcise(&copy);
+  i_img_destroy(copy);
 }
 
 /*
@@ -1314,8 +1348,8 @@ i_diff_image(i_img *im1, i_img *im2, int mindiff) {
   out = i_sametype_chans(im1, xsize, ysize, outchans);
   
   if (im1->bits == i_8_bits && im2->bits == i_8_bits) {
-    i_color *line1 = mymalloc(2 * xsize * sizeof(*line1));
-    i_color *line2 = line1 + xsize;
+    i_color *line1 = mymalloc(xsize * sizeof(*line1)); /* checked 17feb2005 tonyc */
+    i_color *line2 = mymalloc(xsize * sizeof(*line1)); /* checked 17feb2005 tonyc */
     i_color empty;
     int x, y, ch;
 
@@ -1345,10 +1379,11 @@ i_diff_image(i_img *im1, i_img *im2, int mindiff) {
       i_plin(out, 0, xsize, y, line2);
     }
     myfree(line1);
+    myfree(line2);
   }
   else {
-    i_fcolor *line1 = mymalloc(2 * xsize * sizeof(*line1));
-    i_fcolor *line2 = line1 + xsize;
+    i_fcolor *line1 = mymalloc(xsize * sizeof(*line1)); /* checked 17feb2005 tonyc */
+    i_fcolor *line2 = mymalloc(xsize * sizeof(*line2)); /* checked 17feb2005 tonyc */
     i_fcolor empty;
     int x, y, ch;
     double dist = mindiff / 255;
@@ -1379,6 +1414,7 @@ i_diff_image(i_img *im1, i_img *im2, int mindiff) {
       i_plinf(out, 0, xsize, y, line2);
     }
     myfree(line1);
+    myfree(line2);
   }
 
   return out;
@@ -1601,23 +1637,35 @@ I<count> and I<segs> define the segments of the fill.
 
 */
 
-void
+int
 i_fountain(i_img *im, double xa, double ya, double xb, double yb, 
            i_fountain_type type, i_fountain_repeat repeat, 
            int combine, int super_sample, double ssample_param, 
            int count, i_fountain_seg *segs) {
   struct fount_state state;
   int x, y;
-  i_fcolor *line = mymalloc(sizeof(i_fcolor) * im->xsize);
+  i_fcolor *line = NULL;
   i_fcolor *work = NULL;
-
+  int line_bytes;
   i_fountain_seg *my_segs;
   i_fill_combine_f combine_func = NULL;
   i_fill_combinef_f combinef_func = NULL;
 
+  i_clear_error();
+
+  /* i_fountain() allocates floating colors even for 8-bit images,
+     so we need to do this check */
+  line_bytes = sizeof(i_fcolor) * im->xsize;
+  if (line_bytes / sizeof(i_fcolor) != im->xsize) {
+    i_push_error(0, "integer overflow calculating memory allocation");
+    return 0;
+  }
+  
+  line = mymalloc(line_bytes); /* checked 17feb2005 tonyc */
+
   i_get_combine(combine, &combine_func, &combinef_func);
   if (combinef_func)
-    work = mymalloc(sizeof(i_fcolor) * im->xsize);
+    work = mymalloc(line_bytes); /* checked 17feb2005 tonyc */
 
   fount_init_state(&state, xa, ya, xb, yb, type, repeat, combine, 
                    super_sample, ssample_param, count, segs);
@@ -1646,6 +1694,8 @@ i_fountain(i_img *im, double xa, double ya, double xb, double yb,
   fount_finish_state(&state);
   if (work) myfree(work);
   myfree(line);
+
+  return 1;
 }
 
 typedef struct {
@@ -1660,7 +1710,12 @@ static void
 fount_fill_destroy(i_fill_t *fill);
 
 /*
-=item i_new_fount(xa, ya, xb, yb, type, repeat, combine, super_sample, ssample_param, count, segs)
+=item i_new_fill_fount(xa, ya, xb, yb, type, repeat, combine, super_sample, ssample_param, count, segs)
+
+=category Fills
+=synopsis fill = i_new_fill_fount(0, 0, 100, 100, i_ft_linear, i_ft_linear, 
+=synopsis                         i_fr_triangle, 0, i_fts_grid, 9, 1, segs);
+
 
 Creates a new general fill which fills with a fountain fill.
 

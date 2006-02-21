@@ -1,4 +1,4 @@
-#include "imagei.h"
+#include "imageri.h"
 #include <stdlib.h>
 
 #define OVERLAPPED(start1, end1, start2, end2) \
@@ -239,7 +239,7 @@ Fill the areas given by hlines with color.
 */
 
 void
-i_int_hlines_fill_color(i_img *im, i_int_hlines *hlines, i_color *col) {
+i_int_hlines_fill_color(i_img *im, i_int_hlines *hlines, const i_color *col) {
   int y, i, x;
 
   for (y = hlines->start_y; y < hlines->limit_y; ++y) {
@@ -263,7 +263,7 @@ i_int_hlines_fill_fill(im, hlines, fill)
 */
 void
 i_int_hlines_fill_fill(i_img *im, i_int_hlines *hlines, i_fill_t *fill) {
-  int y, i, x;
+  int y, i;
 
   if (im->bits == i_8_bits && fill->fill_with_color) {
     i_color *line = mymalloc(sizeof(i_color) * im->xsize);
@@ -338,7 +338,7 @@ Tony Cook <tony@imager.perl.org>
 
 =head1 REVISION
 
-$Revision: 834 $
+$Revision: 900 $
 
 =cut
 */

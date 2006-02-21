@@ -145,11 +145,17 @@ use Imager::Font;
 
 BEGIN {
   require Exporter;
-  require DynaLoader;
-
-  $VERSION = '0.47';
-  @ISA = qw(Exporter DynaLoader);
-  bootstrap Imager $VERSION;
+  @ISA = qw(Exporter);
+  $VERSION = '0.47_01';
+  eval {
+    require XSLoader;
+    XSLoader::load(Imager => $VERSION);
+    1;
+  } or do {
+    require DynaLoader;
+    push @ISA, 'DynaLoader';
+    bootstrap Imager $VERSION;
+  }
 }
 
 BEGIN {
@@ -235,11 +241,26 @@ BEGIN {
      }
     };
 
-  $filters{nearest_color} ={
-			    callseq => ['image', 'xo', 'yo', 'colors', 'dist'],
-			    defaults => { },
-			    callsub => sub { my %hsh=@_; i_nearest_color($hsh{image}, $hsh{xo}, $hsh{yo}, $hsh{colors}, $hsh{dist}); }
-			   };
+  $filters{nearest_color} =
+    {
+     callseq => ['image', 'xo', 'yo', 'colors', 'dist'],
+     defaults => { },
+     callsub => 
+     sub { 
+       my %hsh=@_; 
+       # make sure the segments are specified with colors
+       my @colors;
+       for my $color (@{$hsh{colors}}) {
+         my $new_color = _color($color) 
+           or die $Imager::ERRSTR."\n";
+         push @colors, $new_color;
+       }
+
+       i_nearest_color($hsh{image}, $hsh{xo}, $hsh{yo}, \@colors, 
+                       $hsh{dist})
+         or die Imager->_error_as_msg() . "\n";
+     },
+    };
   $filters{gaussian} = {
                         callseq => [ 'image', 'stddev' ],
                         defaults => { },
@@ -366,7 +387,8 @@ BEGIN {
 
        i_fountain($hsh{image}, $hsh{xa}, $hsh{ya}, $hsh{xb}, $hsh{yb},
                   $hsh{ftype}, $hsh{repeat}, $hsh{combine}, $hsh{super_sample},
-                  $hsh{ssample_param}, \@segments);
+                  $hsh{ssample_param}, \@segments)
+         or die Imager->_error_as_msg() . "\n";
      },
     };
   $filters{unsharpmask} =
@@ -567,8 +589,7 @@ sub copy {
   }
 
   my $newcopy=Imager->new();
-  $newcopy->{IMG}=i_img_new();
-  i_copy($newcopy->{IMG},$self->{IMG});
+  $newcopy->{IMG} = i_copy($self->{IMG});
   return $newcopy;
 }
 
@@ -576,19 +597,68 @@ sub copy {
 
 sub paste {
   my $self = shift;
-  unless ($self->{IMG}) { $self->{ERRSTR}='empty input image'; return undef; }
-  my %input=(left=>0, top=>0, @_);
-  unless($input{img}) {
-    $self->{ERRSTR}="no source image";
+
+  unless ($self->{IMG}) { 
+    $self->_set_error('empty input image');
+    return;
+  }
+  my %input=(left=>0, top=>0, src_minx => 0, src_miny => 0, @_);
+  my $src = $input{img} || $input{src};
+  unless($src) {
+    $self->_set_error("no source image");
     return;
   }
   $input{left}=0 if $input{left} <= 0;
   $input{top}=0 if $input{top} <= 0;
-  my $src=$input{img};
+
   my($r,$b)=i_img_info($src->{IMG});
+  my ($src_left, $src_top) = @input{qw/src_minx src_miny/};
+  my ($src_right, $src_bottom);
+  if ($input{src_coords}) {
+    ($src_left, $src_top, $src_right, $src_bottom) = @{$input{src_coords}}
+  }
+  else {
+    if (defined $input{src_maxx}) {
+      $src_right = $input{src_maxx};
+    }
+    elsif (defined $input{width}) {
+      if ($input{width} <= 0) {
+        $self->_set_error("paste: width must me positive");
+        return;
+      }
+      $src_right = $src_left + $input{width};
+    }
+    else {
+      $src_right = $r;
+    }
+    if (defined $input{src_maxx}) {
+      $src_bottom = $input{src_maxy};
+    }
+    elsif (defined $input{height}) {
+      if ($input{height} < 0) {
+        $self->_set_error("paste: height must be positive");
+        return;
+      }
+      $src_bottom = $src_top + $input{height};
+    }
+    else {
+      $src_bottom = $b;
+    }
+  }
+
+  $src_right > $r and $src_right = $r;
+  $src_bottom > $r and $src_bottom = $b;
+
+  if ($src_right <= $src_left
+      || $src_bottom < $src_top) {
+    $self->_set_error("nothing to paste");
+    return;
+  }
 
   i_copyto($self->{IMG}, $src->{IMG}, 
-	   0,0, $r, $b, $input{left}, $input{top});
+	   $src_left, $src_top, $src_right, $src_bottom, 
+           $input{left}, $input{top});
+
   return $self;  # What should go here??
 }
 
@@ -1163,7 +1233,8 @@ sub read {
   if ( $input{'type'} eq 'pnm' ) {
     $self->{IMG}=i_readpnm_wiol( $IO, -1 ); # Fixme, check if that length parameter is ever needed
     if ( !defined($self->{IMG}) ) {
-      $self->{ERRSTR}='unable to read pnm image: '._error_as_msg(); return undef;
+      $self->{ERRSTR}='unable to read pnm image: '._error_as_msg(); 
+      return undef;
     }
     $self->{DEBUG} && print "loading a pnm file\n";
     return $self;
@@ -1256,7 +1327,7 @@ sub read {
 				   $params{storechannels},
 				   $params{interleave});
     if ( !defined($self->{IMG}) ) {
-      $self->{ERRSTR}='unable to read raw image';
+      $self->{ERRSTR}=$self->_error_as_msg();
       return undef;
     }
     $self->{DEBUG} && print "loading a raw file\n";
@@ -1392,12 +1463,12 @@ sub write {
 
     if (defined $input{class} && $input{class} eq 'fax') {
       if (!i_writetiff_wiol_faxable($self->{IMG}, $IO, $input{fax_fine})) {
-	$self->{ERRSTR}='Could not write to buffer';
+	$self->{ERRSTR} = $self->_error_as_msg();
 	return undef;
       }
     } else {
       if (!i_writetiff_wiol($self->{IMG}, $IO)) {
-	$self->{ERRSTR}='Could not write to buffer';
+	$self->{ERRSTR} = $self->_error_as_msg();
 	return undef;
       }
     }
@@ -1405,7 +1476,7 @@ sub write {
     $self->_set_opts(\%input, "pnm_", $self)
       or return undef;
     if ( ! i_writeppm_wiol($self->{IMG},$IO) ) {
-      $self->{ERRSTR}='unable to write pnm image';
+      $self->{ERRSTR} = $self->_error_as_msg();
       return undef;
     }
     $self->{DEBUG} && print "writing a pnm file\n";
@@ -1413,7 +1484,7 @@ sub write {
     $self->_set_opts(\%input, "raw_", $self)
       or return undef;
     if ( !i_writeraw_wiol($self->{IMG},$IO) ) {
-      $self->{ERRSTR}='unable to write raw image';
+      $self->{ERRSTR} = $self->_error_as_msg();
       return undef;
     }
     $self->{DEBUG} && print "writing a raw file\n";
@@ -1625,9 +1696,14 @@ sub filter {
     }
   }
   if (defined($filters{$input{'type'}}{defaults})) {
-    %hsh=('image',$self->{IMG},%{$filters{$input{'type'}}{defaults}},%input);
+    %hsh=( image => $self->{IMG},
+           imager => $self,
+           %{$filters{$input{'type'}}{defaults}},
+           %input );
   } else {
-    %hsh=('image',$self->{IMG},%input);
+    %hsh=( image => $self->{IMG},
+           imager => $self,
+           %input );
   }
 
   my @cs=@{$filters{$input{'type'}}{callseq}};
@@ -1655,6 +1731,25 @@ sub filter {
   return $self;
 }
 
+sub register_filter {
+  my $class = shift;
+  my %hsh = ( defaults => {}, @_ );
+
+  defined $hsh{type}
+    or die "register_filter() with no type\n";
+  defined $hsh{callsub}
+    or die "register_filter() with no callsub\n";
+  defined $hsh{callseq}
+    or die "register_filter() with no callseq\n";
+
+  exists $filters{$hsh{type}}
+    and return;
+
+  $filters{$hsh{type}} = \%hsh;
+
+  return 1;
+}
+
 # Scale an image to requested size and return the scaled version
 
 sub scale {
@@ -1663,41 +1758,84 @@ sub scale {
   my $img = Imager->new();
   my $tmp = Imager->new();
 
+  my $scalefactor = $opts{scalefactor};
+
   unless (defined wantarray) {
     my @caller = caller;
     warn "scale() called in void context - scale() returns the scaled image at $caller[1] line $caller[2]\n";
     return;
   }
 
-  unless ($self->{IMG}) { $self->{ERRSTR}='empty input image'; return undef; }
+  unless ($self->{IMG}) { 
+    $self->_set_error('empty input image'); 
+    return undef;
+  }
 
+  # work out the scaling
   if ($opts{xpixels} and $opts{ypixels} and $opts{'type'}) {
-    my ($xpix,$ypix)=( $opts{xpixels}/$self->getwidth() , $opts{ypixels}/$self->getheight() );
-    if ($opts{'type'} eq 'min') { $opts{scalefactor}=min($xpix,$ypix); }
-    if ($opts{'type'} eq 'max') { $opts{scalefactor}=max($xpix,$ypix); }
-  } elsif ($opts{xpixels}) { $opts{scalefactor}=$opts{xpixels}/$self->getwidth(); }
-  elsif ($opts{ypixels}) { $opts{scalefactor}=$opts{ypixels}/$self->getheight(); }
+    my ($xpix, $ypix)=( $opts{xpixels} / $self->getwidth() , 
+			$opts{ypixels} / $self->getheight() );
+    if ($opts{'type'} eq 'min') { 
+      $scalefactor = min($xpix,$ypix); 
+    }
+    elsif ($opts{'type'} eq 'max') {
+      $scalefactor = max($xpix,$ypix);
+    }
+    else {
+      $self->_set_error('invalid value for type parameter');
+      return undef;
+    }
+  } elsif ($opts{xpixels}) { 
+    $scalefactor = $opts{xpixels} / $self->getwidth();
+  }
+  elsif ($opts{ypixels}) { 
+    $scalefactor = $opts{ypixels}/$self->getheight();
+  }
+  elsif ($opts{constrain} && ref $opts{constrain}
+	 && $opts{constrain}->can('constrain')) {
+    # we've been passed an Image::Math::Constrain object or something
+    # that looks like one
+    (undef, undef, $scalefactor)
+      = $opts{constrain}->constrain($self->getwidth, $self->getheight);
+    unless ($scalefactor) {
+      $self->_set_error('constrain method failed on constrain parameter');
+      return undef;
+    }
+  }
 
   if ($opts{qtype} eq 'normal') {
-    $tmp->{IMG}=i_scaleaxis($self->{IMG},$opts{scalefactor},0);
-    if ( !defined($tmp->{IMG}) ) { $self->{ERRSTR}='unable to scale image'; return undef; }
-    $img->{IMG}=i_scaleaxis($tmp->{IMG},$opts{scalefactor},1);
-    if ( !defined($img->{IMG}) ) { $self->{ERRSTR}='unable to scale image'; return undef; }
+    $tmp->{IMG} = i_scaleaxis($self->{IMG}, $scalefactor, 0);
+    if ( !defined($tmp->{IMG}) ) { 
+      $self->{ERRSTR} = 'unable to scale image';
+      return undef;
+    }
+    $img->{IMG}=i_scaleaxis($tmp->{IMG}, $scalefactor, 1);
+    if ( !defined($img->{IMG}) ) { 
+      $self->{ERRSTR}='unable to scale image'; 
+      return undef;
+    }
+
     return $img;
   }
-  if ($opts{'qtype'} eq 'preview') {
-    $img->{IMG}=i_scale_nn($self->{IMG},$opts{'scalefactor'},$opts{'scalefactor'}); 
-    if ( !defined($img->{IMG}) ) { $self->{ERRSTR}='unable to scale image'; return undef; }
+  elsif ($opts{'qtype'} eq 'preview') {
+    $img->{IMG} = i_scale_nn($self->{IMG}, $scalefactor, $scalefactor); 
+    if ( !defined($img->{IMG}) ) { 
+      $self->{ERRSTR}='unable to scale image'; 
+      return undef;
+    }
     return $img;
   }
-  $self->{ERRSTR}='scale: invalid value for qtype'; return undef;
+  else {
+    $self->_set_error('invalid value for qtype parameter');
+    return undef;
+  }
 }
 
 # Scales only along the X axis
 
 sub scaleX {
-  my $self=shift;
-  my %opts=(scalefactor=>0.5,@_);
+  my $self = shift;
+  my %opts = ( scalefactor=>0.5, @_ );
 
   unless (defined wantarray) {
     my @caller = caller;
@@ -1705,24 +1843,39 @@ sub scaleX {
     return;
   }
 
-  unless ($self->{IMG}) { $self->{ERRSTR}='empty input image'; return undef; }
+  unless ($self->{IMG}) { 
+    $self->{ERRSTR} = 'empty input image';
+    return undef;
+  }
 
   my $img = Imager->new();
 
-  if ($opts{pixels}) { $opts{scalefactor}=$opts{pixels}/$self->getwidth(); }
+  my $scalefactor = $opts{scalefactor};
 
-  unless ($self->{IMG}) { $self->{ERRSTR}='empty input image'; return undef; }
-  $img->{IMG}=i_scaleaxis($self->{IMG},$opts{scalefactor},0);
+  if ($opts{pixels}) { 
+    $scalefactor = $opts{pixels} / $self->getwidth();
+  }
 
-  if ( !defined($img->{IMG}) ) { $self->{ERRSTR}='unable to scale image'; return undef; }
+  unless ($self->{IMG}) { 
+    $self->{ERRSTR}='empty input image'; 
+    return undef;
+  }
+
+  $img->{IMG} = i_scaleaxis($self->{IMG}, $scalefactor, 0);
+
+  if ( !defined($img->{IMG}) ) { 
+    $self->{ERRSTR} = 'unable to scale image'; 
+    return undef;
+  }
+
   return $img;
 }
 
 # Scales only along the Y axis
 
 sub scaleY {
-  my $self=shift;
-  my %opts=(scalefactor=>0.5,@_);
+  my $self = shift;
+  my %opts = ( scalefactor => 0.5, @_ );
 
   unless (defined wantarray) {
     my @caller = caller;
@@ -1734,15 +1887,25 @@ sub scaleY {
 
   my $img = Imager->new();
 
-  if ($opts{pixels}) { $opts{scalefactor}=$opts{pixels}/$self->getheight(); }
+  my $scalefactor = $opts{scalefactor};
 
-  unless ($self->{IMG}) { $self->{ERRSTR}='empty input image'; return undef; }
-  $img->{IMG}=i_scaleaxis($self->{IMG},$opts{scalefactor},1);
+  if ($opts{pixels}) { 
+    $scalefactor = $opts{pixels} / $self->getheight();
+  }
 
-  if ( !defined($img->{IMG}) ) { $self->{ERRSTR}='unable to scale image'; return undef; }
+  unless ($self->{IMG}) { 
+    $self->{ERRSTR} = 'empty input image'; 
+    return undef;
+  }
+  $img->{IMG}=i_scaleaxis($self->{IMG}, $scalefactor, 1);
+
+  if ( !defined($img->{IMG}) ) {
+    $self->{ERRSTR} = 'unable to scale image';
+    return undef;
+  }
+
   return $img;
 }
-
 
 # Transform returns a spatial transformation of the input image
 # this moves pixels to a new location in the returned image.
@@ -1903,8 +2066,14 @@ sub rubthrough {
   my $self=shift;
   my %opts=(tx => 0,ty => 0, @_);
 
-  unless ($self->{IMG}) { $self->{ERRSTR}='empty input image'; return undef; }
-  unless ($opts{src} && $opts{src}->{IMG}) { $self->{ERRSTR}='empty input image for source'; return undef; }
+  unless ($self->{IMG}) { 
+    $self->{ERRSTR}='empty input image'; 
+    return undef;
+  }
+  unless ($opts{src} && $opts{src}->{IMG}) {
+    $self->{ERRSTR}='empty input image for src'; 
+    return undef;
+  }
 
   %opts = (src_minx => 0,
 	   src_miny => 0,
@@ -1913,8 +2082,9 @@ sub rubthrough {
 	   %opts);
 
   unless (i_rubthru($self->{IMG}, $opts{src}->{IMG}, $opts{tx}, $opts{ty},
-	  $opts{src_minx}, $opts{src_miny}, $opts{src_maxx}, $opts{src_maxy})) {
-    $self->{ERRSTR} = $self->_error_as_msg();
+                    $opts{src_minx}, $opts{src_miny}, 
+                    $opts{src_maxx}, $opts{src_maxy})) {
+    $self->_set_error($self->_error_as_msg());
     return undef;
   }
   return $self;
@@ -1969,9 +2139,16 @@ sub rotate {
   elsif (defined $opts{radians} || defined $opts{degrees}) {
     my $amount = $opts{radians} || $opts{degrees} * 3.1415926535 / 180;
 
+    my $back = $opts{back};
     my $result = Imager->new;
-    if ($opts{back}) {
-      $result->{IMG} = i_rotate_exact($self->{IMG}, $amount, $opts{back});
+    if ($back) {
+      $back = _color($back);
+      unless ($back) {
+        $self->_set_error(Imager->errstr);
+        return undef;
+      }
+
+      $result->{IMG} = i_rotate_exact($self->{IMG}, $amount, $back);
     }
     else {
       $result->{IMG} = i_rotate_exact($self->{IMG}, $amount);
@@ -2953,7 +3130,15 @@ sub parseiptc {
   return (caption=>$caption,photogr=>$photogr,headln=>$headln,credit=>$credit);
 }
 
-# Autoload methods go after =cut, and are processed by the autosplit program.
+sub Inline {
+  my ($lang) = @_;
+
+  $lang eq 'C'
+    or die "Only C language supported";
+
+  require Imager::ExtUtils;
+  return Imager::ExtUtils->inline_config;
+}
 
 1;
 __END__
@@ -3085,6 +3270,22 @@ L<Imager::Matrix2d> - Helper class for affine transformations.
 =item *
 
 L<Imager::Fountain> - Helper for making gradient profiles.
+
+=item *
+
+L<Imager::API> - using Imager's C API
+
+=item *
+
+L<Imager::APIRef> - API function reference
+
+=item *
+
+L<Imager::Inline> - using Imager's C API from Inline::C
+
+=item *
+
+L<Imager::ExtUtils> - tools to get access to Imager's C API.
 
 =back
 
@@ -3256,6 +3457,9 @@ animated GIF - L<Imager::File/"Writing an animated GIF">
 aspect ratio - L<Imager::ImageTypes/i_xres>,
 L<Imager::ImageTypes/i_yres>, L<Imager::ImageTypes/i_aspect_only>
 
+blend - alpha blending one image onto another
+L<Imager::Transformations/rubthrough>
+
 blur - L<Imager::Filters/guassian>, L<Imager::Filters/conv>
 
 boxes, drawing - L<Imager::Draw/box>
@@ -3345,6 +3549,9 @@ noise, filter - L<Imager::Filter/noise>
 
 noise, rendered - L<Imager::Filter/turbnoise>,
 L<Imager::Filter/radnoise>
+
+paste - L<Imager::Transformations/paste>,
+L<Imager::Transformations/rubthrough>
 
 pseudo-color image - L<Imager::ImageTypes/to_paletted>,
 L<Imager::ImageTypes/new>

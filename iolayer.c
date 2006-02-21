@@ -1,5 +1,6 @@
-#include "imio.h"
+#include "imager.h"
 #include "iolayer.h"
+#include "imerror.h"
 #include "log.h"
 #include <stdlib.h>
 #include <stdio.h>
@@ -7,6 +8,7 @@
 #include <io.h>
 #endif
 #include <string.h>
+#include <errno.h>
 
 #define IOL_DEB(x)
 
@@ -63,6 +65,7 @@ static ssize_t fd_write(io_glue *ig, const void *buf, size_t count);
 static off_t fd_seek(io_glue *ig, off_t offset, int whence);
 static void fd_close(io_glue *ig);
 static ssize_t fd_size(io_glue *ig);
+static const char *my_strerror(int err);
 
 /*
  * Callbacks for sources that cannot seek
@@ -889,6 +892,7 @@ io_glue_commit_types(io_glue *ig) {
       ig->writecb = fd_write;
       ig->seekcb  = fd_seek;
       ig->closecb = fd_close;
+      ig->sizecb  = fd_size;
       break;
     }
   }
@@ -1063,27 +1067,49 @@ io_slurp(io_glue *ig, unsigned char **c) {
 =cut
 */
 static ssize_t fd_read(io_glue *ig, void *buf, size_t count) {
+  ssize_t result;
 #ifdef _MSC_VER
-  return _read(ig->source.fdseek.fd, buf, count);
+  result = _read(ig->source.fdseek.fd, buf, count);
 #else
-  return read(ig->source.fdseek.fd, buf, count);
+  result = read(ig->source.fdseek.fd, buf, count);
 #endif
+
+  /* 0 is valid - means EOF */
+  if (result < 0) {
+    i_push_errorf(0, "read() failure: %s (%d)", my_strerror(errno), errno);
+  }
+
+  return result;
 }
 
 static ssize_t fd_write(io_glue *ig, const void *buf, size_t count) {
+  ssize_t result;
 #ifdef _MSC_VER
-  return _write(ig->source.fdseek.fd, buf, count);
+  result = _write(ig->source.fdseek.fd, buf, count);
 #else
-  return write(ig->source.fdseek.fd, buf, count);
+  result = write(ig->source.fdseek.fd, buf, count);
 #endif
+
+  if (result <= 0) {
+    i_push_errorf(errno, "write() failure: %s (%d)", my_strerror(errno), errno);
+  }
+
+  return result;
 }
 
 static off_t fd_seek(io_glue *ig, off_t offset, int whence) {
+  off_t result;
 #ifdef _MSC_VER
-  return _lseek(ig->source.fdseek.fd, offset, whence);
+  result = _lseek(ig->source.fdseek.fd, offset, whence);
 #else
-  return lseek(ig->source.fdseek.fd, offset, whence);
+  result = lseek(ig->source.fdseek.fd, offset, whence);
 #endif
+
+  if (result == (off_t)-1) {
+    i_push_errorf(errno, "lseek() failure: %s (%d)", my_strerror(errno), errno);
+  }
+
+  return result;
 }
 
 static void fd_close(io_glue *ig) {
@@ -1144,6 +1170,32 @@ io_glue_DESTROY(io_glue *ig) {
   myfree(ig);
 }
 
+/*
+=back
+
+=head1 INTERNAL FUNCTIONS
+
+=over
+
+=item my_strerror
+
+Calls strerror() and ensures we don't return NULL.
+
+On some platforms it's possible for strerror() to return NULL, this
+wrapper ensures we only get non-NULL values.
+
+=cut
+*/
+
+static
+const char *my_strerror(int err) {
+  const char *result = strerror(err);
+
+  if (!result)
+    result = "Unknown error";
+
+  return result;
+}
 
 /*
 =back
