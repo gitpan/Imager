@@ -558,6 +558,10 @@ reason for failure.
 
 =head2 Color transformations
 
+=over
+
+=item convert
+
 You can use the convert method to transform the color space of an
 image using a matrix.  For ease of use some presets are provided.
 
@@ -689,7 +693,13 @@ alpha channel:
                                            [ 0, 0, 0, 0.5 ],
                                          ]);
 
+=back
+
 =head2 Color Mappings
+
+=over
+
+=item map
 
 You can use the map method to map the values of each channel of an
 image independently using a list of lookup tables.  It's important to
@@ -731,6 +741,8 @@ maps to the C<red> and C<blue> channels one would use:
 
   $img->map(maps=>[\@redmap, [], \@bluemap]);
 
+=back
+
 =head1 SEE ALSO
 
 L<Imager>, L<Imager::Engines>
@@ -741,6 +753,6 @@ Tony Cook <tony@imager.perl.org>, Arnar M. Hrafnkelsson
 
 =head1 REVISION
 
-$Revision: 916 $
+$Revision: 930 $
 
 =cut

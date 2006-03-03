@@ -623,6 +623,11 @@ or by code:
 
 In each case deltag() returns the number of tags deleted.
 
+=item settag
+
+settag() replaces any existing tags with a new tag.  This is
+equivalent to calling deltag() then addtag().
+
 =back
 
 =head2 Common Tags
@@ -897,7 +902,7 @@ color table.
 
 =head1 REVISION
 
-$Revision: 828 $
+$Revision: 930 $
 
 =head1 AUTHORS
 
