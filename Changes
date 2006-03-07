@@ -1366,11 +1366,34 @@ Revision history for Perl extension Imager.
   custom META.yml was a waste.
 - bump to 0.47_01
 
-0.48
+0.48 Fri 3 Mar 2006
 - removed unused hashinfo() function from Imager.xs
 - added =items for various methods, so Pod::Coverage will pick them up
   (Pod::Coverage tests to be added in 0.49)
 - bump to 0.48
+
+0.49
+- handle short EXIF user_comment fields correctly, previously Imager
+  would read (and potentially) write beyond the end of an allocated block,
+  or through a NULL pointer if the EXIF user_comment field was less
+  than 8 bytes long.
+  https://rt.cpan.org/Ticket/Display.html?id=17981
+- tifflib 3.8.0 with MDI (Microsoft(tm) TIFF) support produces a 
+  different error when it reads a file with a bad magic number.
+  Update the test to handle the possible messages.
+- some jpeg.c logging calls didn't include parameters enough to match
+  the supplied format string. (detected by valgrind)
+- in some cases memory wasn't being freed during error handling when
+  reading jpeg images (detected by valgrind)
+- free the TIFF object correctly when reading a TIFF image and the 
+  page number is out of range. (detected by valgrind)
+- i_gsampf() (used to implement getsamples() for floating point samples)
+  was leaking memory. (detected by valgrind)
+- writing to a PNG file was leaking one memory block
+  (detected by valgrind)
+- some error paths when reading GIF images weren't closing the GIF
+  read object. (detected by valgrind)
+- bump to 0.49 (to get #17981 fix out)
 
 =================================================================
 
