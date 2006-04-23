@@ -146,7 +146,7 @@ use Imager::Font;
 BEGIN {
   require Exporter;
   @ISA = qw(Exporter);
-  $VERSION = '0.50';
+  $VERSION = '0.51';
   eval {
     require XSLoader;
     XSLoader::load(Imager => $VERSION);
@@ -528,12 +528,7 @@ sub _color {
         $result = Imager::Color->new(%$arg);
       }
       elsif ($copy =~ /^ARRAY\(/) {
-        if (grep $_ > 1, @$arg) {
-          $result = Imager::Color->new(@$arg);
-        }
-        else {
-          $result = Imager::Color::Float->new(@$arg);
-        }
+	$result = Imager::Color->new(@$arg);
       }
       else {
         $Imager::ERRSTR = "Not a color";
@@ -631,7 +626,7 @@ sub paste {
     else {
       $src_right = $r;
     }
-    if (defined $input{src_maxx}) {
+    if (defined $input{src_maxy}) {
       $src_bottom = $input{src_maxy};
     }
     elsif (defined $input{height}) {
@@ -647,7 +642,7 @@ sub paste {
   }
 
   $src_right > $r and $src_right = $r;
-  $src_bottom > $r and $src_bottom = $b;
+  $src_bottom > $b and $src_bottom = $b;
 
   if ($src_right <= $src_left
       || $src_bottom < $src_top) {

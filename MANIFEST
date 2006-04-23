@@ -208,6 +208,8 @@ t/t90cc.t
 t/t91pod.t		Test POD with Test::Pod
 t/t92samples.t
 t/testtools.pl
+t/tr18561.t		Regression tests
+t/tr18561b.t
 tags.c
 testimg/209_yonge.jpg	Regression test: #17981
 testimg/bad1oflow.bmp   1-bit/pixel, overflow integer on 32-bit machines
@@ -277,6 +279,7 @@ testimg/winrgb4.bmp  4-bit bmp base
 testimg/winrgb4off.bmp  4-bit bmp with image data offset from header
 testimg/winrgb8.bmp  8-bit bmp base
 testimg/winrgb8off.bmp  8-bit bmp with image data offset from header
+testimg/zerotype.jpg	Image with a zero type entry in the EXIF data
 tga.c           Reading and writing Targa files
 tiff.c
 trans2.c
