@@ -25,9 +25,16 @@ Imager::APIRef - Imager's C API.
   i_box_filled(im, 0, 0, im->xsize-1, im->ysize-1, &color);
   i_circle_aa(im, 50, 50, 45, &color);
   i_flood_cfill(im, 50, 50, fill);
+  i_flood_cfill_border(im, 50, 50, fill, border);
   i_flood_fill(im, 50, 50, &color);
+  i_flood_fill_border(im, 50, 50, &color, &border);
 
   # Error handling
+
+  # Files
+  i_get_image_file_limits(&width, &height, &bytes)
+  i_i_int_check_image_file_limits(width, height, channels, sizeof(i_sample_t))
+  i_set_image_file_limits(500, 500, 1000000);
 
   # Fills
   fill = i_new_fill_fount(0, 0, 100, 100, i_ft_linear, i_ft_linear, 
@@ -59,7 +66,7 @@ of angles in degrees from d1 to d2, with the color.
 
 
 =for comment
-From: Line 205 in draw.c
+From: Line 209 in draw.c
 
 =item i_arc_aa(im, x, y, rad, d1, d2, color)
 
@@ -69,7 +76,7 @@ the range of angles in degrees from d1 to d2, with the color.
 
 
 =for comment
-From: Line 330 in draw.c
+From: Line 334 in draw.c
 
 =item i_arc_aa_cfill(im, x, y, rad, d1, d2, fill)
 
@@ -79,7 +86,7 @@ the range of angles in degrees from d1 to d2, with the fill object.
 
 
 =for comment
-From: Line 356 in draw.c
+From: Line 360 in draw.c
 
 =item i_arc_cfill(im, x, y, rad, d1, d2, fill)
 
@@ -89,7 +96,7 @@ of angles in degrees from d1 to d2, with the fill object.
 
 
 =for comment
-From: Line 230 in draw.c
+From: Line 234 in draw.c
 
 =item i_box(im, x1, y1, x2, y2, color)
 
@@ -98,7 +105,7 @@ Outlines the box from (x1,y1) to (x2,y2) inclusive with I<color>.
 
 
 =for comment
-From: Line 516 in draw.c
+From: Line 520 in draw.c
 
 =item i_box_cfill(im, x1, y1, x2, y2, fill)
 
@@ -107,7 +114,7 @@ Fills the box from (x1,y1) to (x2,y2) inclusive with fill.
 
 
 =for comment
-From: Line 559 in draw.c
+From: Line 563 in draw.c
 
 =item i_box_filled(im, x1, y1, x2, y2, color)
 
@@ -116,7 +123,7 @@ Fills the box from (x1,y1) to (x2,y2) inclusive with color.
 
 
 =for comment
-From: Line 541 in draw.c
+From: Line 545 in draw.c
 
 =item i_circle_aa(im, x, y, rad, color)
 
@@ -126,7 +133,7 @@ color.
 
 
 =for comment
-From: Line 462 in draw.c
+From: Line 466 in draw.c
 
 =item i_flood_cfill(im, seedx, seedy, fill)
 
@@ -138,7 +145,20 @@ Returns false if (seedx, seedy) are outside the image.
 
 
 =for comment
-From: Line 1317 in draw.c
+From: Line 1329 in draw.c
+
+=item i_flood_cfill_border(im, seedx, seedy, fill, border)
+
+
+Flood fills the 4-connected region starting from the point (seedx,
+seedy) with I<fill>, the fill stops when it reaches pixels of color
+I<border>.
+
+Returns false if (seedx, seedy) are outside the image.
+
+
+=for comment
+From: Line 1409 in draw.c
 
 =item i_flood_fill(im, seedx, seedy, color)
 
@@ -150,7 +170,20 @@ Returns false if (seedx, seedy) are outside the image.
 
 
 =for comment
-From: Line 1280 in draw.c
+From: Line 1287 in draw.c
+
+=item i_flood_fill_border(im, seedx, seedy, color, border)
+
+
+Flood fills the 4-connected region starting from the point (seedx,
+seedy) with I<color>, fill stops when the fill reaches a pixels with
+color I<border>.
+
+Returns false if (seedx, seedy) are outside the image.
+
+
+=for comment
+From: Line 1369 in draw.c
 
 =item i_glin(im, l, r, y, colors)
 
@@ -161,7 +194,7 @@ Returns the number of pixels retrieved.
 
 
 =for comment
-From: Line 202 in imext.c
+From: Line 210 in imext.c
 
 =item i_glinf(im, l, r, y, colors)
 
@@ -173,7 +206,7 @@ Returns the number of pixels retrieved.
 
 
 =for comment
-From: Line 237 in imext.c
+From: Line 245 in imext.c
 
 =item i_gpal(im, x, r, y, indexes)
 
@@ -187,7 +220,7 @@ Always returns 0 for direct color images.
 
 
 =for comment
-From: Line 301 in imext.c
+From: Line 309 in imext.c
 
 =item i_gpix(im, x, y, color)
 
@@ -198,7 +231,7 @@ Returns 0 if the pixel was retrieved, or -1 if not.
 
 
 =for comment
-From: Line 130 in imext.c
+From: Line 138 in imext.c
 
 =item i_gpixf(im, x, y, fcolor)
 
@@ -210,7 +243,7 @@ Returns 0 if the pixel was retrieved, or -1 if not.
 
 
 =for comment
-From: Line 166 in imext.c
+From: Line 174 in imext.c
 
 =item i_gsamp(im, l, r, y, samp, chans, chan_count)
 
@@ -227,7 +260,7 @@ chan_count)
 
 
 =for comment
-From: Line 255 in imext.c
+From: Line 263 in imext.c
 
 =item i_gsampf(im, l, r, y, samp, chans, chan_count)
 
@@ -244,7 +277,7 @@ chan_count)
 
 
 =for comment
-From: Line 278 in imext.c
+From: Line 286 in imext.c
 
 =item i_line(im, x1, y1, x2, y2, val, endp)
 
@@ -261,7 +294,7 @@ Draw a line to image using bresenhams linedrawing algorithm
 
 
 =for comment
-From: Line 630 in draw.c
+From: Line 634 in draw.c
 
 =item i_line_aa(im, x1, x2, y1, y2, color, endp)
 
@@ -272,7 +305,7 @@ The point (x2, y2) is drawn only if endp is set.
 
 
 =for comment
-From: Line 834 in draw.c
+From: Line 838 in draw.c
 
 =item i_plin(im, l, r, y, colors)
 
@@ -284,7 +317,7 @@ Returns the number of pixels set.
 
 
 =for comment
-From: Line 184 in imext.c
+From: Line 192 in imext.c
 
 =item i_plinf(im, l, r, fcolors)
 
@@ -296,7 +329,7 @@ Returns the number of pixels set.
 
 
 =for comment
-From: Line 219 in imext.c
+From: Line 227 in imext.c
 
 =item i_ppal(im, x, r, y, indexes)
 
@@ -310,7 +343,7 @@ Always returns 0 for direct color images.
 
 
 =for comment
-From: Line 320 in imext.c
+From: Line 328 in imext.c
 
 =item i_ppix(im, x, y, color)
 
@@ -324,7 +357,7 @@ color to the image.
 
 
 =for comment
-From: Line 110 in imext.c
+From: Line 118 in imext.c
 
 =item i_ppixf(im, x, y, fcolor)
 
@@ -338,7 +371,7 @@ color to the image.
 
 
 =for comment
-From: Line 147 in imext.c
+From: Line 155 in imext.c
 
 
 =back
@@ -389,6 +422,54 @@ and a format to produce the finally pushed error message.
 
 =for comment
 From: Line 249 in error.c
+
+
+=back
+
+=head2 Files
+
+=over
+
+=item i_get_image_file_limits(&width, &height, &bytes)
+
+
+Retrieves the file limits set by i_set_image_file_limits().
+
+
+=for comment
+From: Line 74 in limits.c
+
+=item i_int_check_image_file_limits(width, height, channels, sample_size)
+
+
+Checks the size of a file in memory against the configured image file
+limits.
+
+This also range checks the values to those permitted by Imager and
+checks for overflows in calculating the size.
+
+Returns non-zero if the file is within limits.
+
+This function is intended to be called by image file read functions.
+
+
+=for comment
+From: Line 96 in limits.c
+
+=item i_set_image_file_limits(width, height, bytes)
+
+
+Set limits on the sizes of images read by Imager.
+
+Setting a limit to 0 means that limit is ignored.
+
+Negative limits result in failure.
+
+Returns non-zero on success.
+
+
+=for comment
+From: Line 33 in limits.c
 
 
 =back
@@ -715,7 +796,7 @@ Always fails for direct color images.
 
 
 =for comment
-From: Line 339 in imext.c
+From: Line 347 in imext.c
 
 =item i_colorcount(im)
 
@@ -726,7 +807,7 @@ Returns -1 for direct images.
 
 
 =for comment
-From: Line 385 in imext.c
+From: Line 393 in imext.c
 
 =item i_findcolor(im, color, &entry)
 
@@ -741,7 +822,7 @@ Always fails on direct color images.
 
 
 =for comment
-From: Line 420 in imext.c
+From: Line 428 in imext.c
 
 =item i_getcolors(im, index, colors, count)
 
@@ -760,7 +841,7 @@ palette.
 
 
 =for comment
-From: Line 360 in imext.c
+From: Line 368 in imext.c
 
 =item i_maxcolors(im)
 
@@ -772,7 +853,7 @@ Returns -1 for direct color images.
 
 
 =for comment
-From: Line 402 in imext.c
+From: Line 410 in imext.c
 
 =item i_setcolors(im, index, colors, count)
 
@@ -790,7 +871,7 @@ Always fails on direct color images.
 
 
 =for comment
-From: Line 440 in imext.c
+From: Line 448 in imext.c
 
 
 =back
@@ -901,7 +982,7 @@ From: Line 320 in tags.c
 
 Retrieve a tag specified by name or code as an integer.
 
-On success sets the i_color *I<value> to the color and returns true.
+On success sets the int *I<value> to the integer and returns true.
 
 On failure returns false.
 

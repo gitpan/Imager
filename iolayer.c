@@ -15,6 +15,56 @@
 
 char *io_type_names[] = { "FDSEEK", "FDNOSEEK", "BUFFER", "CBSEEK", "CBNOSEEK", "BUFCHAIN" };
 
+typedef struct io_blink {
+  char buf[BBSIZ];
+  /* size_t cnt; */
+  size_t len;			/* How large is this buffer = BBZIS for now */
+  struct io_blink *next;
+  struct io_blink *prev;
+} io_blink;
+
+
+/* Structures that describe callback interfaces */
+
+typedef struct {
+  off_t offset;
+  off_t cpos;
+} io_ex_rseek;
+
+
+typedef struct {
+  off_t offset;
+  off_t cpos;
+  io_blink *head;
+  io_blink *tail;
+  io_blink *cp;
+} io_ex_fseek;
+
+
+typedef struct {
+  off_t offset;			/* Offset of the source - not used */
+  off_t length;			/* Total length of chain in bytes */
+  io_blink *head;		/* Start of chain */
+  io_blink *tail;		/* End of chain */
+  off_t tfill;			/* End of stream in last link */
+  io_blink *cp;			/* Current element of list */
+  off_t cpos;			/* Offset within the current */
+  off_t gpos;			/* Global position in stream */
+} io_ex_bchain;
+
+typedef struct {
+  off_t offset;			/* Offset of the source - not used */
+  off_t cpos;			/* Offset within the current */
+} io_ex_buffer;
+
+static void io_obj_setp_buffer(io_obj *io, char *p, size_t len, i_io_closebufp_t closecb, void *closedata);
+static void io_obj_setp_cb2     (io_obj *io, void *p, i_io_readl_t readcb, i_io_writel_t writecb, i_io_seekl_t seekcb, i_io_closel_t closecb, i_io_destroyl_t destroycb);
+
+/* turn current offset, file length, whence and offset into a new offset */
+#define calc_seek_offset(curr_off, length, offset, whence) \
+  (((whence) == SEEK_SET) ? (offset) : \
+   ((whence) == SEEK_CUR) ? (curr_off) + (offset) : \
+   ((whence) == SEEK_END) ? (length) + (offset) : -1)
 
 /*
 =head1 NAME
@@ -37,7 +87,7 @@ iolayer.c - encapsulates different source of data into a single framework.
     break;
   }  
 
-  io_glue_DESTROY(ig);
+  io_glue_destroy(ig);
   // and much more
 
 =head1 DESCRIPTION
@@ -63,7 +113,7 @@ Some of these functions are internal.
 static ssize_t fd_read(io_glue *ig, void *buf, size_t count);
 static ssize_t fd_write(io_glue *ig, const void *buf, size_t count);
 static off_t fd_seek(io_glue *ig, off_t offset, int whence);
-static void fd_close(io_glue *ig);
+static int fd_close(io_glue *ig);
 static ssize_t fd_size(io_glue *ig);
 static const char *my_strerror(int err);
 
@@ -107,8 +157,8 @@ realseek_read(io_glue *ig, void *buf, size_t count) {
   size_t        bc = 0;
   char       *cbuf = buf;
 
-  IOL_DEB( printf("realseek_read: fd = %d, ier->cpos = %ld, buf = %p, "
-                  "count = %d\n", fd, (long) ier->cpos, buf, count) );
+  IOL_DEB( printf("realseek_read:  buf = %p, count = %d\n", 
+		  buf, count) );
   /* Is this a good idea? Would it be better to handle differently?
      skip handling? */
   while( count!=bc && (rc = ig->source.cb.readcb(p,cbuf+bc,count-bc))>0 ) {
@@ -168,11 +218,13 @@ actual close or not.  Does nothing for now.  Should be fixed.
 =cut */
 
 static
-void
+int
 realseek_close(io_glue *ig) {
   mm_log((1, "realseek_close(ig %p)\n", ig));
   if (ig->source.cb.closecb)
-    ig->source.cb.closecb(ig->source.cb.p);
+    return ig->source.cb.closecb(ig->source.cb.p);
+  else
+    return 0;
 }
 
 
@@ -202,6 +254,17 @@ realseek_seek(io_glue *ig, off_t offset, int whence) {
   /* FIXME: How about implementing this offset handling stuff? */
 }
 
+static
+void
+realseek_destroy(io_glue *ig) {
+  io_ex_rseek *ier = ig->exdata;
+
+  if (ig->source.cb.destroycb)
+    ig->source.cb.destroycb(ig->source.cb.p);
+
+  myfree(ier);
+}
+
 /*
  * Callbacks for sources that are a fixed size buffer
  */
@@ -223,7 +286,7 @@ ssize_t
 buffer_read(io_glue *ig, void *buf, size_t count) {
   io_ex_buffer *ieb = ig->exdata;
 
-  IOL_DEB( printf("buffer_read: fd = %d, ier->cpos = %ld, buf = %p, count = %d\n", fd, (long) ier->cpos, buf, count) );
+  IOL_DEB( printf("buffer_read: ieb->cpos = %ld, buf = %p, count = %d\n", (long) ieb->cpos, buf, count) );
 
   if ( ieb->cpos+count > ig->source.buffer.len ) {
     mm_log((1,"buffer_read: short read: cpos=%d, len=%d, count=%d\n", ieb->cpos, ig->source.buffer.len));
@@ -232,7 +295,7 @@ buffer_read(io_glue *ig, void *buf, size_t count) {
   
   memcpy(buf, ig->source.buffer.data+ieb->cpos, count);
   ieb->cpos += count;
-  IOL_DEB( printf("buffer_read: rc = %d, count = %d\n", rc, count) );
+  IOL_DEB( printf("buffer_read: count = %d\n", count) );
   return count;
 }
 
@@ -269,10 +332,11 @@ or not.  Does nothing for now.  Should be fixed.
 */
 
 static
-void
+int
 buffer_close(io_glue *ig) {
   mm_log((1, "buffer_close(ig %p)\n", ig));
-  /* FIXME: Do stuff here */
+
+  return 0;
 }
 
 
@@ -291,12 +355,15 @@ static
 off_t
 buffer_seek(io_glue *ig, off_t offset, int whence) {
   io_ex_buffer *ieb = ig->exdata;
-  off_t reqpos = offset 
-    + (whence == SEEK_CUR)*ieb->cpos 
-    + (whence == SEEK_END)*ig->source.buffer.len;
+  off_t reqpos = 
+    calc_seek_offset(ieb->cpos, ig->source.buffer.len, offset, whence);
   
   if (reqpos > ig->source.buffer.len) {
     mm_log((1, "seeking out of readable range\n"));
+    return (off_t)-1;
+  }
+  if (reqpos < 0) {
+    i_push_error(0, "seek before beginning of file");
     return (off_t)-1;
   }
   
@@ -307,7 +374,18 @@ buffer_seek(io_glue *ig, off_t offset, int whence) {
   /* FIXME: How about implementing this offset handling stuff? */
 }
 
+static
+void
+buffer_destroy(io_glue *ig) {
+  io_ex_buffer *ieb = ig->exdata;
 
+  if (ig->source.buffer.closecb) {
+    mm_log((1,"calling close callback %p for io_buffer\n", 
+	    ig->source.buffer.closecb));
+    ig->source.buffer.closecb(ig->source.buffer.closedata);
+  }
+  myfree(ieb);
+}
 
 
 
@@ -609,12 +687,12 @@ or not.  Does nothing for now.  Should be fixed.
 */
 
 static
-void
+int
 bufchain_close(io_glue *ig) {
   mm_log((1, "bufchain_close(ig %p)\n",ig));
   IOL_DEB( printf("bufchain_close(ig %p)\n", ig) );
-  /* FIXME: Commit a seek point here */
-  
+
+  return 0;  
 }
 
 
@@ -634,108 +712,73 @@ static
 off_t
 bufchain_seek(io_glue *ig, off_t offset, int whence) {
   io_ex_bchain *ieb = ig->exdata;
-  io_blink *ib      = NULL;
   int wrlen;
 
-  off_t cof = 0;
-  off_t scount = offset;
+  off_t scount = calc_seek_offset(ieb->gpos, ieb->length, offset, whence);
   off_t sk;
 
   mm_log((1, "bufchain_seek(ig %p, offset %ld, whence %d)\n", ig, offset, whence));
 
-  switch (whence) {
-  case SEEK_SET: /* SEEK_SET = 0, From the top */
-    ieb->cp   = ieb->head;
-    ieb->cpos = 0;
-    ieb->gpos = 0;
+  if (scount < 0) {
+    i_push_error(0, "invalid whence supplied or seek before start of file");
+    return (off_t)-1;
+  }
 
-    while( scount ) {
-      int clen = (ieb->cp == ieb->tail) ? ieb->tfill : ieb->cp->len;
-      if (clen == ieb->cpos) {
-	if (ieb->cp == ieb->tail) break; /* EOF */
-	ieb->cp = ieb->cp->next;
-	ieb->cpos = 0;
-	clen = (ieb->cp == ieb->tail) ? ieb->tfill : ieb->cp->len;
-      }
-      
-      sk = clen - ieb->cpos;
-      sk = sk > scount ? scount : sk;
-      
-      scount    -= sk;
-      ieb->cpos += sk;
-      ieb->gpos += sk;
-    }
-
-    wrlen = scount;
-
-    if (wrlen > 0) { 
-      /*
-       * extending file - get ieb into consistent state and then
-       * call write which will get it to the correct position 
-       */
-      char TB[BBSIZ];
-      memset(TB, 0, BBSIZ);
-      ieb->gpos = ieb->length;
-      ieb->cpos = ieb->tfill;
-
-      while(wrlen > 0) {
-	ssize_t rc, wl = i_min(wrlen, BBSIZ);
-	mm_log((1, "bufchain_seek: wrlen = %d, wl = %d\n", wrlen, wl));
-	rc = bufchain_write( ig, TB, wl );
-	if (rc != wl) m_fatal(0, "bufchain_seek: Unable to extend file\n");
-	wrlen -= rc;
-      }
+  ieb->cp   = ieb->head;
+  ieb->cpos = 0;
+  ieb->gpos = 0;
+  
+  while( scount ) {
+    int clen = (ieb->cp == ieb->tail) ? ieb->tfill : ieb->cp->len;
+    if (clen == ieb->cpos) {
+      if (ieb->cp == ieb->tail) break; /* EOF */
+      ieb->cp = ieb->cp->next;
+      ieb->cpos = 0;
+      clen = (ieb->cp == ieb->tail) ? ieb->tfill : ieb->cp->len;
     }
     
-    break;
+    sk = clen - ieb->cpos;
+    sk = sk > scount ? scount : sk;
+    
+    scount    -= sk;
+    ieb->cpos += sk;
+    ieb->gpos += sk;
+  }
+  
+  wrlen = scount;
 
-  case SEEK_CUR:
-    m_fatal(123, "SEEK_CUR IS NOT IMPLEMENTED\n");
-
+  if (wrlen > 0) { 
     /*
-      case SEEK_CUR: 
-      ib = ieb->cp;
-      if (cof < 0) {
-      cof += ib->cpos;
-      cpos = 0;
-      while(cof < 0 && ib->prev) {
-      ib = ib->prev;
-      cof += ib->len;
-      }
-    */
-    
-  case SEEK_END: /* SEEK_END = 2 */
-    if (cof>0) m_fatal(0, "bufchain_seek: SEEK_END + %d : Extending files via seek not supported!\n", cof);
-
-    ieb->cp   = ieb->tail;
+     * extending file - get ieb into consistent state and then
+     * call write which will get it to the correct position 
+     */
+    char TB[BBSIZ];
+    memset(TB, 0, BBSIZ);
+    ieb->gpos = ieb->length;
     ieb->cpos = ieb->tfill;
     
-    if (cof<0) {
-      cof      += ieb->cpos;
-      ieb->cpos = 0;
-
-      while(cof<0 && ib->prev) {
-	ib   = ib->prev;
-	cof += ib->len;
-      }
-    
-      if (cof<0) m_fatal(0, "bufchain_seek: Tried to seek before start of file\n");
-      ieb->gpos = ieb->length+offset;
-      ieb->cpos = cof;
+    while(wrlen > 0) {
+      ssize_t rc, wl = i_min(wrlen, BBSIZ);
+      mm_log((1, "bufchain_seek: wrlen = %d, wl = %d\n", wrlen, wl));
+      rc = bufchain_write( ig, TB, wl );
+      if (rc != wl) m_fatal(0, "bufchain_seek: Unable to extend file\n");
+      wrlen -= rc;
     }
-    break;
-  default:
-    m_fatal(0, "bufchain_seek: Unhandled seek request: whence = %d\n", whence );
   }
 
   mm_log((2, "bufchain_seek: returning ieb->gpos = %d\n", ieb->gpos));
   return ieb->gpos;
 }
 
+static
+void
+bufchain_destroy(io_glue *ig) {
+  io_ex_bchain *ieb = ig->exdata;
 
+  io_destroy_bufchain(ieb);
 
-
-
+  myfree(ieb);
+}
 
 /*
  * Methods for setting up data source
@@ -753,8 +796,9 @@ Sets an io_object for reading from a buffer source
 =cut
 */
 
-void
-io_obj_setp_buffer(io_obj *io, char *p, size_t len, closebufp closecb, void *closedata) {
+static void
+io_obj_setp_buffer(io_obj *io, char *p, size_t len, i_io_closebufp_t closecb, 
+		   void *closedata) {
   io->buffer.type      = BUFFER;
   io->buffer.data      = p;
   io->buffer.len       = len;
@@ -762,23 +806,6 @@ io_obj_setp_buffer(io_obj *io, char *p, size_t len, closebufp closecb, void *clo
   io->buffer.closedata = closedata;
 }
 
-
-/*
-=item io_obj_setp_buchain(io)
-
-Sets an io_object for reading/writing from a buffer source
-
-   io  - io object that describes a source
-   p   - pointer to buffer
-   len - length of buffer
-
-=cut
-*/
-
-void
-io_obj_setp_bufchain(io_obj *io) {
-  io->type = BUFCHAIN;
-}
 
 
 /*
@@ -797,8 +824,8 @@ Sets an io_object for reading from a source that uses callbacks
 =cut
 */
 
-void
-io_obj_setp_cb2(io_obj *io, void *p, readl readcb, writel writecb, seekl seekcb, closel closecb, destroyl destroycb) {
+static void
+io_obj_setp_cb2(io_obj *io, void *p, i_io_readl_t readcb, i_io_writel_t writecb, i_io_seekl_t seekcb, i_io_closel_t closecb, i_io_destroyl_t destroycb) {
   io->cb.type      = CBSEEK;
   io->cb.p         = p;
   io->cb.readcb    = readcb;
@@ -808,18 +835,10 @@ io_obj_setp_cb2(io_obj *io, void *p, readl readcb, writel writecb, seekl seekcb,
   io->cb.destroycb = destroycb;
 }
 
-void
-io_obj_setp_cb(io_obj *io, void *p, readl readcb, writel writecb, 
-               seekl seekcb) {
-  io_obj_setp_cb2(io, p, readcb, writecb, seekcb, NULL, NULL);
-}
-
 /*
 =item io_glue_commit_types(ig)
 
-Creates buffers and initializes structures to read with the chosen interface.
-
-   ig - io_glue object
+This is now effectively a no-op.
 
 =cut
 */
@@ -836,66 +855,6 @@ io_glue_commit_types(io_glue *ig) {
     return;
   }
 
-  switch (inn) {
-  case BUFCHAIN:
-    {
-      io_ex_bchain *ieb = mymalloc(sizeof(io_ex_bchain));
-      
-      ieb->offset = 0;
-      ieb->length = 0;
-      ieb->cpos   = 0;
-      ieb->gpos   = 0;
-      ieb->tfill  = 0;
-
-      ieb->head   = io_blink_new();
-      ieb->cp     = ieb->head;
-      ieb->tail   = ieb->head;
-
-      ig->exdata  = ieb;
-      ig->readcb  = bufchain_read;
-      ig->writecb = bufchain_write;
-      ig->seekcb  = bufchain_seek;
-      ig->closecb = bufchain_close;
-    }
-    break;
-  case CBSEEK:
-    {
-      io_ex_rseek *ier = mymalloc(sizeof(io_ex_rseek));
-      
-      ier->offset = 0;
-      ier->cpos   = 0;
-      
-      ig->exdata  = ier;
-      ig->readcb  = realseek_read;
-      ig->writecb = realseek_write;
-      ig->seekcb  = realseek_seek;
-      ig->closecb = realseek_close;
-    }
-    break;
-  case BUFFER:
-    {
-      io_ex_buffer *ieb = mymalloc(sizeof(io_ex_buffer));
-      ieb->offset = 0;
-      ieb->cpos   = 0;
-
-      ig->exdata  = ieb;
-      ig->readcb  = buffer_read;
-      ig->writecb = buffer_write;
-      ig->seekcb  = buffer_seek;
-      ig->closecb = buffer_close;
-    }
-    break;
-  case FDSEEK:
-    {
-      ig->exdata  = NULL;
-      ig->readcb  = fd_read;
-      ig->writecb = fd_write;
-      ig->seekcb  = fd_seek;
-      ig->closecb = fd_close;
-      ig->sizecb  = fd_size;
-      break;
-    }
-  }
   ig->flags |= 0x01; /* indicate source has been setup already */
 }
 
@@ -939,16 +898,33 @@ be written to and read from later (like a pseudo file).
 io_glue *
 io_new_bufchain() {
   io_glue *ig;
+  io_ex_bchain *ieb = mymalloc(sizeof(io_ex_bchain));
+
   mm_log((1, "io_new_bufchain()\n"));
+
   ig = mymalloc(sizeof(io_glue));
   memset(ig, 0, sizeof(*ig));
-  io_obj_setp_bufchain(&ig->source);
+  ig->source.type = BUFCHAIN;
+
+  ieb->offset = 0;
+  ieb->length = 0;
+  ieb->cpos   = 0;
+  ieb->gpos   = 0;
+  ieb->tfill  = 0;
+  
+  ieb->head   = io_blink_new();
+  ieb->cp     = ieb->head;
+  ieb->tail   = ieb->head;
+  
+  ig->exdata    = ieb;
+  ig->readcb    = bufchain_read;
+  ig->writecb   = bufchain_write;
+  ig->seekcb    = bufchain_seek;
+  ig->closecb   = bufchain_close;
+  ig->destroycb = bufchain_destroy;
+
   return ig;
 }
-
-
-
-
 
 /*
 =item io_new_buffer(data, len)
@@ -963,13 +939,27 @@ from specified buffer.  Note that the buffer is not copied.
 */
 
 io_glue *
-io_new_buffer(char *data, size_t len, closebufp closecb, void *closedata) {
+io_new_buffer(char *data, size_t len, i_io_closebufp_t closecb, void *closedata) {
   io_glue *ig;
+  io_ex_buffer *ieb = mymalloc(sizeof(io_ex_buffer));
+  
   mm_log((1, "io_new_buffer(data %p, len %d, closecb %p, closedata %p)\n", data, len, closecb, closedata));
+
   ig = mymalloc(sizeof(io_glue));
   memset(ig, 0, sizeof(*ig));
   io_obj_setp_buffer(&ig->source, data, len, closecb, closedata);
   ig->flags = 0;
+
+  ieb->offset = 0;
+  ieb->cpos   = 0;
+  
+  ig->exdata    = ieb;
+  ig->readcb    = buffer_read;
+  ig->writecb   = buffer_write;
+  ig->seekcb    = buffer_seek;
+  ig->closecb   = buffer_close;
+  ig->destroycb = buffer_destroy;
+
   return ig;
 }
 
@@ -989,26 +979,32 @@ data from the io_glue callbacks hasn't been done yet.
 io_glue *
 io_new_fd(int fd) {
   io_glue *ig;
+
   mm_log((1, "io_new_fd(fd %d)\n", fd));
+
   ig = mymalloc(sizeof(io_glue));
   memset(ig, 0, sizeof(*ig));
   ig->source.type = FDSEEK;
   ig->source.fdseek.fd = fd;
   ig->flags = 0;
-#if 0
-#ifdef _MSC_VER
-  io_obj_setp_cb(&ig->source, (void*)fd, _read, _write, _lseek);
-#else
-  io_obj_setp_cb(&ig->source, (void*)fd, read, write, lseek);
-#endif
-#endif
+
+  ig->exdata    = NULL;
+  ig->readcb    = fd_read;
+  ig->writecb   = fd_write;
+  ig->seekcb    = fd_seek;
+  ig->closecb   = fd_close;
+  ig->sizecb    = fd_size;
+  ig->destroycb = NULL;
+      
   mm_log((1, "(%p) <- io_new_fd\n", ig));
   return ig;
 }
 
-io_glue *io_new_cb(void *p, readl readcb, writel writecb, seekl seekcb, 
-                   closel closecb, destroyl destroycb) {
+io_glue *io_new_cb(void *p, i_io_readl_t readcb, i_io_writel_t writecb, 
+		   i_io_seekl_t seekcb, i_io_closel_t closecb, 
+		   i_io_destroyl_t destroycb) {
   io_glue *ig;
+  io_ex_rseek *ier = mymalloc(sizeof(io_ex_rseek));
 
   mm_log((1, "io_new_cb(p %p, readcb %p, writecb %p, seekcb %p, closecb %p, "
           "destroycb %p)\n", p, readcb, writecb, seekcb, closecb, destroycb));
@@ -1016,6 +1012,16 @@ io_glue *io_new_cb(void *p, readl readcb, writel writecb, seekl seekcb,
   memset(ig, 0, sizeof(*ig));
   io_obj_setp_cb2(&ig->source, p, readcb, writecb, seekcb, closecb, destroycb);
   mm_log((1, "(%p) <- io_new_cb\n", ig));
+
+  ier->offset = 0;
+  ier->cpos   = 0;
+  
+  ig->exdata    = ier;
+  ig->readcb    = realseek_read;
+  ig->writecb   = realseek_write;
+  ig->seekcb    = realseek_seek;
+  ig->closecb   = realseek_close;
+  ig->destroycb = realseek_destroy;
 
   return ig;
 }
@@ -1112,8 +1118,9 @@ static off_t fd_seek(io_glue *ig, off_t offset, int whence) {
   return result;
 }
 
-static void fd_close(io_glue *ig) {
+static int fd_close(io_glue *ig) {
   /* no, we don't close it */
+  return 0;
 }
 
 static ssize_t fd_size(io_glue *ig) {
@@ -1123,7 +1130,7 @@ static ssize_t fd_size(io_glue *ig) {
 }
 
 /*
-=item io_glue_DESTROY(ig)
+=item io_glue_destroy(ig)
 
 A destructor method for io_glue objects.  Should clean up all related buffers.
 Might leave us with a dangling pointer issue on some buffers.
@@ -1134,39 +1141,12 @@ Might leave us with a dangling pointer issue on some buffers.
 */
 
 void
-io_glue_DESTROY(io_glue *ig) {
-  io_type      inn = ig->source.type;
+io_glue_destroy(io_glue *ig) {
   mm_log((1, "io_glue_DESTROY(ig %p)\n", ig));
+
+  if (ig->destroycb)
+    ig->destroycb(ig);
   
-  switch (inn) {
-  case BUFCHAIN:
-    {
-      io_ex_bchain *ieb = ig->exdata;
-      io_destroy_bufchain(ieb);
-      myfree(ieb);
-    }
-    break;
-  case CBSEEK:
-    {
-      io_ex_rseek *ier = ig->exdata;
-      if (ig->source.cb.destroycb)
-        ig->source.cb.destroycb(ig->source.cb.p);
-      myfree(ier);
-    }
-    break;
-  case BUFFER:
-    {
-      io_ex_buffer *ieb = ig->exdata;
-      if (ig->source.buffer.closecb) {
-	mm_log((1,"calling close callback %p for io_buffer\n", ig->source.buffer.closecb));
-	ig->source.buffer.closecb(ig->source.buffer.closedata);
-      }
-      myfree(ieb);
-    }
-    break;
-  default:
-    break;
-  }
   myfree(ig);
 }
 

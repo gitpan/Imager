@@ -82,6 +82,7 @@ my @libs; # all the places to look for libraries
 
 init();       # initialize global data
 pathcheck();  # Check if directories exist
+distcheck();  # for building dists
 
 if (exists $ENV{IM_ENABLE}) {
   my %en = map { $_, 1 } split ' ', $ENV{IM_ENABLE};
@@ -198,8 +199,8 @@ imconfig.h : Makefile.PL
 	$(PERLRUN) Makefile.PL
 	$(ECHO) "==> Your Makefile has been rebuilt - re-run your make command <=="
 '.qq!
-lib/Imager/APIRef.pm : \$(C_FILES) apidocs.perl
-	$perl apidocs.perl lib/Imager/APIRef.pm
+lib/Imager/APIRef.pod : \$(C_FILES) apidocs.perl
+	$perl apidocs.perl lib/Imager/APIRef.pod
 
 !;
 
@@ -252,22 +253,22 @@ sub gifcheck {
 
  RETR:
   if (($formats{'gif'} or $formats{'ungif'}) && !$ENV{IM_SUPPRESS_PROMPT}) {
-    print <<EOFF;
+    my $msg = <<EOFF;
 
 You have libgif or libungif installed.  They are both known to have
 bugs.  Imager can crash or display other strange behaviour after
-reading or writing gif images.  Some of the gif tests can even fail
-since they stress some parts of the buggy code.
+reading or writing gif images.  Some of the gif tests can fail since
+they stress some parts of the buggy code.
 
-libungif 4.1.2 and later is safe.  giflib 4.1.3 needs at least one
-patch to have all the bugs fixed, see README for details.
+libungif or libguf 4.1.4 and later is safe.
 
 Of course it's possible your operating system distributor has patched
 all of these problems and you have nothing to worry about.
 
 Do you want to remove gif support? [Y/n]
 EOFF
-    my $resp = <STDIN>;
+    chomp $msg;
+    my $resp = prompt($msg);
     chomp($resp);
     if ($resp ne "n") {
       delete $formats{'gif'};
@@ -864,5 +865,34 @@ YAML
     open META, "> META.yml" or die "Cannot create META.yml: $!";
     print META $meta;
     close META;
+  }
+}
+
+# this is intended to only be running on the development
+# machines
+sub distcheck {
+  if (-e '.svn') {
+    # update Changes if needed
+    my $write_changes;
+    # get the last revision from Changes
+    if (open CHANGES, "< Changes") {
+      <CHANGES>;
+      my ($changes_rev) = <CHANGES> =~ /^r(\d+)/
+	or ++$write_changes;
+
+      my ($revision) = grep s/^Revision: //, `svn info`
+	or die "Could not get Revision from svn";
+      chomp $revision;
+
+      $write_changes ||= $changes_rev != $revision;
+      close CHANGES;
+    }
+    else {
+      ++$write_changes;
+    }
+    if ($write_changes) {
+      print "Updating Changes file\n";
+      system 'svn log -v -r HEAD:943 >Changes';
+    }
   }
 }

@@ -181,6 +181,8 @@ void i_poly_aa_cfill(i_img *im,int l,const double *x,const double *y,i_fill_t *f
 
 undef_int i_flood_fill  (i_img *im,int seedx,int seedy, const i_color *dcol);
 undef_int i_flood_cfill(i_img *im, int seedx, int seedy, i_fill_t *fill);
+undef_int i_flood_fill_border  (i_img *im,int seedx,int seedy, const i_color *dcol, const i_color *border);
+undef_int i_flood_cfill_border(i_img *im, int seedx, int seedy, i_fill_t *fill, const i_color *border);
 
 
 /* image processing functions */
@@ -351,7 +353,7 @@ extern i_img *i_img_double_new(int x, int y, int ch);
 extern i_img *i_img_double_new_low(i_img *im, int x, int y, int ch);
 
 
-char * i_test_format_probe(io_glue *data, int length);
+const char * i_test_format_probe(io_glue *data, int length);
 
 
 #ifdef HAVE_LIBJPEG
@@ -529,6 +531,8 @@ extern int
 i_set_image_file_limits(int width, int height, int bytes);
 extern int
 i_get_image_file_limits(int *width, int *height, int *bytes);
+extern int
+i_int_check_image_file_limits(int width, int height, int channels, int sample_size);
 
 /* memory allocation */
 void* mymalloc(int size);

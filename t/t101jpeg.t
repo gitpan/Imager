@@ -2,7 +2,7 @@
 use strict;
 use lib 't';
 use Imager qw(:all);
-use Test::More tests => 54;
+use Test::More tests => 57;
 
 init_log("testout/t101jpeg.log",1);
 
@@ -30,7 +30,7 @@ if (!i_has_format("jpeg")) {
     $im = Imager->new(xsize=>2, ysize=>2);
     ok(!$im->write(file=>"testout/nojpeg.jpg"), "should fail to write jpeg");
     cmp_ok($im->errstr, '=~', qr/format not supported/, "check no jpeg message");
-    skip("no jpeg support", 50);
+    skip("no jpeg support", 53);
   }
 } else {
   open(FH,">testout/t101.jpg") || die "cannot open testout/t101.jpg for writing\n";
@@ -52,12 +52,12 @@ if (!i_has_format("jpeg")) {
 
   ok($diff < 10000, "difference between original and jpeg within bounds");
 
-	Imager::log_entry("Starting 4\n", 1);
+	Imager::i_log_entry("Starting 4\n", 1);
   my $imoo = Imager->new;
   ok($imoo->read(file=>'testout/t101.jpg'), "read jpeg OO");
 
   ok($imoo->write(file=>'testout/t101_oo.jpg'), "write jpeg OO");
-	Imager::log_entry("Starting 5\n", 1);
+	Imager::i_log_entry("Starting 5\n", 1);
   my $oocmp = Imager->new;
   ok($oocmp->read(file=>'testout/t101_oo.jpg'), "read jpeg OO for comparison");
 
@@ -244,6 +244,21 @@ if (!i_has_format("jpeg")) {
        "test read of image with invalid exif_user_comment");
     is($im->tags(name=>'exif_user_comment'), '',
        "check exif_user_comment set correctly");
+  }
+
+  { # test parseiptc handling no IPTC data correctly
+    my $saw_warn;
+    local $SIG{__WARN__} = 
+      sub {
+	++$saw_warn;
+	print "# @_\n";
+      };
+    my $im = Imager->new;
+    ok($im->read(file => 'testout/t101.jpg', type=>'jpeg'),
+       "read jpeg with no IPTC data");
+    ok(!defined $im->{IPTCRAW}, "no iptc data");
+    my %iptc = $im->parseiptc;
+    ok(!$saw_warn, "should be no warnings");
   }
 
   { # Issue # 18397

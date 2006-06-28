@@ -329,24 +329,43 @@ tga_header_verify(unsigned char headbuf[18]) {
   default:
     /*printf("bad typecode!\n");*/
     return 0;
-  case 0:
   case 1:  /* Uncompressed, color-mapped images */ 
-  case 2:  /* Uncompressed, rgb images          */ 
   case 3:  /* Uncompressed, grayscale images    */ 
   case 9:  /* Compressed,   color-mapped images */ 
-  case 10: /* Compressed,   rgb images          */ 
   case 11: /* Compressed,   grayscale images    */ 
-	  break;
+    if (header.bitsperpixel != 8)
+      return 0;
+    break;
+  case 0:
+  case 2:  /* Uncompressed, rgb images          */ 
+  case 10: /* Compressed,   rgb images          */ 
+    if (header.bitsperpixel != 15 && header.bitsperpixel != 16
+	&& header.bitsperpixel != 24 && header.bitsperpixel != 23)
+      return 0;
+    break;
 	}
 
   switch (header.colourmaptype) { 
   default:
     /*printf("bad colourmaptype!\n");*/
     return 0;
-  case 0:
   case 1:
+    if (header.datatypecode != 1 && header.datatypecode != 9)
+      return 0; /* only get a color map on a color mapped image */
+  case 0:
   	break;
 	}
+
+  switch (header.colourmapdepth) {
+  default:
+    return 0;
+  case 0: /* can be 0 if no colour map */
+  case 15:
+  case 16:
+  case 24:
+  case 32:
+    break;
+  }
   
   return 1;
 }
@@ -805,8 +824,6 @@ i_writetga_wiol(i_img *img, io_glue *ig, int wierdpack, int compress, char *idst
     int wierdpack = 0;
   */
 
-  io_glue_commit_types(ig);
-  
   idlen = strlen(idstring);
   mapped = img->type == i_palette_type;
 
@@ -816,6 +833,7 @@ i_writetga_wiol(i_img *img, io_glue *ig, int wierdpack, int compress, char *idst
   mm_log((1, "channels %d\n", img->channels));
   
   i_clear_error();
+  io_glue_commit_types(ig);
   
   switch (img->channels) {
   case 1:

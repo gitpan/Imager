@@ -17,8 +17,6 @@ extern "C" {
 #include "regmach.h"
 #include "imextdef.h"
 
-typedef io_glue* Imager__IO;
-
 #if i_int_hlines_testing()
 #include "imageri.h"
 #endif
@@ -108,7 +106,7 @@ void my_SvREFCNT_dec(void *p) {
 
 
 static void
-log_entry(char *string, int level) {
+i_log_entry(char *string, int level) {
   mm_log((level, string));
 }
 
@@ -272,7 +270,7 @@ static ssize_t call_writer(struct cbdata *cbd, void const *buf, size_t size) {
   FREETMPS;
   LEAVE;
 
-  return success ? size : 0;
+  return success ? size : -1;
 }
 
 static ssize_t call_reader(struct cbdata *cbd, void *buf, size_t size, 
@@ -377,7 +375,7 @@ static off_t io_seeker(void *p, off_t offset, int whence) {
 static ssize_t io_writer(void *p, void const *data, size_t size) {
   struct cbdata *cbd = p;
 
-  /*printf("io_writer(%p, %p, %u)\n", p, data, size);*/
+  /* printf("io_writer(%p, %p, %u)\n", p, data, size); */
   if (!cbd->writing) {
     if (cbd->reading && cbd->where < cbd->used) {
       /* we read past the place where the caller expected us to be
@@ -459,11 +457,12 @@ static ssize_t io_reader(void *p, void *data, size_t size) {
   return total;
 }
 
-static void io_closer(void *p) {
+static int io_closer(void *p) {
   struct cbdata *cbd = p;
 
   if (cbd->writing && cbd->used > 0) {
-    write_flush(cbd);
+    if (write_flush(cbd) < 0)
+      return -1;
     cbd->writing = 0;
   }
 
@@ -482,6 +481,8 @@ static void io_closer(void *p) {
     FREETMPS;
     LEAVE;
   }
+
+  return 0;
 }
 
 static void io_destroyer(void *p) {
@@ -879,6 +880,9 @@ i_int_hlines_dump(i_int_hlines *hlines) {
 #define i_exif_enabled() 0
 #endif
 
+/* trying to use more C style names, map them here */
+#define i_io_DESTROY(ig) io_glue_destroy(ig)
+
 MODULE = Imager		PACKAGE = Imager::Color	PREFIX = ICL_
 
 Imager::Color
@@ -1101,18 +1105,79 @@ i_get_image_file_limits()
           PUSHs(sv_2mortal(newSViv(bytes)));
         }
 
-MODULE = Imager		PACKAGE = Imager::IO	PREFIX = io_glue_
+MODULE = Imager		PACKAGE = Imager::IO	PREFIX = i_io_
+
+int
+i_io_write(ig, data_sv)
+	Imager::IO ig
+	SV *data_sv
+      PREINIT:
+        void *data;
+	STRLEN size;
+      CODE:
+#ifdef SvUTF8
+        if (SvUTF8(data_sv)) {
+	  data_sv = sv_2mortal(newSVsv(data_sv));
+	  sv_utf8_downgrade(data_sv, FALSE);
+	}
+#endif        
+	data = SvPV(data_sv, size);
+        RETVAL = i_io_write(ig, data, size);
+      OUTPUT:
+	RETVAL
+
+SV *
+i_io_read(ig, buffer_sv, size)
+	Imager::IO ig
+	SV *buffer_sv
+	int size
+      PREINIT:
+        void *buffer;
+	int result;
+      CODE:
+        if (size < 0)
+	  croak("size negative in call to i_io_read()");
+        /* prevent an undefined value warning if they supplied an 
+	   undef buffer.
+           Orginally conditional on !SvOK(), but this will prevent the
+	   downgrade from croaking */
+	sv_setpvn(buffer_sv, "", 0);
+#ifdef SvUTF8
+	if (SvUTF8(buffer_sv))
+          sv_utf8_downgrade(buffer_sv, FALSE);
+#endif
+	buffer = SvGROW(buffer_sv, size+1);
+        result = i_io_read(ig, buffer, size);
+        if (result < 0) {
+	  RETVAL = &PL_sv_undef;
+	}
+	else {
+	  SvCUR_set(buffer_sv, result);
+	  *SvEND(buffer_sv) = '\0';
+	  SvPOK_only(buffer_sv);
+	  RETVAL = newSViv(result); /* XS will mortal this */
+	}
+      OUTPUT:
+	RETVAL
+	buffer_sv
+
+int
+i_io_seek(ig, position, whence)
+	Imager::IO ig
+	long position
+	int whence
 
 void
-io_glue_DESTROY(ig)
-        Imager::IO     ig
+i_io_close(ig)
+	Imager::IO ig
 
+void
+i_io_DESTROY(ig)
+        Imager::IO     ig
 
 MODULE = Imager		PACKAGE = Imager
 
 PROTOTYPES: ENABLE
-
-
 
 void
 i_list_formats()
@@ -1160,12 +1225,12 @@ i_sametype_chans(im, x, y, channels)
                int channels
 
 void
-m_init_log(name,level)
+i_init_log(name,level)
 	      char*    name
 	       int     level
 
 void
-log_entry(string,level)
+i_log_entry(string,level)
 	      char*    string
 	       int     level
 
@@ -1432,6 +1497,22 @@ i_flood_cfill(im,seedx,seedy,fill)
 	       int     seedx
 	       int     seedy
      Imager::FillHandle     fill
+
+undef_int
+i_flood_fill_border(im,seedx,seedy,dcol, border)
+    Imager::ImgRaw     im
+	       int     seedx
+	       int     seedy
+     Imager::Color     dcol
+     Imager::Color     border
+
+undef_int
+i_flood_cfill_border(im,seedx,seedy,fill, border)
+    Imager::ImgRaw     im
+	       int     seedx
+	       int     seedy
+     Imager::FillHandle     fill
+     Imager::Color     border
 
 
 void
@@ -2099,7 +2180,7 @@ i_exif_enabled()
 #endif
 
 
-char *
+const char *
 i_test_format_probe(ig, length)
         Imager::IO     ig
 	       int     length
@@ -3202,6 +3283,14 @@ i_errors()
 	  PUSHs(sv_2mortal(newRV_noinc((SV*)av)));
 	  ++i;
 	}
+
+void
+i_clear_error()
+
+void
+i_push_error(code, msg)
+	int code
+	const char *msg
 
 undef_int
 i_nearest_color(im, ...)

@@ -474,8 +474,8 @@ i_writejpeg_wiol(i_img *im, io_glue *ig, int qfactor) {
 
   mm_log((1,"i_writejpeg(im %p, ig %p, qfactor %d)\n", im, ig, qfactor));
   
-  io_glue_commit_types(ig);
   i_clear_error();
+  io_glue_commit_types(ig);
 
   if (!(im->channels==1 || im->channels==3)) { 
     i_push_error(0, "only 1 or 3 channels images can be saved as JPEG");
