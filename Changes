@@ -1,4 +1,156 @@
 ------------------------------------------------------------------------
+r1028 | tony | 2006-07-04 23:54:13 +1000 (Tue, 04 Jul 2006) | 2 lines
+Changed paths:
+   M /trunk/Imager/Imager.pm
+   M /trunk/Imager/META.yml
+
+bump to 0.51_02
+
+------------------------------------------------------------------------
+r1027 | tony | 2006-07-04 22:52:08 +1000 (Tue, 04 Jul 2006) | 3 lines
+Changed paths:
+   M /trunk/Imager/Imager.pm
+   M /trunk/Imager/t/t93podcover.t
+
+make sure the method index includes all documented Imager methods and
+is properly sorted.
+
+------------------------------------------------------------------------
+r1026 | tony | 2006-07-04 22:06:22 +1000 (Tue, 04 Jul 2006) | 3 lines
+Changed paths:
+   M /trunk/Imager/Imager.xs
+   M /trunk/Imager/ppport.h
+
+update to a newer ppport.h and modify Imager.xs a bit based on its
+recommendations
+
+------------------------------------------------------------------------
+r1025 | tony | 2006-07-04 21:39:37 +1000 (Tue, 04 Jul 2006) | 2 lines
+Changed paths:
+   M /trunk/Imager/filters.c
+
+addition memory allocation checks
+
+------------------------------------------------------------------------
+r1024 | tony | 2006-07-04 21:28:34 +1000 (Tue, 04 Jul 2006) | 2 lines
+Changed paths:
+   M /trunk/Imager/lib/Imager/Matrix2d.pm
+   M /trunk/Imager/lib/Imager/Transform.pm
+   M /trunk/Imager/t/t93podcover.t
+
+add more pod coverage tests (and the coverage needed)
+
+------------------------------------------------------------------------
+r1023 | tony | 2006-07-04 21:17:12 +1000 (Tue, 04 Jul 2006) | 6 lines
+Changed paths:
+   M /trunk/Imager
+   M /trunk/Imager/CountColor
+   M /trunk/Imager/DynTest
+   M /trunk/Imager/Flines
+   M /trunk/Imager/ICO
+   M /trunk/Imager/Imager.pm
+   M /trunk/Imager/MANIFEST
+   M /trunk/Imager/Mandelbrot
+   M /trunk/Imager/lib/Imager/Color/Float.pm
+   M /trunk/Imager/lib/Imager/Color/Table.pm
+   M /trunk/Imager/lib/Imager/Color.pm
+   M /trunk/Imager/lib/Imager/Expr.pm
+   M /trunk/Imager/lib/Imager/Files.pod
+   M /trunk/Imager/lib/Imager/Fill.pm
+   M /trunk/Imager/lib/Imager/Font/BBox.pm
+   M /trunk/Imager/lib/Imager/Font/Wrap.pm
+   M /trunk/Imager/lib/Imager/Font.pm
+   A /trunk/Imager/lib/Imager/Handy.pod
+   M /trunk/Imager/lib/Imager/ImageTypes.pod
+   M /trunk/Imager/t/t93podcover.t
+
+svn:ignore some more profiler files and other junk
+
+we now pass the pod coverage test on the Imager class, remove the TODO
+
+add pod coverage tests for several other classes, and pass them
+
+------------------------------------------------------------------------
+r1021 | tony | 2006-07-01 15:38:11 +1000 (Sat, 01 Jul 2006) | 4 lines
+Changed paths:
+   M /trunk/Imager/apidocs.perl
+   M /trunk/Imager/lib/Imager/APIRef.pod
+
+don't include the line number in the From comment so since unrelated edits
+were causing changes to APIRef.pm.  This is still possible but they should
+be a lot less frequence.
+
+------------------------------------------------------------------------
+r1020 | tony | 2006-07-01 15:31:35 +1000 (Sat, 01 Jul 2006) | 3 lines
+Changed paths:
+   M /trunk/Imager/t/t023palette.t
+
+added error handling tests for bad colors supplied to addcolors()
+and setcolors()
+
+------------------------------------------------------------------------
+r1019 | tony | 2006-06-30 23:51:45 +1000 (Fri, 30 Jun 2006) | 6 lines
+Changed paths:
+   M /trunk/Imager/Imager.xs
+   M /trunk/Imager/iolayer.c
+   A /trunk/Imager/lib/Imager/IO.pod
+   M /trunk/Imager/t/t07iolayer.t
+
+add more iolayer tests
+callback handler fixes to return errors correctly
+Imager::IO XS changes to make errors return empty lists
+iolayer error handling fixes
+documented Imager::IO methods
+
+------------------------------------------------------------------------
+r1018 | tony | 2006-06-29 21:39:10 +1000 (Thu, 29 Jun 2006) | 3 lines
+Changed paths:
+   M /trunk/Imager/Imager.pm
+   M /trunk/Imager/t/t023palette.t
+
+setcolors() and addcolors() can now accept non-object colors like most
+other methods
+
+------------------------------------------------------------------------
+r1017 | tony | 2006-06-29 21:06:16 +1000 (Thu, 29 Jun 2006) | 2 lines
+Changed paths:
+   M /trunk/Imager/t/t101jpeg.t
+
+extra jpeg tests to improve code coverage of jpeg.c
+
+------------------------------------------------------------------------
+r1016 | tony | 2006-06-29 20:56:09 +1000 (Thu, 29 Jun 2006) | 3 lines
+Changed paths:
+   M /trunk/Imager/bmp.c
+   M /trunk/Imager/datatypes.c
+   M /trunk/Imager/error.c
+   M /trunk/Imager/filters.c
+   M /trunk/Imager/font.c
+   M /trunk/Imager/gif.c
+   M /trunk/Imager/hlines.c
+   M /trunk/Imager/image.c
+   M /trunk/Imager/imexif.c
+   M /trunk/Imager/iolayer.c
+   M /trunk/Imager/log.c
+
+long delayed renaming of m_fatal() to i_fatal() to match Imager's
+functions in general
+
+------------------------------------------------------------------------
+r1015 | tony | 2006-06-29 20:53:07 +1000 (Thu, 29 Jun 2006) | 2 lines
+Changed paths:
+   M /trunk/Imager/META.yml
+
+META.yml changed due to release
+
+------------------------------------------------------------------------
+r1014 | tony | 2006-06-29 20:51:12 +1000 (Thu, 29 Jun 2006) | 2 lines
+Changed paths:
+   M /trunk/Imager/jpeg.c
+
+add missing parameter required by format in wiol_empty_output_buffer
+
+------------------------------------------------------------------------
 r1012 | tony | 2006-06-28 23:22:25 +1000 (Wed, 28 Jun 2006) | 2 lines
 Changed paths:
    M /trunk/Imager/Imager.pm

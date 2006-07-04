@@ -155,7 +155,7 @@ my %attempted_to_load;
 BEGIN {
   require Exporter;
   @ISA = qw(Exporter);
-  $VERSION = '0.51_01';
+  $VERSION = '0.51_02';
   eval {
     require XSLoader;
     XSLoader::load(Imager => $VERSION);
@@ -892,17 +892,46 @@ sub addcolors {
   my $self = shift;
   my %opts = (colors=>[], @_);
 
-  @{$opts{colors}} or return undef;
+  unless ($self->{IMG}) {
+    $self->_set_error("empty input image");
+    return;
+  }
 
-  $self->{IMG} and i_addcolors($self->{IMG}, @{$opts{colors}});
+  my @colors = @{$opts{colors}}
+    or return undef;
+
+  for my $color (@colors) {
+    $color = _color($color);
+    unless ($color) {
+      $self->_set_error($Imager::ERRSTR);
+      return;
+    }  
+  }
+
+  return i_addcolors($self->{IMG}, @colors);
 }
 
 sub setcolors {
   my $self = shift;
   my %opts = (start=>0, colors=>[], @_);
-  @{$opts{colors}} or return undef;
 
-  $self->{IMG} and i_setcolors($self->{IMG}, $opts{start}, @{$opts{colors}});
+  unless ($self->{IMG}) {
+    $self->_set_error("empty input image");
+    return;
+  }
+
+  my @colors = @{$opts{colors}}
+    or return undef;
+
+  for my $color (@colors) {
+    $color = _color($color);
+    unless ($color) {
+      $self->_set_error($Imager::ERRSTR);
+      return;
+    }  
+  }
+
+  return i_setcolors($self->{IMG}, $opts{start}, @colors);
 }
 
 sub getcolors {
@@ -3418,7 +3447,7 @@ render text and more.
 
 =item *
 
-Imager - This document - Synopsis Example, Table of Contents and
+Imager - This document - Synopsis, Example, Table of Contents and
 Overview.
 
 =item *
@@ -3522,14 +3551,32 @@ or if you want to create an empty image:
 This example creates a completely black image of width 400 and height
 300 and 4 channels.
 
-When an operation fails which can be directly associated with an image
-the error message is stored can be retrieved with
-C<$img-E<gt>errstr()>.
+=head1 ERROR HANDLING
 
-In cases where no image object is associated with an operation
-C<$Imager::ERRSTR> is used to report errors not directly associated
-with an image object.  You can also call C<Imager->errstr> to get this
-value.
+In general a method will return false when it fails, if it does use the errstr() method to find out why:
+
+=over
+
+=item errstr
+
+Returns the last error message in that context.
+
+If the last error you received was from calling an object method, such
+as read, call errstr() as an object method to find out why:
+
+  my $image = Imager->new;
+  $image->read(file => 'somefile.gif')
+     or die $image->errstr;
+
+If it was a class method then call errstr() as a class method:
+
+  my @imgs = Imager->read_multi(file => 'somefile.gif')
+    or die Imager->errstr;
+
+Note that in some cases object methods are implemented in terms of
+class methods so a failing object method may set both.
+
+=back
 
 The C<Imager-E<gt>new> method is described in detail in
 L<Imager::ImageTypes>.
@@ -3542,9 +3589,9 @@ addcolors() -  L<Imager::ImageTypes/addcolors>
 
 addtag() -  L<Imager::ImageTypes/addtag> - add image tags
 
-arc() - L<Imager::Draw/arc>
-
 align_string() - L<Imager::Draw/align_string>
+
+arc() - L<Imager::Draw/arc>
 
 bits() - L<Imager::ImageTypes/bits> - number of bits per sample for the
 image
@@ -3561,6 +3608,8 @@ transform the color space
 copy() - L<Imager::Transformations/copy>
 
 crop() - L<Imager::Transformations/crop> - extract part of an image
+
+def_guess_type() - L<Imager::Files/def_guess_type>
 
 deltag() -  L<Imager::ImageTypes/deltag> - delete image tags
 
@@ -3588,6 +3637,8 @@ get_file_limits() - L<Imager::Files/"Limiting the sizes of images you read">
 
 getheight() - L<Imager::ImageTypes/getwidth>
 
+getmask() - L<Imager::ImageTypes/getmask>
+
 getpixel() - L<Imager::Draw/getpixel>
 
 getsamples() - L<Imager::Draw/getsamples>
@@ -3598,7 +3649,11 @@ getwidth() - L<Imager::ImageTypes/getwidth>
 
 img_set() - L<Imager::ImageTypes/img_set>
 
+init() - L<Imager::ImageTypes/init>
+
 line() - L<Imager::Draw/line>
+
+load_plugin() - L<Imager::Filters/load_plugin>
 
 map() - L<Imager::Transformations/"Color Mappings"> - remap color
 channel values
@@ -3609,7 +3664,17 @@ matrix_transform() - L<Imager::Engines/matrix_transform>
 
 maxcolors() - L<Imager::ImageTypes/maxcolors>
 
+NC() - L<Imager::Handy/NC>
+
 new() - L<Imager::ImageTypes/new>
+
+newcolor() - L<Imager::Handy/newcolor>
+
+newcolour() - L<Imager::Handy/newcolour>
+
+newfont() - L<Imager::Handy/newfont>
+
+NF() - L<Imager::Handy/NF>
 
 open() - L<Imager::Files> - an alias for read()
 
@@ -3627,6 +3692,12 @@ read() - L<Imager::Files> - read a single image from an image file
 read_multi() - L<Imager::Files> - read multiple images from an image
 file
 
+register_filter() - L<Imager::Filters/register_filter>
+
+register_reader() - L<Imager::Filters/register_reader>
+
+register_writer() - L<Imager::Filters/register_writer>
+
 rotate() - L<Imager::Transformations/rotate>
 
 rubthrough() - L<Imager::Transformations/rubthrough> - draw an image onto an
@@ -3641,13 +3712,15 @@ scaleY() - L<Imager::Transformations/scaleY>
 setcolors() - L<Imager::ImageTypes/setcolors> - set palette colors in
 a paletted image
 
+set_file_limits() - L<Imager::Files/"Limiting the sizes of images you read">
+
+setmask() - L<Imager::ImageTypes/setmask>
+
 setpixel() - L<Imager::Draw/setpixel>
 
 setscanline() - L<Imager::Draw/setscanline>
 
 settag() - L<Imager::ImageTypes/settag>
-
-set_file_limits() - L<Imager::Files/"Limiting the sizes of images you read">
 
 string() - L<Imager::Draw/string> - draw text on an image
 
@@ -3662,6 +3735,8 @@ transform() - L<Imager::Engines/"transform">
 transform2() - L<Imager::Engines/"transform2">
 
 type() -  L<Imager::ImageTypes/type> - type of image (direct vs paletted)
+
+unload_plugin() - L<Imager::Filters/unload_plugin>
 
 virtual() - L<Imager::ImageTypes/virtual> - whether the image has it's own
 data

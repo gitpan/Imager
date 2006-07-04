@@ -167,7 +167,7 @@ realseek_read(io_glue *ig, void *buf, size_t count) {
   
   ier->cpos += bc;
   IOL_DEB( printf("realseek_read: rc = %d, bc = %d\n", rc, bc) );
-  return bc;
+  return rc < 0 ? rc : bc;
 }
 
 
@@ -203,7 +203,7 @@ realseek_write(io_glue *ig, const void *buf, size_t count) {
 
   ier->cpos += bc;
   IOL_DEB( printf("realseek_write: rc = %d, bc = %d\n", rc, bc) );
-  return bc;
+  return rc < 0 ? rc : bc;
 }
 
 
@@ -761,7 +761,7 @@ bufchain_seek(io_glue *ig, off_t offset, int whence) {
       ssize_t rc, wl = i_min(wrlen, BBSIZ);
       mm_log((1, "bufchain_seek: wrlen = %d, wl = %d\n", wrlen, wl));
       rc = bufchain_write( ig, TB, wl );
-      if (rc != wl) m_fatal(0, "bufchain_seek: Unable to extend file\n");
+      if (rc != wl) i_fatal(0, "bufchain_seek: Unable to extend file\n");
       wrlen -= rc;
     }
   }
@@ -1049,7 +1049,7 @@ io_slurp(io_glue *ig, unsigned char **c) {
   io_type inn = ig->source.type;
   
   if ( inn != BUFCHAIN ) {
-    m_fatal(0, "io_slurp: called on a source that is not from a bufchain\n");
+    i_fatal(0, "io_slurp: called on a source that is not from a bufchain\n");
   }
 
   ieb = ig->exdata;
@@ -1062,7 +1062,7 @@ io_slurp(io_glue *ig, unsigned char **c) {
   rc = bufchain_read(ig, cc, ieb->length);
 
   if (rc != ieb->length)
-    m_fatal(1, "io_slurp: bufchain_read returned an incomplete read: rc = %d, request was %d\n", rc, ieb->length);
+    i_fatal(1, "io_slurp: bufchain_read returned an incomplete read: rc = %d, request was %d\n", rc, ieb->length);
 
   return rc;
 }
