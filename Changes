@@ -1,4 +1,196 @@
 ------------------------------------------------------------------------
+r1052 | tony | 2006-07-19 10:39:58 +1000 (Wed, 19 Jul 2006) | 2 lines
+Changed paths:
+   M /trunk/Imager/Imager.pm
+   M /trunk/Imager/META.yml
+
+bump to 0.51_03
+
+------------------------------------------------------------------------
+r1051 | tony | 2006-07-19 00:34:52 +1000 (Wed, 19 Jul 2006) | 3 lines
+Changed paths:
+   M /trunk/Imager/jpeg.c
+
+make the selection of a transfer function check that it's getting the
+right number of channels
+
+------------------------------------------------------------------------
+r1050 | tony | 2006-07-18 23:34:56 +1000 (Tue, 18 Jul 2006) | 2 lines
+Changed paths:
+   M /trunk/Imager/lib/Imager/APIRef.pod
+
+set eol-style so that generation doesn't make svn burp
+
+------------------------------------------------------------------------
+r1049 | tony | 2006-07-18 23:21:21 +1000 (Tue, 18 Jul 2006) | 3 lines
+Changed paths:
+   M /trunk/Imager/image.c
+   M /trunk/Imager/jpeg.c
+
+cast 2 signed/unsigned char pointer conversions to prevent warnings
+(errors on some compilers)
+
+------------------------------------------------------------------------
+r1048 | tony | 2006-07-18 22:49:31 +1000 (Tue, 18 Jul 2006) | 2 lines
+Changed paths:
+   M /trunk/Imager/t/t106tiff.t
+
+report the error if we can't read the alpha test images
+
+------------------------------------------------------------------------
+r1047 | tony | 2006-07-18 22:43:02 +1000 (Tue, 18 Jul 2006) | 3 lines
+Changed paths:
+   M /trunk/Imager/testimg/scmyka.tif
+   M /trunk/Imager/testimg/scmykaa.tif
+   M /trunk/Imager/testimg/srgba.tif
+   M /trunk/Imager/testimg/srgbaa.tif
+
+newer versions of libtiff were choking on the bad values corel was
+putting into EXTRASAMPLES, corrected via hex editing
+
+------------------------------------------------------------------------
+r1046 | tony | 2006-07-15 00:57:44 +1000 (Sat, 15 Jul 2006) | 21 lines
+Changed paths:
+   M /trunk/Imager/MANIFEST
+   M /trunk/Imager/jpeg.c
+   M /trunk/Imager/t/t101jpeg.t
+   A /trunk/Imager/testimg/scmyk.jpg
+
+CMYK jpeg images were being read as 4 channel images, even though they
+have no alpha channel.
+
+The colors were being transferred directly from the JPEG image data,
+this only looked correct because of an old bug in photoshop, kept for
+compatibility in later versions.  Photoshop inverts the ink values in
+the file, so max cyan coverage is stored at 0, and min as 255, and so
+on.
+
+CMYK jpegs are now read as 3 channel images.  The colors are now
+converted adjusting for the photoshop bug, cmyk images from the only
+other source I have, corel draw 9, are inverted in the same way,
+presumably for compatibility with photoshop.
+
+If anyone has an application that produces technically correct CMYK
+jpegs, please provide a sample in jpeg and tiff form so I can attempt
+to deal with it.
+
+Fixes: http://rt.cpan.org/Ticket/Display.html?id=20416
+
+
+------------------------------------------------------------------------
+r1045 | tony | 2006-07-13 21:04:53 +1000 (Thu, 13 Jul 2006) | 10 lines
+Changed paths:
+   M /trunk/Imager/MANIFEST
+   M /trunk/Imager/lib/Imager/Files.pod
+   M /trunk/Imager/t/t106tiff.t
+   A /trunk/Imager/testimg/scmyk.tif
+   A /trunk/Imager/testimg/scmyka.tif
+   A /trunk/Imager/testimg/scmykaa.tif
+   A /trunk/Imager/testimg/slab.tif
+   A /trunk/Imager/testimg/srgb.tif
+   A /trunk/Imager/testimg/srgba.tif
+   A /trunk/Imager/testimg/srgbaa.tif
+   M /trunk/Imager/tiff.c
+
+http://rt.cpan.org/Ticket/Display.html?id=20415
+
+Reading a CMYK TIFF with no alpha would result in a 4-channel image.
+
+Also, reading a CMYK TIFF with an alpha channel would fail to read.
+
+Reading a CMYK TIFF with 2 alpha channels would fail to read.
+
+Reading a RGB TIFF with 2 alpha channels would also fail to read.
+
+------------------------------------------------------------------------
+r1044 | tony | 2006-07-13 15:20:09 +1000 (Thu, 13 Jul 2006) | 8 lines
+Changed paths:
+   M /trunk/Imager/freetyp2.c
+   M /trunk/Imager/t/t38ft2font.t
+
+attempting to render a space non-antialiased from freetype 2 could
+crash or fail, depending on the version of freetype.
+
+Fixed by checking if the glyph has anything to render before calling
+FT_Render_Glyph().
+
+https://rt.cpan.org/Ticket/Display.html?id=20403
+
+------------------------------------------------------------------------
+r1043 | tony | 2006-07-11 23:21:31 +1000 (Tue, 11 Jul 2006) | 2 lines
+Changed paths:
+   M /trunk/Imager/Imager.pm
+   M /trunk/Imager/lib/Imager/Cookbook.pod
+   M /trunk/Imager/lib/Imager/ImageTypes.pod
+
+add some examples using the i_xres and i_yres tags
+
+------------------------------------------------------------------------
+r1042 | tony | 2006-07-10 18:07:18 +1000 (Mon, 10 Jul 2006) | 3 lines
+Changed paths:
+   M /trunk/Imager/lib/Imager/Cookbook.pod
+
+the cookbook said we couldn't limit image sizes, but we can now.  Fix
+that and add some simple examples.
+
+------------------------------------------------------------------------
+r1035 | tony | 2006-07-07 20:59:07 +1000 (Fri, 07 Jul 2006) | 2 lines
+Changed paths:
+   M /trunk/Imager/Makefile.PL
+
+it's libgif not libguf
+
+------------------------------------------------------------------------
+r1034 | tony | 2006-07-07 20:57:26 +1000 (Fri, 07 Jul 2006) | 3 lines
+Changed paths:
+   M /trunk/Imager/Makefile.PL
+
+move linker flags from freetype-config/pkg-config up to the front to
+match the placement of C flags.
+
+------------------------------------------------------------------------
+r1033 | tony | 2006-07-06 00:21:07 +1000 (Thu, 06 Jul 2006) | 6 lines
+Changed paths:
+   M /trunk/Imager/Makefile.PL
+
+we search /usr/local/include by default but we weren't searching
+/usr/local/lib, fixed that
+
+don't rebuild META.yml if we're not setting AUTHOR, this was producing
+a bad META.yml on older EU::MMs
+
+------------------------------------------------------------------------
+r1032 | tony | 2006-07-05 21:54:33 +1000 (Wed, 05 Jul 2006) | 3 lines
+Changed paths:
+   M /trunk/Imager/ICO/t/t60writefail.t
+
+implement limited writes as a closure instead of as an overloaded
+class to support 5.005_03
+
+------------------------------------------------------------------------
+r1031 | tony | 2006-07-05 21:41:04 +1000 (Wed, 05 Jul 2006) | 2 lines
+Changed paths:
+   M /trunk/Imager/ICO/ICO.xs
+   M /trunk/Imager/ICO/t/t10icon.t
+   M /trunk/Imager/ICO/t/t20readone.t
+   M /trunk/Imager/ICO/t/t21readmult.t
+   M /trunk/Imager/ICO/t/t30cursor.t
+   M /trunk/Imager/ICO/t/t40readcurone.t
+   M /trunk/Imager/ICO/t/t41curmultread.t
+   M /trunk/Imager/ICO/t/t50readfail.t
+   M /trunk/Imager/ICO/t/t60writefail.t
+   M /trunk/Imager/ICO/t/t70icosing.t
+   M /trunk/Imager/ICO/t/t71icomult.t
+   M /trunk/Imager/ICO/t/t72cursing.t
+   M /trunk/Imager/ICO/t/t73curmult.t
+   M /trunk/Imager/t/t07iolayer.t
+   M /trunk/Imager/t/t69rubthru.t
+   M /trunk/Imager/t/tr18561.t
+   M /trunk/Imager/t/tr18561b.t
+
+minor changes for compatibility with 5.005_03
+
+------------------------------------------------------------------------
 r1028 | tony | 2006-07-04 23:54:13 +1000 (Tue, 04 Jul 2006) | 2 lines
 Changed paths:
    M /trunk/Imager/Imager.pm

@@ -170,10 +170,7 @@ C<WARNING>: file format attacks have become a common attack vector,
 make sure you have up to date image file format libraries, otherwise
 trying to parse uploaded files, whether with Imager or some other
 tool, may result in a remote attacker being able to run their own code
-on your system.  Currently Imager makes no attempt to place size
-limits on a read image file.  This may result in consumption of large
-amounts of memory.  Future versions of Imager may provide mechanisms
-to limit the sizes of images read from files.
+on your system.
 
 If your HTML form uses the correct magic, it can upload files to your
 CGI script, in particular, you need to use C< method="post" > and
@@ -226,6 +223,16 @@ have Imager read the image
 
 See C<samples/samp-scale.cgi> and C<samples/samp-tags.cgi> in the
 Imager distribution for example code.
+
+You may also want to set limits on the size of the image read, using
+Imager's C<set_file_limits> method, documented in
+L<Imager::Files/set_file_limits>.  For example:
+
+  # limit to 10 million bytes of memory usage
+  Imager->set_file_limits(bytes => 10_000_000);
+
+  # limit to 1024 x 1024
+  Imager->set_file_limits(width => 1024, height => 1024);
 
 =head1 DRAWING
 
@@ -315,7 +322,43 @@ transformed text into.
 
 =head1 METADATA
 
-=head2 Image spatial resolution.
+=head2 Image format
+
+When Imager reads a file it does a magic number check to determine the
+file type, so "foo.png" could actually be a GIF image, and Imager will
+read it anyway.
+
+You can check the actual format of the image by looking at the
+C<i_format> tag.
+
+  my $format = $image->tags(name=>'i_format');
+
+=head2 Image spatial resolution
+
+Most image file formats store information about the physical size of
+the pixels, though in some cases that information isn't useful.
+
+Imager stores this information in the tags C<i_xres> and C<i_yres>,
+and this is always stored in dots per inch.
+
+Some formats, including TIFF and JPEG allow you to change the units
+spatial resolution information is stored in, if you set the tag that
+changes this the Imager will convert C<i_xres> and C<i_yres> to those
+units when it writes the file.
+
+For example to set the resolution to 300 dpi:
+
+  $image->settag(name => 'i_xres', value => 300);
+  $image->settag(name => 'i_yres', value => 300);
+
+If you want the file format to store the resolution in some other
+unit, for example you can write a TIFF file that stores the resolution
+in pixels per centimeter, you would do:
+
+  # 150 pixels/cm
+  $image->settag(name => 'i_xres', value => 150 * 2.54);
+  $image->settag(name => 'i_yres', value => 150 * 2.54);
+  $image->settag(name => 'tiff_resolutionunit', value => 3);
 
 Keywords: DPI
 

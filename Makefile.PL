@@ -111,18 +111,25 @@ if ($MANUAL) {
 gifcheck();
 
 my $lib_cflags = '';
+my $lib_lflags = '';
 my $F_LIBS = '';
 my $F_OBJECT = '';
 for my $frmkey (sort { $formats{$a}{order} <=> $formats{$b}{order} } keys %formats) {
   my $frm = $formats{$frmkey};
   push @defines, [ $frm->{def}, 1, "$frmkey available" ];
-  $F_LIBS   .= ' '  .$frm->{libfiles};
   $F_OBJECT .= ' '  .$frm->{objfiles};
   if ($frm->{cflags}) {
     $lib_cflags   .= ' '  .$frm->{cflags};
     ++$definc{$_} for map { /^-I(.*)$/ ? ($1) : () }
       grep /^-I./, split ' ', $frm->{cflags};
   }
+  if ($frm->{lflags}) {
+    $lib_lflags .= ' ' . $frm->{lflags};
+  }
+  else {
+    $F_LIBS   .= ' '  .$frm->{libfiles};
+  }
+
 }
 
 unless ($noexif) {
@@ -156,7 +163,7 @@ $Recommends{Imager} =
 my %opts=(
           'NAME'         => 'Imager',
           'VERSION_FROM' => 'Imager.pm',
-          'LIBS'         => "$LFLAGS -lm $OSLIBS $F_LIBS",
+          'LIBS'         => "$LFLAGS -lm $lib_lflags $OSLIBS $F_LIBS",
           'DEFINE'       => "$OSDEF $CFLAGS",
           'INC'          => "$lib_cflags $DFLAGS $F_INC",
           'OBJECT'       => join(' ', @objs, $F_OBJECT),
@@ -260,7 +267,7 @@ bugs.  Imager can crash or display other strange behaviour after
 reading or writing gif images.  Some of the gif tests can fail since
 they stress some parts of the buggy code.
 
-libungif or libguf 4.1.4 and later is safe.
+libungif or libgif 4.1.4 and later is safe.
 
 Of course it's possible your operating system distributor has patched
 all of these problems and you have nothing to worry about.
@@ -433,6 +440,7 @@ sub init {
     # it can't find and it doesn't look for -L in ldflags
     #@deflib{@hidden} = @hidden;
   }
+  push @libs, grep -d, qw(/usr/local/lib);
 
   $formats{'jpeg'}={
 		    order=>'21',
@@ -711,7 +719,7 @@ sub freetype2_probe {
 		   map "-I$_", reverse @incdirs);
   }
   $frm->{cflags} = $cflags;
-  $frm->{libfiles} = $lflags;
+  $frm->{lflags} = $lflags;
 
   printf "%10s: configured via freetype-config\n", $frmkey;
 
@@ -742,7 +750,7 @@ sub png_probe {
   chomp $cflags;
   chomp $lflags;
   $frm->{cflags} = $cflags;
-  $frm->{libfiles} = $lflags;
+  $frm->{lflags} = $lflags;
 
   printf "%10s: configured via `pkg-config $config ...`\n", $frmkey;
 
@@ -828,6 +836,10 @@ sub make_metafile {
   # extract the version
   my $version = MM->parse_version($opts->{VERSION_FROM})
     or die "Could not extract version number from $opts->{VERSION_FROM}\n";
+
+  # we don't set this on older EU::MM and it corrupts META.yml
+  # so don't generate it
+  return unless $opts->{AUTHOR};
 
   my $meta = <<YAML;
 --- #YAML:1.0
