@@ -2205,12 +2205,20 @@ i_test_format_probe(io_glue *data, int length) {
 
     /* Utah RLE */
     FORMAT_ENTRY("\x52\xCC", "utah"),
+
+    /* GZIP compressed, only matching deflate for now */
+    FORMAT_ENTRY("\x1F\x8B\x08", "gzip"),
+
+    /* bzip2 compressed */
+    FORMAT_ENTRY("BZh", "bzip2"),
   };
   static const struct magic_entry more_formats[] = {
     /* these were originally both listed as ico, but cur files can
        include hotspot information */
     FORMAT_ENTRY("\x00\x00\x01\x00", "ico"), /* Windows icon */
     FORMAT_ENTRY("\x00\x00\x02\x00", "cur"), /* Windows cursor */
+    FORMAT_ENTRY2("\x00\x00\x00\x00\x00\x00\x00\x07", 
+		  "xwd", "    xxxx"), /* X Windows Dump */
   };
 
   unsigned int i;

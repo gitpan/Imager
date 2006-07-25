@@ -1,4 +1,160 @@
 ------------------------------------------------------------------------
+r1064 | tony | 2006-07-25 14:43:38 +1000 (Tue, 25 Jul 2006) | 42 lines
+Changed paths:
+   M /trunk/Imager/Imager.pm
+   M /trunk/Imager/META.yml
+   A /trunk/Imager/announce/0.52.txt
+
+bump to 0.52
+
+This is primarily a feature release, but contains a fair few bug
+fixes, new features:
+
+- ability to read and write MS Windows ICO and CUR files
+
+- you can now add file format plugins to support new file formats
+
+- add POD coverage tests
+
+- setcolors() and addcolors() now accept color names and so on instead
+  of requiring Imager::Color objects.
+
+- flood_fill() can now fill to a specified border color instead of
+  just to the area the same color as the seed.
+
+Bug fixes:
+
+- bounding_box for the T1 driver wasn't converting UTF8 to ascii when
+  calculating the advance width.
+
+- bounding_box for the T1 driver wasn't including leading and trailing
+  spaces in the bounding box as the other drivers did, it also produced
+  strange results for empty strings or strings containing only spaces
+
+- when reading CMYK jpeg images they were being transferred to the
+  image object as is, producing a four channel image.  It only looked
+  ok due to an old still unfixed Photoshop bug.  We now convert from
+  the inverted CMYK that photoshop (and Corel for example) produce
+  into RGB.
+
+- reading a CYMK TIFF would result in a 4 channel image, reading any
+  image with more than 4 channels (eg. RGB with 2 alpha channels)
+  would result in an error.
+
+- added /usr/local/include to the default include search path, since
+  we were already searching /usr/local/lib for libraries.
+
+And various minor fixes and documentation updates.
+
+
+------------------------------------------------------------------------
+r1063 | tony | 2006-07-24 22:28:31 +1000 (Mon, 24 Jul 2006) | 4 lines
+Changed paths:
+   M /trunk/Imager/lib/Imager/Cookbook.pod
+
+added a cookbook entry for converting files from one format to another
+
+part of http://rt.cpan.org/Ticket/Display.html?id=5608
+
+------------------------------------------------------------------------
+r1062 | tony | 2006-07-24 22:09:22 +1000 (Mon, 24 Jul 2006) | 4 lines
+Changed paths:
+   M /trunk/Imager/lib/Imager/Draw.pod
+
+document the direction of Imager's co-ordinate system
+
+http://rt.cpan.org/Ticket/Display.html?id=11429
+
+------------------------------------------------------------------------
+r1061 | tony | 2006-07-24 21:27:24 +1000 (Mon, 24 Jul 2006) | 2 lines
+Changed paths:
+   M /trunk/Imager/lib/Imager/Files.pod
+
+add an example of reading exif tags
+
+------------------------------------------------------------------------
+r1060 | tony | 2006-07-24 21:16:06 +1000 (Mon, 24 Jul 2006) | 2 lines
+Changed paths:
+   M /trunk/Imager/lib/Imager/Files.pod
+
+add some basic examples of using data, fd, fh, callback parameters
+
+------------------------------------------------------------------------
+r1059 | tony | 2006-07-24 20:17:00 +1000 (Mon, 24 Jul 2006) | 3 lines
+Changed paths:
+   M /trunk/Imager/lib/Imager/Files.pod
+
+added examples for fh, fd, file, data and callback mechanisms for
+reading/writing files.
+
+------------------------------------------------------------------------
+r1058 | tony | 2006-07-24 17:15:49 +1000 (Mon, 24 Jul 2006) | 2 lines
+Changed paths:
+   M /trunk/Imager/image.c
+   M /trunk/Imager/t/t1000files.t
+
+add detection of BZIP2 and gzip data
+
+------------------------------------------------------------------------
+r1057 | tony | 2006-07-24 14:46:00 +1000 (Mon, 24 Jul 2006) | 2 lines
+Changed paths:
+   M /trunk/Imager/MANIFEST
+   A /trunk/Imager/dynfilt/t
+   A /trunk/Imager/dynfilt/t/t00dummy.t
+
+add dummy test to dynfilt to since it was confusing smoke testers
+
+------------------------------------------------------------------------
+r1056 | tony | 2006-07-24 14:44:28 +1000 (Mon, 24 Jul 2006) | 2 lines
+Changed paths:
+   M /trunk/Imager/fontfiles/SpaceTest.sfd
+
+commit changes to SpaceTest font source caused by exports
+
+------------------------------------------------------------------------
+r1055 | tony | 2006-07-21 10:01:57 +1000 (Fri, 21 Jul 2006) | 2 lines
+Changed paths:
+   M /trunk/Imager/image.c
+   M /trunk/Imager/t/t1000files.t
+
+add a magic entry to detect XWD files
+
+------------------------------------------------------------------------
+r1054 | tony | 2006-07-21 00:35:22 +1000 (Fri, 21 Jul 2006) | 5 lines
+Changed paths:
+   M /trunk/Imager/font.c
+   M /trunk/Imager/t/t30t1font.t
+
+bounding_box() for the t1 driver wasn't converting from UTF8 to ascii
+when calculating the advance width.
+
+fixes http://rt.cpan.org/Ticket/Display.html?id=20554
+
+------------------------------------------------------------------------
+r1053 | tony | 2006-07-20 23:42:04 +1000 (Thu, 20 Jul 2006) | 11 lines
+Changed paths:
+   M /trunk/Imager/MANIFEST
+   M /trunk/Imager/font.c
+   M /trunk/Imager/fontfiles/ExistenceTest.afm
+   M /trunk/Imager/fontfiles/ExistenceTest.pfb
+   M /trunk/Imager/fontfiles/ExistenceTest.sfd
+   A /trunk/Imager/fontfiles/SpaceTest.afm
+   A /trunk/Imager/fontfiles/SpaceTest.pfb
+   A /trunk/Imager/fontfiles/SpaceTest.sfd
+   M /trunk/Imager/t/t30t1font.t
+
+bounding_box() for t1 driver fonts was treating spaces as empty space
+when calculating the bounds, which they are, but this is inconsistent
+with other drivers.  This was especially a problem for strings
+containing only spaces where the left bound would end up far to the
+right of the right bound, and similarly for the ascent and descent.
+
+calculating the bounding box for an empty string invoked special
+behaviour in t1lib, making it unreliable.
+
+Fixes: http://rt.cpan.org/Ticket/Display.html?id=20555
+
+------------------------------------------------------------------------
 r1052 | tony | 2006-07-19 10:39:58 +1000 (Wed, 19 Jul 2006) | 2 lines
 Changed paths:
    M /trunk/Imager/Imager.pm

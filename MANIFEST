@@ -77,6 +77,7 @@ dynfilt/flines.exp
 dynfilt/mandelbrot.c
 dynfilt/mandelbrot.exp
 dynfilt/pluginst.h
+dynfilt/t/t00dummy.t	Dummy test script to prevent smoker problems
 errep.perl
 error.c
 ext.h
@@ -92,6 +93,8 @@ fontfiles/ExistenceTest.ttf     generated using pfaedit
 fontfiles/ImUgly.ttf
 fontfiles/MMOne.pfb		multiple master test font
 fontfiles/NameTest.ttf          test glyph_names() - see t38ft2font.t
+fontfiles/SpaceTest.afm
+fontfiles/SpaceTest.pfb		test bounding box with spaces in t30t1font.t
 fontfiles/dcr10.afm
 fontfiles/dcr10.pfb
 fontfiles/dodge.ttf
