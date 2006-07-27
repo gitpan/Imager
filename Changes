@@ -1,4 +1,30 @@
 ------------------------------------------------------------------------
+r1067 | tony | 2006-07-27 10:38:49 +1000 (Thu, 27 Jul 2006) | 6 lines
+Changed paths:
+   M /trunk/Imager/Imager.pm
+   M /trunk/Imager/META.yml
+
+bump to 0.53
+
+This is to fix a crash bug introduced in 0.52.
+
+http://rt.cpan.org/Ticket/Display.html?id=20705
+
+------------------------------------------------------------------------
+r1066 | tony | 2006-07-27 10:31:44 +1000 (Thu, 27 Jul 2006) | 8 lines
+Changed paths:
+   M /trunk/Imager/Imager.xs
+   M /trunk/Imager/t/t07iolayer.t
+
+there was a C< *(char *)0 = 0 > left in a code path uncovered by the
+test suite.
+
+- added a test to cover that code path
+- removed the debug code
+
+Fixes: http://rt.cpan.org/Ticket/Display.html?id=20705
+
+------------------------------------------------------------------------
 r1064 | tony | 2006-07-25 14:43:38 +1000 (Tue, 25 Jul 2006) | 42 lines
 Changed paths:
    M /trunk/Imager/Imager.pm
