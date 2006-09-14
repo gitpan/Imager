@@ -1,4 +1,285 @@
 ------------------------------------------------------------------------
+r1098 | tony | 2006-09-14 17:43:24 +1000 (Thu, 14 Sep 2006) | 29 lines
+Changed paths:
+   M /trunk/Imager/Imager.pm
+   M /trunk/Imager/META.yml
+   A /trunk/Imager/announce/0.54.txt
+
+This is primarily a feature release:
+
+- a new qtype value 'mixing' has been added to the scale() method.
+  This is faster than 'normal', slower than 'preview'.  This is based on
+  the method used by pnmscale, and seems to produce less blurry results
+  than normal.
+
+- the rubthrough() method can now render onto images with an alpha
+  channel.
+
+- the read_multi() method now falls back to calling doing a single
+  image read via the read() method and write_multi() will now fall
+  back to calling write() if a single image is supplied.  This means
+  you can simply call the read_multi() or write_multi() functions
+  without having to check if the type is formatted by that method.
+
+- the GIF loop extension can now be written.  If you don't have
+  libungif/giflib 4.1.4 (or some distribution's bugfixed equivalent)
+  you should upgrade.
+
+- getscanline() and setscanline() can now read/write palette index
+  based data from/to the image for paletted images, by setting type to
+  'index'.
+
+- we no longer hassle you to disable GIF support
+
+- minor documentation fixes
+
+
+------------------------------------------------------------------------
+r1092 | tony | 2006-09-12 14:19:09 +1000 (Tue, 12 Sep 2006) | 2 lines
+Changed paths:
+   M /trunk/Imager/Makefile.PL
+
+add generated .c files to make clean
+
+------------------------------------------------------------------------
+r1091 | tony | 2006-09-06 23:50:43 +1000 (Wed, 06 Sep 2006) | 3 lines
+Changed paths:
+   M /trunk/Imager/doco.perl
+   M /trunk/Imager/errep.perl
+   M /trunk/Imager/filterlist.perl
+   M /trunk/Imager/t/t94kwalitee.t
+
+add .perl files to the t94kwalitee struct tests and fix the non strict
+.perl code
+
+------------------------------------------------------------------------
+r1090 | tony | 2006-09-06 21:35:38 +1000 (Wed, 06 Sep 2006) | 3 lines
+Changed paths:
+   M /trunk/Imager/Imager.pm
+   M /trunk/Imager/t/t102png.t
+
+read_multi() now falls back to calling read() and write_multi() now
+falls back to calling write() for a single image.
+
+------------------------------------------------------------------------
+r1089 | tony | 2006-09-01 17:17:36 +1000 (Fri, 01 Sep 2006) | 1 line
+Changed paths:
+   M /trunk/Imager/t/t105gif.t
+
+skip the right number of tests when gif not available
+------------------------------------------------------------------------
+r1088 | tony | 2006-08-31 23:35:33 +1000 (Thu, 31 Aug 2006) | 2 lines
+Changed paths:
+   M /trunk/Imager/TODO
+
+rubthrough done
+
+------------------------------------------------------------------------
+r1087 | tony | 2006-08-31 23:27:19 +1000 (Thu, 31 Aug 2006) | 2 lines
+Changed paths:
+   M /trunk/Imager/t/t105gif.t
+
+skip the loop tests with older (un)giflibs
+
+------------------------------------------------------------------------
+r1086 | tony | 2006-08-31 23:16:45 +1000 (Thu, 31 Aug 2006) | 18 lines
+Changed paths:
+   M /trunk/Imager/Makefile.PL
+   M /trunk/Imager/gif.c
+   M /trunk/Imager/t/t105gif.t
+
+Changes to GIF support:
+
+- the Nescape loop extension block is written if gif_loop is set.
+This requires libungif/libgif 4.1.3 or later.
+
+Resolves: http://rt.cpan.org/Ticket/Display.html?id=21185
+
+- we now set the GIF header depending on the features enabled in the
+GIF.  Since we don't do configure type probes for bugs we have to
+enable this based on the gif_lib.h version number, it's enabled for
+4.1.0 and later, but requires 4.1.3 and later (maybe 4.1.3) to run
+without crashing.
+
+You can avoid this crash by passing --nogifsetversion to Makefile.PL,
+or by installing a non-buggy libungif/libgif, if there is such a
+thing.
+
+
+------------------------------------------------------------------------
+r1085 | tony | 2006-08-30 17:25:55 +1000 (Wed, 30 Aug 2006) | 2 lines
+Changed paths:
+   M /trunk/Imager/lib/Imager/Transformations.pod
+
+note on relative speeds of the scaling mechanisms
+
+------------------------------------------------------------------------
+r1084 | tony | 2006-08-30 16:47:48 +1000 (Wed, 30 Aug 2006) | 12 lines
+Changed paths:
+   M /trunk/Imager/MANIFEST
+   M /trunk/Imager/bench/scale.perl
+   M /trunk/Imager/imtoc.perl
+   M /trunk/Imager/lib/Imager/Transformations.pod
+   D /trunk/Imager/scale.c
+   A /trunk/Imager/scale.im (from /trunk/Imager/scale.c:1083)
+   M /trunk/Imager/t/t40scale.t
+
+convert scale.c to scale.im so we have 8 bit/sample and double/sample
+implementations of mixing scaling.
+
+modified imtoc.perl to allow non-conditional #code sections to allow
+creation ofr 8 and double/sample versions of support functions.
+
+fixed a bug in an optimization that avoids vertically scaling when the
+vertical size stays the same.
+
+The change from double/sample only to both saved about 20% on
+scalebench time (which also loads/saves the images)
+
+------------------------------------------------------------------------
+r1083 | tony | 2006-08-29 17:20:42 +1000 (Tue, 29 Aug 2006) | 3 lines
+Changed paths:
+   M /trunk/Imager/CountColor/Makefile.PL
+   M /trunk/Imager/DynTest/Makefile.PL
+   M /trunk/Imager/Flines/Makefile.PL
+   M /trunk/Imager/ICO/Makefile.PL
+   M /trunk/Imager/Makefile.PL
+   M /trunk/Imager/Mandelbrot/Makefile.PL
+
+comparisons against $ExtUtils::MakeMaker::VERSION were warning when
+that had an _ in it.  We now eval it to prevent the warning.
+
+------------------------------------------------------------------------
+r1082 | tony | 2006-08-29 10:42:46 +1000 (Tue, 29 Aug 2006) | 10 lines
+Changed paths:
+   M /trunk/Imager
+   M /trunk/Imager/MANIFEST
+   M /trunk/Imager/MANIFEST.SKIP
+   M /trunk/Imager/Makefile.PL
+   M /trunk/Imager/apidocs.perl
+   M /trunk/Imager/image.c
+   A /trunk/Imager/imtoc.perl
+   M /trunk/Imager/lib/Imager/APIRef.pod
+   M /trunk/Imager/lib/Imager/ImageTypes.pod
+   A /trunk/Imager/rubthru.im
+   M /trunk/Imager/t/t69rubthru.t
+
+the rubthrough() method now supports destination images with an alpha
+channel.
+
+Also added a statement on the relationship between the alpha channel
+and color data in Imager.
+
+The new rubthrough() code uses a new pre-processor that reduces source
+code duplication between 8-bit/sample and double/sample processing.
+
+
+------------------------------------------------------------------------
+r1081 | tony | 2006-08-29 10:23:01 +1000 (Tue, 29 Aug 2006) | 2 lines
+Changed paths:
+   M /trunk/Imager/MANIFEST
+
+remove t/t60dyntest.t from the MANIFEST, since we moved it
+
+------------------------------------------------------------------------
+r1080 | tony | 2006-08-19 17:24:35 +1000 (Sat, 19 Aug 2006) | 2 lines
+Changed paths:
+   M /trunk/Imager/Imager.pm
+
+to_rgb8 doesn't crop but the void content warning said it did
+
+------------------------------------------------------------------------
+r1079 | tony | 2006-08-18 17:08:37 +1000 (Fri, 18 Aug 2006) | 3 lines
+Changed paths:
+   M /trunk/Imager/MANIFEST
+   M /trunk/Imager/TODO
+   D /trunk/Imager/dynfilt/t/t00dummy.t
+   A /trunk/Imager/dynfilt/t/t60dyntest.t (from /trunk/Imager/t/t60dyntest.t:1077)
+   D /trunk/Imager/t/t60dyntest.t
+
+move the existing dynfilt test into dynfilt/t, update it to use
+Test::More and remove the dummy test script
+
+------------------------------------------------------------------------
+r1078 | tony | 2006-08-18 14:35:27 +1000 (Fri, 18 Aug 2006) | 10 lines
+Changed paths:
+   M /trunk/Imager/Imager.pm
+   M /trunk/Imager/Imager.xs
+   M /trunk/Imager/MANIFEST
+   M /trunk/Imager/Makefile.PL
+   M /trunk/Imager/TODO
+   M /trunk/Imager/imager.h
+   M /trunk/Imager/lib/Imager/Transformations.pod
+   A /trunk/Imager/scale.c (from /branches/Imager/scale/scale.c:1077)
+   M /trunk/Imager/t/t40scale.t
+
+Merged in the scale branch:
+
+- adds a new scaling mechanism 'mixing' based on the method
+implemented by pnmscale.  Produces better detail when scaling down and
+is faster than the 'normal' method.
+
+- the scale() method can now scale non-proportionally if the caller
+specifically asks for it with xscalefactor/yscalefactor or by setting
+type to 'nonprop'.
+
+------------------------------------------------------------------------
+r1074 | tony | 2006-08-15 18:12:30 +1000 (Tue, 15 Aug 2006) | 5 lines
+Changed paths:
+   M /trunk/Imager/Imager.pm
+   M /trunk/Imager/Imager.xs
+   M /trunk/Imager/TODO
+   M /trunk/Imager/lib/Imager/Draw.pod
+   M /trunk/Imager/t/t023palette.t
+   M /trunk/Imager/t/t67convert.t
+
+added pixel type 'index' to getscanline() and setscanline() for
+getting/setting palette indexes from paletted images.
+
+https://rt.cpan.org/Ticket/Display.html?id=20338
+
+------------------------------------------------------------------------
+r1073 | tony | 2006-08-10 11:53:19 +1000 (Thu, 10 Aug 2006) | 5 lines
+Changed paths:
+   M /trunk/Imager/samples/slant_text.pl
+   M /trunk/Imager/t/t91pod.t
+
+finally found which file contained the POD errors that
+http://cpants.perl.org/kwalitee/Imager was complaining about
+
+modified t/t91pod.t to check every pl/pod/pm/PL file
+
+------------------------------------------------------------------------
+r1071 | tony | 2006-08-08 00:20:21 +1000 (Tue, 08 Aug 2006) | 5 lines
+Changed paths:
+   M /trunk/Imager/lib/Imager/API.pod
+
+you need to load Imager to use the API, Imager::API now tells the user
+that
+
+http://rt.cpan.org/Ticket/Display.html?id=20823
+
+------------------------------------------------------------------------
+r1070 | tony | 2006-08-07 17:02:43 +1000 (Mon, 07 Aug 2006) | 7 lines
+Changed paths:
+   M /trunk/Imager/Makefile.PL
+   M /trunk/Imager/README
+
+Removed the query asking if GIF support should be disabled, since
+recent lib(un)gif are sane.
+
+https://rt.cpan.org/Ticket/Display.html?id=20687
+
+Some README cleanup.
+
+------------------------------------------------------------------------
+r1069 | tony | 2006-07-29 15:21:49 +1000 (Sat, 29 Jul 2006) | 2 lines
+Changed paths:
+   M /trunk/Imager/TODO
+
+basic todo for 0.54
+
+------------------------------------------------------------------------
 r1067 | tony | 2006-07-27 10:38:49 +1000 (Thu, 27 Jul 2006) | 6 lines
 Changed paths:
    M /trunk/Imager/Imager.pm

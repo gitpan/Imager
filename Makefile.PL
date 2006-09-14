@@ -38,6 +38,7 @@ my @incpaths; # places to look for headers
 my @libpaths; # places to look for libraries
 my $noprobe; # non-zero to disable newer probes
 my $noexif; # non-zero to disable EXIF parsing of JPEGs
+my $no_gif_set_version; # disable calling EGifSetGifVersion
 GetOptions("help" => \$help,
            "enable=s" => \@enable,
            "disable=s" => \@disable,
@@ -46,7 +47,8 @@ GetOptions("help" => \$help,
            "noprobe" => \$noprobe,
            "verbose|v" => \$VERBOSE,
            "nolog" => \$NOLOG,
-	   "noexif" => \$noexif);
+	   "noexif" => \$noexif,
+           "nogifsetversion" => \$no_gif_set_version);
 
 if ($VERBOSE) { 
   print "Verbose mode\n"; 
@@ -155,7 +157,7 @@ my @objs = qw(Imager.o draw.o polygon.o image.o io.o iolayer.o
               regmach.o trans2.o quant.o error.o convert.o
               map.o tags.o palimg.o maskimg.o img16.o rotate.o
               bmp.o tga.o rgb.o color.o fills.o imgdouble.o limits.o hlines.o
-              imext.o);
+              imext.o scale.o rubthru.o);
 
 $Recommends{Imager} =
   { 'Parse::RecDescent' => 0 };
@@ -167,15 +169,17 @@ my %opts=(
           'DEFINE'       => "$OSDEF $CFLAGS",
           'INC'          => "$lib_cflags $DFLAGS $F_INC",
           'OBJECT'       => join(' ', @objs, $F_OBJECT),
-          clean          => { FILES=>'testout meta.tmp' },
+          clean          => { FILES=>'testout meta.tmp rubthru.c scale.c' },
           PM             => gen_PM(),
          );
 
-if ($ExtUtils::MakeMaker::VERSION > 6.06) {
+# eval to prevent warnings about versions with _ in them
+my $MM_ver = eval $ExtUtils::MakeMaker::VERSION;
+if ($MM_ver > 6.06) {
   $opts{AUTHOR} = 'Tony Cook <tony@imager.perl.org>, Arnar M. Hrafnkelsson';
   $opts{ABSTRACT} = 'Perl extension for Generating 24 bit Images';
 }
-if ($ExtUtils::MakeMaker::VERSION > 6.10) {
+if ($MM_ver > 6.10) {
   $opts{NO_META} = 1;
 }
 
@@ -194,6 +198,9 @@ exit;
 sub MY::postamble {
     my $self = shift;
     my $perl = $self->{PERLRUN} ? '$(PERLRUN)' : '$(PERL)';
+    my $mani = maniread;
+
+    my @ims = grep /\.im$/, keys %$mani;
 '
 dyntest.$(MYEXTLIB) : dynfilt/Makefile
 	cd dynfilt && $(MAKE) $(PASTHRU)
@@ -209,7 +216,20 @@ imconfig.h : Makefile.PL
 lib/Imager/APIRef.pod : \$(C_FILES) apidocs.perl
 	$perl apidocs.perl lib/Imager/APIRef.pod
 
-!;
+!.join('', map _im_rule($perl, $_), @ims)
+
+}
+
+sub _im_rule {
+  my ($perl, $im) = @_;
+
+  (my $c = $im) =~ s/\.im$/.c/;
+  return <<MAKE;
+
+$c: $im imtoc.perl
+	$perl imtoc.perl $im $c
+
+MAKE
 
 }
 
@@ -258,32 +278,6 @@ sub gifcheck {
     delete $formats{'ungif'};
   }
 
- RETR:
-  if (($formats{'gif'} or $formats{'ungif'}) && !$ENV{IM_SUPPRESS_PROMPT}) {
-    my $msg = <<EOFF;
-
-You have libgif or libungif installed.  They are both known to have
-bugs.  Imager can crash or display other strange behaviour after
-reading or writing gif images.  Some of the gif tests can fail since
-they stress some parts of the buggy code.
-
-libungif or libgif 4.1.4 and later is safe.
-
-Of course it's possible your operating system distributor has patched
-all of these problems and you have nothing to worry about.
-
-Do you want to remove gif support? [Y/n]
-EOFF
-    chomp $msg;
-    my $resp = prompt($msg);
-    chomp($resp);
-    if ($resp ne "n") {
-      delete $formats{'gif'};
-      delete $formats{'ungif'};
-      return;
-    }
-  }
-
   for my $frm (qw(gif ungif)) {
     checkformat($frm) if ($MANUAL and $formats{$frm});
   }
@@ -312,6 +306,8 @@ EOFF
 
   push @defines, [ IM_GIFMAJOR => $major, "Parsed giflib version" ];
   push @defines, [ IM_GIFMINOR => $minor ];
+  push @defines, [ IM_NO_SET_GIF_VERSION => 1, "Disable EGifSetGifVersion" ]
+    if $no_gif_set_version;
 }
 
 

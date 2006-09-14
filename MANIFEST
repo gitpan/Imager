@@ -77,7 +77,7 @@ dynfilt/flines.exp
 dynfilt/mandelbrot.c
 dynfilt/mandelbrot.exp
 dynfilt/pluginst.h
-dynfilt/t/t00dummy.t	Dummy test script to prevent smoker problems
+dynfilt/t/t60dyntest.t	Simple test script
 errep.perl
 error.c
 ext.h
@@ -117,6 +117,7 @@ img16.c
 imgdouble.c     Implements double/sample images
 imio.h
 imperl.h
+imtoc.perl      Sample size adapter pre-processor
 io.c
 iolayer.c
 iolayer.h
@@ -173,6 +174,7 @@ regmach.h
 regops.perl
 rgb.c           Reading and writing SGI rgb files
 rotate.c
+rubthru.im
 samples/README
 samples/align-string.pl Demonstrate align_string method.
 samples/anaglyph.pl
@@ -189,6 +191,7 @@ samples/samp-tags.cgi   Demonstrate image upload via a HTML form
 samples/samp-tags.html  Form for samp-tags.cgi
 samples/slant_text.pl   Using $font->transform() to slant text
 samples/tk-photo.pl
+scale.im	Newer scaling code
 spot.perl	For making an ordered dither matrix from a spot function
 stackmach.c
 stackmach.h
@@ -228,7 +231,6 @@ t/t56postfix.t
 t/t57infix.t
 t/t58trans2.t
 t/t59assem.t
-t/t60dyntest.t
 t/t61filters.t
 t/t64copyflip.t         Test copy, flip, rotate, matrix_transform
 t/t65crop.t

@@ -1,8 +1,18 @@
 #!perl -w
+=pod
+
+IF THIS TEST CRASHES
+
+Giflib/libungif have a long history of bugs, so if this script crashes
+and you aren't running version 4.1.4 of giflib or libungif then
+UPGRADE.
+
+=cut
+
 use strict;
 $|=1;
 use lib 't';
-use Test::More tests => 107;
+use Test::More tests => 113;
 use Imager qw(:all);
 BEGIN { require "t/testtools.pl"; }
 use Carp 'confess';
@@ -38,7 +48,7 @@ SKIP:
     $im = Imager->new(xsize=>2, ysize=>2);
     ok(!$im->write(file=>"testout/nogif.gif"), "should fail to write gif");
     is($im->errstr, 'format not supported', "check no gif message");
-    skip("no gif support", 103);
+    skip("no gif support", 109);
   }
     open(FH,">testout/t105.gif") || die "Cannot open testout/t105.gif\n";
     binmode(FH);
@@ -635,6 +645,29 @@ EOS
     ok(!$res->read(file=>$test_file, page=>3), "fail reading fourth page");
     cmp_ok($res->errstr, "=~", 'page 3 not found',
 	   "check error message");
+  }
+SKIP:
+  {
+    skip("gif_loop not supported on giflib before 4.1", 6) 
+      unless $gifver >= 4.1;
+    # testing writing the loop extension
+    my $im1 = Imager->new(xsize => 100, ysize => 100);
+    $im1->box(filled => 1, color => '#FF0000');
+    my $im2 = Imager->new(xsize => 100, ysize => 100);
+    $im2->box(filled => 1, color => '#00FF00');
+    ok(Imager->write_multi({
+                            gif_loop => 5, 
+                            gif_delay => 50, 
+                            file => 'testout/t105loop.gif'
+                           }, $im1, $im2),
+       "write with loop extension");
+
+    my @im = Imager->read_multi(file => 'testout/t105loop.gif');
+    is(@im, 2, "read loop images back");
+    is($im[0]->tags(name => 'gif_loop'), 5, "first loop read back");
+    is($im[1]->tags(name => 'gif_loop'), 5, "second loop read back");
+    is($im[0]->tags(name => 'gif_delay'), 50, "first delay read back");
+    is($im[1]->tags(name => 'gif_delay'), 50, "second delay read back");
   }
 }
 

@@ -155,7 +155,7 @@ my %attempted_to_load;
 BEGIN {
   require Exporter;
   @ISA = qw(Exporter);
-  $VERSION = '0.53';
+  $VERSION = '0.54';
   eval {
     require XSLoader;
     XSLoader::load(Imager => $VERSION);
@@ -552,6 +552,15 @@ sub _color {
   return $result;
 }
 
+sub _valid_image {
+  my ($self) = @_;
+
+  $self->{IMG} and return 1;
+
+  $self->_set_error('empty input image');
+
+  return;
+}
 
 #
 # Methods to be called on objects.
@@ -875,7 +884,7 @@ sub to_rgb8 {
 
   unless (defined wantarray) {
     my @caller = caller;
-    warn "to_rgb8() called in void context - to_rgb8() returns the cropped image at $caller[1] line $caller[2]\n";
+    warn "to_rgb8() called in void context - to_rgb8() returns the converted image at $caller[1] line $caller[2]\n";
     return;
   }
 
@@ -1114,9 +1123,9 @@ sub settag {
 sub _get_reader_io {
   my ($self, $input) = @_;
 
-	if ($input->{io}) {
-		return $input->{io}, undef;
-	}
+  if ($input->{io}) {
+    return $input->{io}, undef;
+  }
   elsif ($input->{fd}) {
     return io_new_fd($input->{fd});
   }
@@ -1165,7 +1174,10 @@ sub _get_reader_io {
 sub _get_writer_io {
   my ($self, $input, $type) = @_;
 
-  if ($input->{fd}) {
+  if ($input->{io}) {
+    return $input->{io};
+  }
+  elsif ($input->{fd}) {
     return io_new_fd($input->{fd});
   }
   elsif ($input->{fh}) {
@@ -1781,8 +1793,15 @@ sub write_multi {
       }
     }
     else {
-      $ERRSTR = "Sorry, write_multi doesn't support $type yet";
-      return 0;
+      if (@images == 1) {
+	unless ($images[0]->write(%$opts, io => $IO, type => $type)) {
+	  return 1;
+	}
+      }
+      else {
+	$ERRSTR = "Sorry, write_multi doesn't support $type yet";
+	return 0;
+      }
     }
   }
 
@@ -1848,6 +1867,12 @@ sub read_multi {
     else {
       $ERRSTR = _error_as_msg();
       return;
+    }
+  }
+  else {
+    my $img = Imager->new;
+    if ($img->read(%opts, io => $IO, type => $type)) {
+      return ( $img );
     }
   }
 
@@ -1954,11 +1979,10 @@ sub register_filter {
 
 sub scale {
   my $self=shift;
-  my %opts=(scalefactor=>0.5,'type'=>'max',qtype=>'normal',@_);
+  my %opts=('type'=>'max',qtype=>'normal',@_);
   my $img = Imager->new();
   my $tmp = Imager->new();
-
-  my $scalefactor = $opts{scalefactor};
+  my ($x_scale, $y_scale);
 
   unless (defined wantarray) {
     my @caller = caller;
@@ -1971,45 +1995,67 @@ sub scale {
     return undef;
   }
 
+  if ($opts{'xscalefactor'} && $opts{'yscalefactor'}) {
+    $x_scale = $opts{'xscalefactor'};
+    $y_scale = $opts{'yscalefactor'};
+  }
+  elsif ($opts{'xscalefactor'}) {
+    $x_scale = $opts{'xscalefactor'};
+    $y_scale = $opts{'scalefactor'} || $x_scale;
+  }
+  elsif ($opts{'yscalefactor'}) {
+    $y_scale = $opts{'yscalefactor'};
+    $x_scale = $opts{'scalefactor'} || $y_scale;
+  }
+  else {
+    $x_scale = $y_scale = $opts{'scalefactor'} || 0.5;
+  }
+
   # work out the scaling
   if ($opts{xpixels} and $opts{ypixels} and $opts{'type'}) {
     my ($xpix, $ypix)=( $opts{xpixels} / $self->getwidth() , 
 			$opts{ypixels} / $self->getheight() );
     if ($opts{'type'} eq 'min') { 
-      $scalefactor = _min($xpix,$ypix); 
+      $x_scale = $y_scale = _min($xpix,$ypix); 
     }
     elsif ($opts{'type'} eq 'max') {
-      $scalefactor = _max($xpix,$ypix);
+      $x_scale = $y_scale = _max($xpix,$ypix);
+    }
+    elsif ($opts{'type'} eq 'nonprop' || $opts{'type'} eq 'non-proportional') {
+      $x_scale = $xpix;
+      $y_scale = $ypix;
     }
     else {
       $self->_set_error('invalid value for type parameter');
       return undef;
     }
   } elsif ($opts{xpixels}) { 
-    $scalefactor = $opts{xpixels} / $self->getwidth();
+    $x_scale = $y_scale = $opts{xpixels} / $self->getwidth();
   }
   elsif ($opts{ypixels}) { 
-    $scalefactor = $opts{ypixels}/$self->getheight();
+    $x_scale = $y_scale = $opts{ypixels}/$self->getheight();
   }
   elsif ($opts{constrain} && ref $opts{constrain}
 	 && $opts{constrain}->can('constrain')) {
     # we've been passed an Image::Math::Constrain object or something
     # that looks like one
+    my $scalefactor;
     (undef, undef, $scalefactor)
       = $opts{constrain}->constrain($self->getwidth, $self->getheight);
     unless ($scalefactor) {
       $self->_set_error('constrain method failed on constrain parameter');
       return undef;
     }
+    $x_scale = $y_scale = $scalefactor;
   }
 
   if ($opts{qtype} eq 'normal') {
-    $tmp->{IMG} = i_scaleaxis($self->{IMG}, $scalefactor, 0);
+    $tmp->{IMG} = i_scaleaxis($self->{IMG}, $x_scale, 0);
     if ( !defined($tmp->{IMG}) ) { 
       $self->{ERRSTR} = 'unable to scale image';
       return undef;
     }
-    $img->{IMG}=i_scaleaxis($tmp->{IMG}, $scalefactor, 1);
+    $img->{IMG}=i_scaleaxis($tmp->{IMG}, $y_scale, 1);
     if ( !defined($img->{IMG}) ) { 
       $self->{ERRSTR}='unable to scale image'; 
       return undef;
@@ -2018,10 +2064,22 @@ sub scale {
     return $img;
   }
   elsif ($opts{'qtype'} eq 'preview') {
-    $img->{IMG} = i_scale_nn($self->{IMG}, $scalefactor, $scalefactor); 
+    $img->{IMG} = i_scale_nn($self->{IMG}, $x_scale, $y_scale); 
     if ( !defined($img->{IMG}) ) { 
       $self->{ERRSTR}='unable to scale image'; 
       return undef;
+    }
+    return $img;
+  }
+  elsif ($opts{'qtype'} eq 'mixing') {
+    my $new_width = int(0.5 + $self->getwidth * $x_scale);
+    my $new_height = int(0.5 + $self->getheight * $y_scale);
+    $new_width >= 1 or $new_width = 1;
+    $new_height >= 1 or $new_height = 1;
+    $img->{IMG} = i_scale_mixing($self->{IMG}, $new_width, $new_height);
+    unless ($img->{IMG}) {
+      $self->_set_error(Imager->_error_as_meg);
+      return;
     }
     return $img;
   }
@@ -2837,6 +2895,8 @@ sub getscanline {
   my $self = shift;
   my %opts = ( type => '8bit', x=>0, @_);
 
+  $self->_valid_image or return;
+
   defined $opts{width} or $opts{width} = $self->getwidth - $opts{x};
 
   unless (defined $opts{'y'}) {
@@ -2846,11 +2906,19 @@ sub getscanline {
 
   if ($opts{type} eq '8bit') {
     return i_glin($self->{IMG}, $opts{x}, $opts{x}+$opts{width},
-		  $opts{y});
+		  $opts{'y'});
   }
   elsif ($opts{type} eq 'float') {
     return i_glinf($self->{IMG}, $opts{x}, $opts{x}+$opts{width},
-		  $opts{y});
+		  $opts{'y'});
+  }
+  elsif ($opts{type} eq 'index') {
+    unless (i_img_type($self->{IMG})) {
+      $self->_set_error("type => index only valid on paletted images");
+      return;
+    }
+    return i_gpal($self->{IMG}, $opts{x}, $opts{x} + $opts{width},
+                  $opts{'y'});
   }
   else {
     $self->_set_error("invalid type parameter - must be '8bit' or 'float'");
@@ -2861,6 +2929,8 @@ sub getscanline {
 sub setscanline {
   my $self = shift;
   my %opts = ( x=>0, @_);
+
+  $self->_valid_image or return;
 
   unless (defined $opts{'y'}) {
     $self->_set_error("missing y parameter");
@@ -2901,6 +2971,14 @@ sub setscanline {
     }
     else {
       return i_plinf($self->{IMG}, $opts{x}, $opts{'y'}, $opts{pixels});
+    }
+  }
+  elsif ($opts{type} eq 'index') {
+    if (ref $opts{pixels}) {
+      return i_ppal($self->{IMG}, $opts{x}, $opts{'y'}, @{$opts{pixels}});
+    }
+    else {
+      return i_ppal_p($self->{IMG}, $opts{x}, $opts{'y'}, $opts{pixels});
     }
   }
   else {
