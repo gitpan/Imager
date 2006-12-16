@@ -1,16 +1,16 @@
 #!perl -w
 use strict;
-use lib 't';
-use Test::More tests => 72;
+use Test::More tests => 85;
 
 BEGIN { use_ok(Imager => ':all') }
 require "t/testtools.pl";
+use Imager::Test qw(diff_text_with_nul);
 
 init_log("testout/t35ttfont.log",2);
 
 SKIP:
 {
-  skip("freetype 1.x unavailable or disabled", 71) 
+  skip("freetype 1.x unavailable or disabled", 84) 
     unless i_has_format("tt");
   print "# has tt\n";
   
@@ -19,7 +19,7 @@ SKIP:
 
   if (!ok(-f $fontname, "check test font file exists")) {
     print "# cannot find fontfile for truetype test $fontname\n";
-    skip('Cannot load test font', 70);
+    skip('Cannot load test font', 83);
   }
 
   i_init_fonts();
@@ -135,15 +135,15 @@ SKIP:
     
     my $face_name = Imager::i_tt_face_name($hcfont->{id});
     print "# face $face_name\n";
-    ok($face_name eq 'ExistenceTest', "face name");
+    is($face_name, 'ExistenceTest', "face name (function)");
     $face_name = $hcfont->face_name;
-    ok($face_name eq 'ExistenceTest', "face name");
+    is($face_name, 'ExistenceTest', "face name (OO)");
     
     # FT 1.x cheats and gives names even if the font doesn't have them
     my @glyph_names = $hcfont->glyph_names(string=>"!J/");
-    ok($glyph_names[0] eq 'exclam', "check exclam name OO");
+    is($glyph_names[0], 'exclam', "check exclam name OO");
     ok(!defined($glyph_names[1]), "check for no J name OO");
-    ok($glyph_names[2] eq 'slash', "check slash name OO");
+    is($glyph_names[2], 'slash', "check slash name OO");
     
     print "# ** name table of the test font **\n";
     Imager::i_tt_dump_names($hcfont->{id});
@@ -256,6 +256,24 @@ SKIP:
     my $font = Imager::Font->new(file=>'fontfiles/ImUgly.ttf', size=>14);
     ok($im->string(font=>$font, x=> 5, y => 50, string=>' '),
       "outputting just a space was crashing");
+  }
+
+  { # string output cut off at NUL ('\0')
+    # https://rt.cpan.org/Ticket/Display.html?id=21770 cont'd
+    my $font = Imager::Font->new(file=>'fontfiles/ImUgly.ttf', type=>'tt');
+    ok($font, "loaded imugly");
+
+    diff_text_with_nul("a\\0b vs a", "a\0b", "a", 
+		       font => $font, color => '#FFFFFF');
+    diff_text_with_nul("a\\0b vs a", "a\0b", "a", 
+		       font => $font, channel => 1);
+
+    # UTF8 encoded \x{2010}
+    my $dash = pack("C*", 0xE2, 0x80, 0x90);
+    diff_text_with_nul("utf8 dash\0dash vs dash", "$dash\0$dash", $dash,
+		       font => $font, color => '#FFFFFF', utf8 => 1);
+    diff_text_with_nul("utf8 dash\0dash vs dash", "$dash\0$dash", $dash,
+		       font => $font, channel => 1, utf8 => 1);
   }
 
   ok(1, "end of code");

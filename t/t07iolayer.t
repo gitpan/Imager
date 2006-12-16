@@ -1,6 +1,5 @@
 #!perl -w
 use strict;
-use lib 't';
 use Test::More tests => 68;
 # for SEEK_SET etc, Fcntl doesn't provide these in 5.005_03
 use IO::Seekable;
@@ -109,7 +108,7 @@ $work = '';
 ok(Imager::i_writeppm_wiol($im, $IO8), "write to cb");
 # I originally compared this to $data, but that doesn't include the
 # Imager header
-ok($work eq $data2, "write image match");
+is($work, $data2, "write image match");
 ok($did_close, "did close");
 
 # with a short buffer, no closer
@@ -118,7 +117,7 @@ ok($IO9, "making short writecb object");
 $pos = 0;
 $work = '';
 ok(Imager::i_writeppm_wiol($im, $IO9), "write to short cb");
-ok($work eq $data2, "short write image match");
+is($work, $data2, "short write image match");
 
 {
   my $buf_data = "Test data";

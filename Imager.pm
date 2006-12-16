@@ -155,7 +155,7 @@ my %attempted_to_load;
 BEGIN {
   require Exporter;
   @ISA = qw(Exporter);
-  $VERSION = '0.54';
+  $VERSION = '0.55';
   eval {
     require XSLoader;
     XSLoader::load(Imager => $VERSION);
@@ -3254,7 +3254,7 @@ sub string {
   unless ($self->{IMG}) { $self->{ERRSTR}='empty input image'; return undef; }
 
   my %input=('x'=>0, 'y'=>0, @_);
-  $input{string}||=$input{text};
+  defined($input{string}) or $input{string} = $input{text};
 
   unless(defined $input{string}) {
     $self->{ERRSTR}="missing required parameter 'string'";

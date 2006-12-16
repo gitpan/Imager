@@ -1,7 +1,6 @@
 #!perl -w
 use strict;
-use lib 't';
-use Test::More tests => 160;
+use Test::More tests => 178;
 ++$|;
 # Before `make install' is performed this script should be runnable with
 # `make test'. After `make install' it should work as `perl test.pl'
@@ -13,19 +12,21 @@ use Test::More tests => 160;
 
 BEGIN { use_ok(Imager => ':all') }
 
+use Imager::Test qw(diff_text_with_nul);
+
 init_log("testout/t38ft2font.log",2);
 
 my @base_color = (64, 255, 64);
 
 SKIP:
 {
-  i_has_format("ft2") or skip("no freetype2 library found", 159);
+  i_has_format("ft2") or skip("no freetype2 library found", 177);
 
   print "# has ft2\n";
   
   my $fontname=$ENV{'TTFONTTEST'}||'./fontfiles/dodge.ttf';
 
-  -f $fontname or skip("cannot find fontfile $fontname", 159);
+  -f $fontname or skip("cannot find fontfile $fontname", 177);
 
 
   my $bgcolor=i_color_new(255,0,0,0);
@@ -182,7 +183,7 @@ SKIP:
   ok(@got == 2, "has_chars returned 2 items");
   ok(!$got[0], "have no chr(1)");
   ok($got[1], "have 'H'");
-  ok($oof->has_chars(string=>"H\x01") eq "\x01\x00",
+  is($oof->has_chars(string=>"H\x01"), "\x01\x00",
      "scalar has_chars()");
 
   print "# OO bounding boxes\n";
@@ -254,9 +255,9 @@ SKIP:
     if (Imager::Font::FreeType2::i_ft2_can_face_name()) {
       my $facename = Imager::Font::FreeType2::i_ft2_face_name($exfont->{id});
       print "# face name '$facename'\n";
-      ok($facename eq 'ExistenceTest', "test face name");
+      is($facename, 'ExistenceTest', "test face name");
       $facename = $exfont->face_name;
-      ok($facename eq 'ExistenceTest', "test face name OO");
+      is($facename, 'ExistenceTest', "test face name OO");
     }
     else {
       # make sure we get the error we expect
@@ -411,6 +412,42 @@ SKIP:
     ok($im->string(x => 10, y => 50, string => "test space", aa => 0,
 		   channel => 0, size => 8, font => $font),
        "draw space non-antialiased (channel)");
+  }
+
+  { # cannot output "0"
+    # https://rt.cpan.org/Ticket/Display.html?id=21770
+    my $font = Imager::Font->new(file=>'fontfiles/ImUgly.ttf', type=>'ft2');
+    ok($font, "loaded imugly");
+    my $imbase = Imager->new(xsize => 100, ysize => 100);
+    my $im = $imbase->copy;
+    ok($im->string(x => 10, y => 50, string => "0", aa => 0,
+		   color => '#FFF', size => 20, font => $font),
+       "draw '0'");
+    ok(Imager::i_img_diff($im->{IMG}, $imbase->{IMG}),
+       "make sure we actually drew it");
+    $im = $imbase->copy;
+    ok($im->string(x => 10, y => 50, string => 0.0, aa => 0,
+		   color => '#FFF', size => 20, font => $font),
+       "draw 0.0");
+    ok(Imager::i_img_diff($im->{IMG}, $imbase->{IMG}),
+       "make sure we actually drew it");
+  }
+  { # string output cut off at NUL ('\0')
+    # https://rt.cpan.org/Ticket/Display.html?id=21770 cont'd
+    my $font = Imager::Font->new(file=>'fontfiles/ImUgly.ttf', type=>'ft2');
+    ok($font, "loaded imugly");
+
+    diff_text_with_nul("a\\0b vs a", "a\0b", "a", 
+		       font => $font, color => '#FFFFFF');
+    diff_text_with_nul("a\\0b vs a", "a\0b", "a", 
+		       font => $font, channel => 1);
+
+    # UTF8 encoded \x{2010}
+    my $dash = pack("C*", 0xE2, 0x80, 0x90);
+    diff_text_with_nul("utf8 dash\0dash vs dash", "$dash\0$dash", $dash,
+		       font => $font, color => '#FFFFFF', utf8 => 1);
+    diff_text_with_nul("utf8 dash\0dash vs dash", "$dash\0$dash", $dash,
+		       font => $font, channel => 1, utf8 => 1);
   }
 }
 

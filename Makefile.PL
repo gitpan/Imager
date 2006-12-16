@@ -171,6 +171,7 @@ my %opts=(
           'OBJECT'       => join(' ', @objs, $F_OBJECT),
           clean          => { FILES=>'testout meta.tmp rubthru.c scale.c' },
           PM             => gen_PM(),
+	  PREREQ_PM      => { 'Test::More' => 0.47 },
          );
 
 # eval to prevent warnings about versions with _ in them
@@ -398,6 +399,9 @@ sub init {
   if ($^O =~ /win32/i && $Config{cc} =~ /\bcl\b/i) {
     push(@incs, split /;/, $ENV{INCLUDE}) if exists $ENV{INCLUDE};
   }
+  if ($Config{incpath}) {
+    push @incs, grep -d, split /\Q$Config{path_sep}/, $Config{incpath};
+  }
   push @incs, grep -d,
       qw(/sw/include 
          /usr/include/freetype2
@@ -467,7 +471,7 @@ sub init {
 		   def=>'HAVE_LIBPNG',
 		   inccheck=>sub { -e catfile($_[0], 'png.h') },
 		   libcheck=>sub { $_[0] eq "libpng$aext" or $_[0] eq "libpng.$lext" },
-		   libfiles=>'-lpng -lz',
+		   libfiles=>$^O eq 'MSWin32' ? '-lpng -lzlib' : '-lpng -lz',
 		   objfiles=>'png.o',
 		   docs=>q{
 			   Png stands for Portable Network Graphics and is intended as
@@ -852,10 +856,19 @@ YAML
       $meta .= "  $module: $version\n";
     }
   }
+  if ($opts->{PREREQ_PM}) {
+    $meta .= "requires:\n";
+    while (my ($module, $version) = each %{$opts->{PREREQ_PM}}) {
+      $meta .= "  $module: $version\n";
+    }
+  }
   $meta .= <<YAML;
 license: perl
 dynamic_config: 1
 distribution_type: module
+meta-spec:
+  version: 1.3
+  url: http://module-build.sourceforge.net/META-spec-v1.3.html
 generated_by: $opts->{NAME} version $version
 YAML
   my $save_meta;
