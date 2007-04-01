@@ -155,7 +155,7 @@ my %attempted_to_load;
 BEGIN {
   require Exporter;
   @ISA = qw(Exporter);
-  $VERSION = '0.55';
+  $VERSION = '0.56';
   eval {
     require XSLoader;
     XSLoader::load(Imager => $VERSION);
@@ -1269,11 +1269,13 @@ sub read {
     return $self;
   }
 
+  my $allow_incomplete = $input{allow_incomplete};
+  defined $allow_incomplete or $allow_incomplete = 0;
+
   if ( $input{'type'} eq 'tiff' ) {
     my $page = $input{'page'};
     defined $page or $page = 0;
-    # Fixme, check if that length parameter is ever needed
-    $self->{IMG}=i_readtiff_wiol( $IO, -1, $page ); 
+    $self->{IMG}=i_readtiff_wiol( $IO, $allow_incomplete, $page ); 
     if ( !defined($self->{IMG}) ) {
       $self->{ERRSTR}=$self->_error_as_msg(); return undef;
     }
@@ -1282,7 +1284,7 @@ sub read {
   }
 
   if ( $input{'type'} eq 'pnm' ) {
-    $self->{IMG}=i_readpnm_wiol( $IO, -1 ); # Fixme, check if that length parameter is ever needed
+    $self->{IMG}=i_readpnm_wiol( $IO, $allow_incomplete );
     if ( !defined($self->{IMG}) ) {
       $self->{ERRSTR}='unable to read pnm image: '._error_as_msg(); 
       return undef;
@@ -1301,7 +1303,7 @@ sub read {
   }
 
   if ( $input{'type'} eq 'bmp' ) {
-    $self->{IMG}=i_readbmp_wiol( $IO );
+    $self->{IMG}=i_readbmp_wiol( $IO, $allow_incomplete );
     if ( !defined($self->{IMG}) ) {
       $self->{ERRSTR}=$self->_error_as_msg();
       return undef;
@@ -1675,7 +1677,7 @@ sub write {
       $self->_set_opts(\%input, "bmp_", $self)
         or return undef;
       if ( !i_writebmp_wiol($self->{IMG}, $IO) ) {
-        $self->{ERRSTR}='unable to write bmp image';
+	$self->{ERRSTR} = $self->_error_as_msg;
         return undef;
       }
       $self->{DEBUG} && print "writing a bmp file\n";

@@ -1,1604 +1,229 @@
-------------------------------------------------------------------------
-r1127 | tony | 2006-12-16 10:05:31 +1100 (Sat, 16 Dec 2006) | 1 line
-Changed paths:
-   M /trunk/Imager/Makefile.PL
+Imager release history.  Older releases can be found in Changes.old
 
-search $Config{incpath} for headers too, why this was left out I don't know
-------------------------------------------------------------------------
-r1126 | tony | 2006-12-16 09:32:20 +1100 (Sat, 16 Dec 2006) | 1 line
-Changed paths:
-   M /trunk/Imager/t/t01introvert.t
+Imager 0.56 - 
+===========
 
-work around a bug in some intermediate versions of Test::More, fixed in current releases
-------------------------------------------------------------------------
-r1123 | tony | 2006-12-15 14:30:09 +1100 (Fri, 15 Dec 2006) | 2 lines
-Changed paths:
-   M /trunk/Imager/META.yml
-   M /trunk/Imager/Makefile.PL
+ - added support for reading 16-bit/sample PGM/PPM images
 
-include meta-spec in META.yml as required by the spec
+ - added support for writing 16-bit/sample PGM/PPM images
 
-------------------------------------------------------------------------
-r1122 | tony | 2006-12-15 14:27:29 +1100 (Fri, 15 Dec 2006) | 3 lines
-Changed paths:
-   M /trunk/Imager/CountColor/t/t00countcolor.t
-   M /trunk/Imager/DynTest/t/t00dyntest.t
-   M /trunk/Imager/Flines/t/t00flines.t
-   M /trunk/Imager/ICO/t/t10icon.t
-   M /trunk/Imager/ICO/t/t20readone.t
-   M /trunk/Imager/ICO/t/t21readmult.t
-   M /trunk/Imager/ICO/t/t30cursor.t
-   M /trunk/Imager/ICO/t/t40readcurone.t
-   M /trunk/Imager/ICO/t/t41curmultread.t
-   M /trunk/Imager/ICO/t/t50readfail.t
-   M /trunk/Imager/ICO/t/t60writefail.t
-   M /trunk/Imager/ICO/t/t70icosing.t
-   M /trunk/Imager/ICO/t/t71icomult.t
-   M /trunk/Imager/ICO/t/t72cursing.t
-   M /trunk/Imager/ICO/t/t73curmult.t
-   M /trunk/Imager/MANIFEST
-   M /trunk/Imager/Makefile.PL
-   D /trunk/Imager/t/Test
-   M /trunk/Imager/t/t01introvert.t
-   M /trunk/Imager/t/t021sixteen.t
-   M /trunk/Imager/t/t022double.t
-   M /trunk/Imager/t/t023palette.t
-   M /trunk/Imager/t/t07iolayer.t
-   M /trunk/Imager/t/t1000files.t
-   M /trunk/Imager/t/t101jpeg.t
-   M /trunk/Imager/t/t102png.t
-   M /trunk/Imager/t/t103raw.t
-   M /trunk/Imager/t/t104ppm.t
-   M /trunk/Imager/t/t105gif.t
-   M /trunk/Imager/t/t106tiff.t
-   M /trunk/Imager/t/t107bmp.t
-   M /trunk/Imager/t/t108tga.t
-   M /trunk/Imager/t/t15color.t
-   M /trunk/Imager/t/t16matrix.t
-   M /trunk/Imager/t/t20fill.t
-   M /trunk/Imager/t/t21draw.t
-   M /trunk/Imager/t/t30t1font.t
-   M /trunk/Imager/t/t35ttfont.t
-   M /trunk/Imager/t/t36oofont.t
-   M /trunk/Imager/t/t37w32font.t
-   M /trunk/Imager/t/t38ft2font.t
-   M /trunk/Imager/t/t40scale.t
-   M /trunk/Imager/t/t61filters.t
-   M /trunk/Imager/t/t64copyflip.t
-   M /trunk/Imager/t/t65crop.t
-   M /trunk/Imager/t/t66paste.t
-   M /trunk/Imager/t/t67convert.t
-   M /trunk/Imager/t/t69rubthru.t
-   M /trunk/Imager/t/t81hlines.t
-   M /trunk/Imager/t/t82inline.t
-   M /trunk/Imager/t/t91pod.t
-   M /trunk/Imager/t/t92samples.t
-   M /trunk/Imager/t/t94kwalitee.t
-   M /trunk/Imager/t/tr18561.t
-   M /trunk/Imager/t/tr18561b.t
+ - improved performance of reading PBM/PGM/PPM images
 
-Test::More is now a pre-requisite for Imager, so remove it from the
-distribution.
+ - added support for writing PBM images if the image is paletted and
+   contains only black and white
 
-------------------------------------------------------------------------
-r1121 | tony | 2006-12-15 00:52:53 +1100 (Fri, 15 Dec 2006) | 3 lines
-Changed paths:
-   M /trunk/Imager/Makefile.PL
+ - added a new make_colors value - "mono"
 
-link zlib in using the default installed library name on Win32 instead of as libz.
+ - switched from the svn log Changes to a manual Changes to reduce
+   noise
 
-fixes RT #23064
-------------------------------------------------------------------------
-r1120 | tony | 2006-12-15 00:46:32 +1100 (Fri, 15 Dec 2006) | 3 lines
-Changed paths:
-   M /trunk/Imager/gif.c
+ - new sample code - samples/flasher.pl
 
-fix check for MSVC
+Bug fixes:
 
-fixed RT 23922
-------------------------------------------------------------------------
-r1118 | tony | 2006-11-26 22:25:29 +1100 (Sun, 26 Nov 2006) | 3 lines
-Changed paths:
-   M /trunk/Imager/t/t022double.t
-   M /trunk/Imager/t/t023palette.t
-   M /trunk/Imager/t/t07iolayer.t
-   M /trunk/Imager/t/t106tiff.t
-   M /trunk/Imager/t/t30t1font.t
-   M /trunk/Imager/t/t35ttfont.t
-   M /trunk/Imager/t/t36oofont.t
-   M /trunk/Imager/t/t38ft2font.t
+ - CRITICAL: the "Imager" typemap entry (not used by Imager itself)
+   was returning an image object with an extra reference, this
+   resulted in a memory leak.
+   http://rt.cpan.org/Ticket/Display.html?id=24992
 
-convert ok(... eq ..., ... ) to is(..., ..., ...)
-RT 23184
+ - fix rendering on alpha channel images for the FreeType 2.x driver
+   http://rt.cpan.org/Ticket/Display.html?id=11972
 
-------------------------------------------------------------------------
-r1117 | tony | 2006-11-26 21:49:52 +1100 (Sun, 26 Nov 2006) | 2 lines
-Changed paths:
-   M /trunk/Imager/color.c
-   M /trunk/Imager/freetyp2.c
-   M /trunk/Imager/imexif.c
-   M /trunk/Imager/rgb.c
-   M /trunk/Imager/rotate.c
-   M /trunk/Imager/scale.im
+ - reading bmp files now consitently handles short reads.  You can now
+   supply a parameter to treat a short read as successful and set
+   i_incomplete
+   http://rt.cpan.org/Ticket/Display.html?id=8426
 
-avoid most compilter warnings produced by GCC 4.1
+ - previously, reading ASCII PBM files required spaces between samples,
+   even though the format doesn't require that
 
-------------------------------------------------------------------------
-r1116 | tony | 2006-11-19 22:25:55 +1100 (Sun, 19 Nov 2006) | 2 lines
-Changed paths:
-   M /trunk/Imager/Imager.xs
-   M /trunk/Imager/font.c
-   M /trunk/Imager/map.c
-   M /trunk/Imager/polygon.c
-   M /trunk/Imager/quant.c
-   M /trunk/Imager/rotate.c
-   M /trunk/Imager/tga.c
+ - improved documentation of the unsharpmask filter (I hope)
+   http://rt.cpan.org/Ticket/Display.html?id=25531
 
-avoid various compiler warnings
+ - force flushing of the output from i_tt_dump_names() and test output
+   in t/t35ttfont.t to prevent output from being mixed up.
+   https://rt.cpan.org/Ticket/Display.html?id=24859
 
-------------------------------------------------------------------------
-r1115 | tony | 2006-11-09 23:48:13 +1100 (Thu, 09 Nov 2006) | 3 lines
-Changed paths:
-   M /trunk/Imager/t/t36oofont.t
-   M /trunk/Imager/t/t58trans2.t
-   M /trunk/Imager/t/t80texttools.t
-   M /trunk/Imager/t/testtools.pl
+ - rewrite a conditional expression as an if() to hopefully work around
+   a bug in the pre-4.0 GCC Apple shipped with OS X 10.4.
+   https://rt.cpan.org/Ticket/Display.html?id=25561
 
-switch to Test::More in a few more test scripts, eliminate the
-testtools okx/okn variants
+ - avoid Data::Dumper in regops.perl to support older releases of perl
+   https://rt.cpan.org/Ticket/Display.html?id=24391
 
-------------------------------------------------------------------------
-r1114 | tony | 2006-11-09 23:24:23 +1100 (Thu, 09 Nov 2006) | 2 lines
-Changed paths:
-   M /trunk/Imager/lib/Imager/Files.pod
+ Imager 0.55 - 16 Dec 2006
+===========
 
-fix a pod error introduced in the previous commit
+This is primarily a bug fix release.
 
-------------------------------------------------------------------------
-r1113 | tony | 2006-11-09 21:57:08 +1100 (Thu, 09 Nov 2006) | 2 lines
-Changed paths:
-   M /trunk/Imager/lib/Imager/Files.pod
-   M /trunk/Imager/lib/Imager/Filters.pod
+Note: Test::More is now a pre-requisite for Imager and is no longer bundled.
 
-minor documentation tweaks
+There is one new feature:
 
-------------------------------------------------------------------------
-r1112 | tony | 2006-11-06 21:56:10 +1100 (Mon, 06 Nov 2006) | 2 lines
-Changed paths:
-   M /trunk/Imager/Imager.xs
-   M /trunk/Imager/t/t37w32font.t
+ - the Win32 font driver now supports UTF8 (RT 22166)
+   http://www.cpanforum.com/threads/3276
+   http://rt.cpan.org/Ticket/Display.html?id=22166
 
-added tests for the overflowing box changes, fix draw 
-string to channel string length for win32 driver
-------------------------------------------------------------------------
-r1111 | tony | 2006-11-06 21:22:50 +1100 (Mon, 06 Nov 2006) | 1 line
-Changed paths:
-   M /trunk/Imager/t/t00basic.t
+Several bugs were fixed:
 
-convert t/t00basic to Test::More and have it try to load all of the core modules
-------------------------------------------------------------------------
-r1110 | tony | 2006-10-29 19:37:43 +1100 (Sun, 29 Oct 2006) | 5 lines
-Changed paths:
-   M /trunk/Imager/win32.c
+ - the string() method would not output the string "0"
+   http://rt.cpan.org/Public/Bug/Display.html?id=21770
 
-fixed a variety of problems:
- - global descent from bounding box has been the wrong sign forever
- - the left and right side bearing calculations were ignoring the utf 8 flag
- - glyphs that overflowed the left or right side of the advance width were being clipped
- - the ascent/descent calculations were completely broken by the last (unreleased) commit, fixed that
-------------------------------------------------------------------------
-r1109 | tony | 2006-10-26 00:16:33 +1000 (Thu, 26 Oct 2006) | 1 line
-Changed paths:
-   M /trunk/Imager/t/t30t1font.t
-   M /trunk/Imager/t/t37w32font.t
+ - fills.c was failing to compile on Solaris 10 (compiler unknown)
+   http://rt.cpan.org/Public/Bug/Display.html?id=21944
 
-fix test skip counts for missing/available platforms.
-------------------------------------------------------------------------
-r1108 | tony | 2006-10-26 00:04:44 +1000 (Thu, 26 Oct 2006) | 5 lines
-Changed paths:
-   M /trunk/Imager
-   M /trunk/Imager/Imager.xs
-   M /trunk/Imager/MANIFEST
-   M /trunk/Imager/META.yml
-   M /trunk/Imager/Makefile.PL
-   A /trunk/Imager/lib/Imager/Test.pm
-   M /trunk/Imager/t/t30t1font.t
-   M /trunk/Imager/t/t35ttfont.t
-   M /trunk/Imager/t/t38ft2font.t
+ - the gif_disposal and gif_user_input tags weren't being read from
+   the file correctly
+   http://rt.cpan.org/Public/Bug/Display.html?id=22192
 
-use SvPV to get the length of text to draw rather than strlen(), add
-tests for the functionality.
+ - gif.c was failing to build under MSVC
+   http://rt.cpan.org/Ticket/Display.html?id=23922
 
-https://rt.cpan.org/Ticket/Display.html?id=21770
+ - in some cases strings passed to the string() method were treated as
+   terminated by NUL (chr 0)
+   http://rt.cpan.org/Public/Bug/Display.html?id=21770
 
-------------------------------------------------------------------------
-r1107 | tony | 2006-10-25 23:24:25 +1000 (Wed, 25 Oct 2006) | 3 lines
-Changed paths:
-   M /trunk/Imager/io.c
+ - on "MSWin32" perl builds we now link to -lzlib instead of -lz since
+   that's the default build name for zlib on Win32.
+   http://rt.cpan.org/Ticket/Display.html?id=23064
 
-break out of the search loop early when we find the right utf8 code
-length
+ - search $Config{incpath} for headers too, which we should have been
+   doing all along.
 
-------------------------------------------------------------------------
-r1106 | tony | 2006-10-25 10:58:10 +1000 (Wed, 25 Oct 2006) | 3 lines
-Changed paths:
-   M /trunk/Imager/lib/Imager/Files.pod
+Win32 font driver fixes:
 
-the decription of the page parameter didn't belong in the description
-of the tags.
+ - the global descent value from bounding box was the wrong sign
+   http://www.cpanforum.com/threads/3276
 
-------------------------------------------------------------------------
-r1105 | tony | 2006-10-19 22:28:40 +1000 (Thu, 19 Oct 2006) | 3 lines
-Changed paths:
-   M /trunk/Imager/Imager.xs
-   M /trunk/Imager/imager.h
-   M /trunk/Imager/lib/Imager/Font/Win32.pm
-   M /trunk/Imager/t/t37w32font.t
-   M /trunk/Imager/win32.c
+ - if the first or last glyph overflowed the left or right side of the
+   advance width they would be clipped
 
-Add UTF8 support to the Win32 font driver
 
-http://rt.cpan.org/Ticket/Display.html?id=22166
-------------------------------------------------------------------------
-r1104 | tony | 2006-10-19 20:26:12 +1000 (Thu, 19 Oct 2006) | 5 lines
-Changed paths:
-   M /trunk/Imager/gif.c
-   M /trunk/Imager/t/t105gif.t
-
-The gif_disposal and gif_user_input tags weren't being set to the
-correct values when a GIF with a GCE block was read.
-
-http://rt.cpan.org/Ticket/Display.html?id=22192
-
-------------------------------------------------------------------------
-r1103 | tony | 2006-10-08 22:21:09 +1000 (Sun, 08 Oct 2006) | 3 lines
-Changed paths:
-   M /trunk/Imager/Imager.pm
-   M /trunk/Imager/t/t38ft2font.t
-
-the string() method would not output the string "0"
-See: https://rt.cpan.org/Ticket/Display.html?id=21770
-
-------------------------------------------------------------------------
-r1102 | tony | 2006-10-08 21:49:40 +1000 (Sun, 08 Oct 2006) | 3 lines
-Changed paths:
-   M /trunk/Imager/fills.c
-
-work around compilation problem reported in
-https://rt.cpan.org/Ticket/Display.html?id=21944
-
-------------------------------------------------------------------------
-r1098 | tony | 2006-09-14 17:43:24 +1000 (Thu, 14 Sep 2006) | 29 lines
-Changed paths:
-   M /trunk/Imager/Imager.pm
-   M /trunk/Imager/META.yml
-   A /trunk/Imager/announce/0.54.txt
+Imager 0.54 - 14 Sep 2006
+===========
 
 This is primarily a feature release:
 
-- a new qtype value 'mixing' has been added to the scale() method.
-  This is faster than 'normal', slower than 'preview'.  This is based on
-  the method used by pnmscale, and seems to produce less blurry results
-  than normal.
+ - a new qtype value 'mixing' has been added to the scale()
+   method. This is faster than 'normal', slower than 'preview'. This
+   is based on the method used by pnmscale, and seems to produce less
+   blurry results than normal.
+   http://rt.cpan.org/Public/Bug/Display.html?id=20677
 
-- the rubthrough() method can now render onto images with an alpha
-  channel.
+ - the rubthrough() method can now render onto images with an alpha
+   channel.
+   http://rt.cpan.org/Ticket/Display.html?id=20678
 
-- the read_multi() method now falls back to calling doing a single
-  image read via the read() method and write_multi() will now fall
-  back to calling write() if a single image is supplied.  This means
-  you can simply call the read_multi() or write_multi() functions
-  without having to check if the type is formatted by that method.
+ - the read_multi() method now falls back to calling doing a single
+   image read via the read() method and write_multi() will now fall
+   back to calling write() if a single image is supplied. This means
+   you can simply call the read_multi() or write_multi() functions
+   without having to check if the type is formatted by that method.
+   http://rt.cpan.org/Ticket/Display.html?id=19457
+   http://rt.cpan.org/Ticket/Display.html?id=19458
 
-- the GIF loop extension can now be written.  If you don't have
-  libungif/giflib 4.1.4 (or some distribution's bugfixed equivalent)
-  you should upgrade.
+ - the GIF loop extension can now be written. If you don't have
+   libungif/giflib 4.1.4 (or some distribution's bugfixed equivalent) you
+   should upgrade.
+   http://rt.cpan.org/Ticket/Display.html?id=21185
 
-- getscanline() and setscanline() can now read/write palette index
-  based data from/to the image for paletted images, by setting type to
-  'index'.
+ - getscanline() and setscanline() can now read/write palette index
+   based data from/to the image for paletted images, by setting type to
+   'index'.
+   http://rt.cpan.org/Ticket/Display.html?id=20338
 
-- we no longer hassle you to disable GIF support
+ - we no longer hassle you to disable GIF support
+   http://rt.cpan.org/Ticket/Display.html?id=20687
 
-- minor documentation fixes
+ - minor documentation fixes
 
 
-------------------------------------------------------------------------
-r1092 | tony | 2006-09-12 14:19:09 +1000 (Tue, 12 Sep 2006) | 2 lines
-Changed paths:
-   M /trunk/Imager/Makefile.PL
+Imager 0.53 - 26 Jul 2006
+===========
 
-add generated .c files to make clean
+This is a bugfix release.
 
-------------------------------------------------------------------------
-r1091 | tony | 2006-09-06 23:50:43 +1000 (Wed, 06 Sep 2006) | 3 lines
-Changed paths:
-   M /trunk/Imager/doco.perl
-   M /trunk/Imager/errep.perl
-   M /trunk/Imager/filterlist.perl
-   M /trunk/Imager/t/t94kwalitee.t
+Some test code was left in a code path not covered by the test
+suite. A test was added to cover this code path and the test code was
+removed.
+http://rt.cpan.org/Public/Bug/Display.html?id=20705
 
-add .perl files to the t94kwalitee struct tests and fix the non strict
-.perl code
 
-------------------------------------------------------------------------
-r1090 | tony | 2006-09-06 21:35:38 +1000 (Wed, 06 Sep 2006) | 3 lines
-Changed paths:
-   M /trunk/Imager/Imager.pm
-   M /trunk/Imager/t/t102png.t
-
-read_multi() now falls back to calling read() and write_multi() now
-falls back to calling write() for a single image.
-
-------------------------------------------------------------------------
-r1089 | tony | 2006-09-01 17:17:36 +1000 (Fri, 01 Sep 2006) | 1 line
-Changed paths:
-   M /trunk/Imager/t/t105gif.t
-
-skip the right number of tests when gif not available
-------------------------------------------------------------------------
-r1088 | tony | 2006-08-31 23:35:33 +1000 (Thu, 31 Aug 2006) | 2 lines
-Changed paths:
-   M /trunk/Imager/TODO
-
-rubthrough done
-
-------------------------------------------------------------------------
-r1087 | tony | 2006-08-31 23:27:19 +1000 (Thu, 31 Aug 2006) | 2 lines
-Changed paths:
-   M /trunk/Imager/t/t105gif.t
-
-skip the loop tests with older (un)giflibs
-
-------------------------------------------------------------------------
-r1086 | tony | 2006-08-31 23:16:45 +1000 (Thu, 31 Aug 2006) | 18 lines
-Changed paths:
-   M /trunk/Imager/Makefile.PL
-   M /trunk/Imager/gif.c
-   M /trunk/Imager/t/t105gif.t
-
-Changes to GIF support:
-
-- the Nescape loop extension block is written if gif_loop is set.
-This requires libungif/libgif 4.1.3 or later.
-
-Resolves: http://rt.cpan.org/Ticket/Display.html?id=21185
-
-- we now set the GIF header depending on the features enabled in the
-GIF.  Since we don't do configure type probes for bugs we have to
-enable this based on the gif_lib.h version number, it's enabled for
-4.1.0 and later, but requires 4.1.3 and later (maybe 4.1.3) to run
-without crashing.
-
-You can avoid this crash by passing --nogifsetversion to Makefile.PL,
-or by installing a non-buggy libungif/libgif, if there is such a
-thing.
-
-
-------------------------------------------------------------------------
-r1085 | tony | 2006-08-30 17:25:55 +1000 (Wed, 30 Aug 2006) | 2 lines
-Changed paths:
-   M /trunk/Imager/lib/Imager/Transformations.pod
-
-note on relative speeds of the scaling mechanisms
-
-------------------------------------------------------------------------
-r1084 | tony | 2006-08-30 16:47:48 +1000 (Wed, 30 Aug 2006) | 12 lines
-Changed paths:
-   M /trunk/Imager/MANIFEST
-   M /trunk/Imager/bench/scale.perl
-   M /trunk/Imager/imtoc.perl
-   M /trunk/Imager/lib/Imager/Transformations.pod
-   D /trunk/Imager/scale.c
-   A /trunk/Imager/scale.im (from /trunk/Imager/scale.c:1083)
-   M /trunk/Imager/t/t40scale.t
-
-convert scale.c to scale.im so we have 8 bit/sample and double/sample
-implementations of mixing scaling.
-
-modified imtoc.perl to allow non-conditional #code sections to allow
-creation ofr 8 and double/sample versions of support functions.
-
-fixed a bug in an optimization that avoids vertically scaling when the
-vertical size stays the same.
-
-The change from double/sample only to both saved about 20% on
-scalebench time (which also loads/saves the images)
-
-------------------------------------------------------------------------
-r1083 | tony | 2006-08-29 17:20:42 +1000 (Tue, 29 Aug 2006) | 3 lines
-Changed paths:
-   M /trunk/Imager/CountColor/Makefile.PL
-   M /trunk/Imager/DynTest/Makefile.PL
-   M /trunk/Imager/Flines/Makefile.PL
-   M /trunk/Imager/ICO/Makefile.PL
-   M /trunk/Imager/Makefile.PL
-   M /trunk/Imager/Mandelbrot/Makefile.PL
-
-comparisons against $ExtUtils::MakeMaker::VERSION were warning when
-that had an _ in it.  We now eval it to prevent the warning.
-
-------------------------------------------------------------------------
-r1082 | tony | 2006-08-29 10:42:46 +1000 (Tue, 29 Aug 2006) | 10 lines
-Changed paths:
-   M /trunk/Imager
-   M /trunk/Imager/MANIFEST
-   M /trunk/Imager/MANIFEST.SKIP
-   M /trunk/Imager/Makefile.PL
-   M /trunk/Imager/apidocs.perl
-   M /trunk/Imager/image.c
-   A /trunk/Imager/imtoc.perl
-   M /trunk/Imager/lib/Imager/APIRef.pod
-   M /trunk/Imager/lib/Imager/ImageTypes.pod
-   A /trunk/Imager/rubthru.im
-   M /trunk/Imager/t/t69rubthru.t
-
-the rubthrough() method now supports destination images with an alpha
-channel.
-
-Also added a statement on the relationship between the alpha channel
-and color data in Imager.
-
-The new rubthrough() code uses a new pre-processor that reduces source
-code duplication between 8-bit/sample and double/sample processing.
-
-
-------------------------------------------------------------------------
-r1081 | tony | 2006-08-29 10:23:01 +1000 (Tue, 29 Aug 2006) | 2 lines
-Changed paths:
-   M /trunk/Imager/MANIFEST
-
-remove t/t60dyntest.t from the MANIFEST, since we moved it
-
-------------------------------------------------------------------------
-r1080 | tony | 2006-08-19 17:24:35 +1000 (Sat, 19 Aug 2006) | 2 lines
-Changed paths:
-   M /trunk/Imager/Imager.pm
-
-to_rgb8 doesn't crop but the void content warning said it did
-
-------------------------------------------------------------------------
-r1079 | tony | 2006-08-18 17:08:37 +1000 (Fri, 18 Aug 2006) | 3 lines
-Changed paths:
-   M /trunk/Imager/MANIFEST
-   M /trunk/Imager/TODO
-   D /trunk/Imager/dynfilt/t/t00dummy.t
-   A /trunk/Imager/dynfilt/t/t60dyntest.t (from /trunk/Imager/t/t60dyntest.t:1077)
-   D /trunk/Imager/t/t60dyntest.t
-
-move the existing dynfilt test into dynfilt/t, update it to use
-Test::More and remove the dummy test script
-
-------------------------------------------------------------------------
-r1078 | tony | 2006-08-18 14:35:27 +1000 (Fri, 18 Aug 2006) | 10 lines
-Changed paths:
-   M /trunk/Imager/Imager.pm
-   M /trunk/Imager/Imager.xs
-   M /trunk/Imager/MANIFEST
-   M /trunk/Imager/Makefile.PL
-   M /trunk/Imager/TODO
-   M /trunk/Imager/imager.h
-   M /trunk/Imager/lib/Imager/Transformations.pod
-   A /trunk/Imager/scale.c (from /branches/Imager/scale/scale.c:1077)
-   M /trunk/Imager/t/t40scale.t
-
-Merged in the scale branch:
-
-- adds a new scaling mechanism 'mixing' based on the method
-implemented by pnmscale.  Produces better detail when scaling down and
-is faster than the 'normal' method.
-
-- the scale() method can now scale non-proportionally if the caller
-specifically asks for it with xscalefactor/yscalefactor or by setting
-type to 'nonprop'.
-
-------------------------------------------------------------------------
-r1074 | tony | 2006-08-15 18:12:30 +1000 (Tue, 15 Aug 2006) | 5 lines
-Changed paths:
-   M /trunk/Imager/Imager.pm
-   M /trunk/Imager/Imager.xs
-   M /trunk/Imager/TODO
-   M /trunk/Imager/lib/Imager/Draw.pod
-   M /trunk/Imager/t/t023palette.t
-   M /trunk/Imager/t/t67convert.t
-
-added pixel type 'index' to getscanline() and setscanline() for
-getting/setting palette indexes from paletted images.
-
-https://rt.cpan.org/Ticket/Display.html?id=20338
-
-------------------------------------------------------------------------
-r1073 | tony | 2006-08-10 11:53:19 +1000 (Thu, 10 Aug 2006) | 5 lines
-Changed paths:
-   M /trunk/Imager/samples/slant_text.pl
-   M /trunk/Imager/t/t91pod.t
-
-finally found which file contained the POD errors that
-http://cpants.perl.org/kwalitee/Imager was complaining about
-
-modified t/t91pod.t to check every pl/pod/pm/PL file
-
-------------------------------------------------------------------------
-r1071 | tony | 2006-08-08 00:20:21 +1000 (Tue, 08 Aug 2006) | 5 lines
-Changed paths:
-   M /trunk/Imager/lib/Imager/API.pod
-
-you need to load Imager to use the API, Imager::API now tells the user
-that
-
-http://rt.cpan.org/Ticket/Display.html?id=20823
-
-------------------------------------------------------------------------
-r1070 | tony | 2006-08-07 17:02:43 +1000 (Mon, 07 Aug 2006) | 7 lines
-Changed paths:
-   M /trunk/Imager/Makefile.PL
-   M /trunk/Imager/README
-
-Removed the query asking if GIF support should be disabled, since
-recent lib(un)gif are sane.
-
-https://rt.cpan.org/Ticket/Display.html?id=20687
-
-Some README cleanup.
-
-------------------------------------------------------------------------
-r1069 | tony | 2006-07-29 15:21:49 +1000 (Sat, 29 Jul 2006) | 2 lines
-Changed paths:
-   M /trunk/Imager/TODO
-
-basic todo for 0.54
-
-------------------------------------------------------------------------
-r1067 | tony | 2006-07-27 10:38:49 +1000 (Thu, 27 Jul 2006) | 6 lines
-Changed paths:
-   M /trunk/Imager/Imager.pm
-   M /trunk/Imager/META.yml
-
-bump to 0.53
-
-This is to fix a crash bug introduced in 0.52.
-
-http://rt.cpan.org/Ticket/Display.html?id=20705
-
-------------------------------------------------------------------------
-r1066 | tony | 2006-07-27 10:31:44 +1000 (Thu, 27 Jul 2006) | 8 lines
-Changed paths:
-   M /trunk/Imager/Imager.xs
-   M /trunk/Imager/t/t07iolayer.t
-
-there was a C< *(char *)0 = 0 > left in a code path uncovered by the
-test suite.
-
-- added a test to cover that code path
-- removed the debug code
-
-Fixes: http://rt.cpan.org/Ticket/Display.html?id=20705
-
-------------------------------------------------------------------------
-r1064 | tony | 2006-07-25 14:43:38 +1000 (Tue, 25 Jul 2006) | 42 lines
-Changed paths:
-   M /trunk/Imager/Imager.pm
-   M /trunk/Imager/META.yml
-   A /trunk/Imager/announce/0.52.txt
-
-bump to 0.52
+Imager 0.52 - 25 Jul 2006
+===========
 
 This is primarily a feature release, but contains a fair few bug
 fixes, new features:
 
-- ability to read and write MS Windows ICO and CUR files
+ - ability to read and write MS Windows ICO and CUR files
 
-- you can now add file format plugins to support new file formats
+ - you can now add file format plugins to support new file formats
 
-- add POD coverage tests
+ - add POD coverage tests
 
-- setcolors() and addcolors() now accept color names and so on instead
-  of requiring Imager::Color objects.
+ - setcolors() and addcolors() now accept color names and so on
+   instead of requiring Imager::Color objects.
+   http://rt.cpan.org/Ticket/Display.html?id=20056
 
-- flood_fill() can now fill to a specified border color instead of
-  just to the area the same color as the seed.
+ - flood_fill() can now fill to a specified border color instead of
+   just to the area the same color as the seed.
+   http://rt.cpan.org/Ticket/Display.html?id=19618
+
 
 Bug fixes:
 
-- bounding_box for the T1 driver wasn't converting UTF8 to ascii when
-  calculating the advance width.
+ - bounding_box for the T1 driver wasn't converting UTF8 to ascii when
+   calculating the advance width.
+   http://rt.cpan.org/Public/Bug/Display.html?id=20554
 
-- bounding_box for the T1 driver wasn't including leading and trailing
-  spaces in the bounding box as the other drivers did, it also produced
-  strange results for empty strings or strings containing only spaces
+ - bounding_box for the T1 driver wasn't including leading and
+   trailing spaces in the bounding box as the other drivers did, it also
+   produced strange results for empty strings or strings containing only
+   spaces
 
-- when reading CMYK jpeg images they were being transferred to the
-  image object as is, producing a four channel image.  It only looked
-  ok due to an old still unfixed Photoshop bug.  We now convert from
-  the inverted CMYK that photoshop (and Corel for example) produce
-  into RGB.
+ - when reading CMYK jpeg images they were being transferred to the
+   image object as is, producing a four channel image. It only looked ok
+   due to an old still unfixed Photoshop bug. We now convert from the
+   inverted CMYK that photoshop (and Corel for example) produce into RGB.
+   http://rt.cpan.org/Ticket/Display.html?id=20416
 
-- reading a CYMK TIFF would result in a 4 channel image, reading any
-  image with more than 4 channels (eg. RGB with 2 alpha channels)
-  would result in an error.
+ - reading a CYMK TIFF would result in a 4 channel image, reading any
+   image with more than 4 channels (eg. RGB with 2 alpha channels) would
+   result in an error.
+   http://rt.cpan.org/Ticket/Display.html?id=20415
 
-- added /usr/local/include to the default include search path, since
-  we were already searching /usr/local/lib for libraries.
+ - added /usr/local/include to the default include search path, since
+   we were already searching /usr/local/lib for libraries.
 
 And various minor fixes and documentation updates.
 
 
-------------------------------------------------------------------------
-r1063 | tony | 2006-07-24 22:28:31 +1000 (Mon, 24 Jul 2006) | 4 lines
-Changed paths:
-   M /trunk/Imager/lib/Imager/Cookbook.pod
+Imager 0.51 - 23 Apr 2006
+===========
 
-added a cookbook entry for converting files from one format to another
+ - fix a validation bug when processing JPEG EXIF data that can cause
+   a crash
+   http://rt.cpan.org/Public/Bug/Display.html?id=18496
 
-part of http://rt.cpan.org/Ticket/Display.html?id=5608
+ - fix mis-processing of the src_maxx and src_maxy parameters of the
+   paste() method
+   http://rt.cpan.org/Public/Bug/Display.html?id=18712
 
-------------------------------------------------------------------------
-r1062 | tony | 2006-07-24 22:09:22 +1000 (Mon, 24 Jul 2006) | 4 lines
-Changed paths:
-   M /trunk/Imager/lib/Imager/Draw.pod
+ - fix a problem in Imager's "smart" handling of the color parameter
+   to various methods.
+   http://rt.cpan.org/Public/Bug/Display.html?id=18561
 
-document the direction of Imager's co-ordinate system
 
-http://rt.cpan.org/Ticket/Display.html?id=11429
+Imager 0.50 - 29 Mar 2006
+===========
 
-------------------------------------------------------------------------
-r1061 | tony | 2006-07-24 21:27:24 +1000 (Mon, 24 Jul 2006) | 2 lines
-Changed paths:
-   M /trunk/Imager/lib/Imager/Files.pod
+ - CRITICAL: fixes a segmentation fault from attempting to write a 2
+   or 4 channel image to jpeg or a 2 channel image to tga where the
+   output is an in-memeory buffer.
+   http://rt.cpan.org/Public/Bug/Display.html?id=18397
 
-add an example of reading exif tags
+ - fixes an incorrect pointer parameter in the PNG code
+   http://rt.cpan.org/Public/Bug/Display.html?id=18051
 
-------------------------------------------------------------------------
-r1060 | tony | 2006-07-24 21:16:06 +1000 (Mon, 24 Jul 2006) | 2 lines
-Changed paths:
-   M /trunk/Imager/lib/Imager/Files.pod
-
-add some basic examples of using data, fd, fh, callback parameters
-
-------------------------------------------------------------------------
-r1059 | tony | 2006-07-24 20:17:00 +1000 (Mon, 24 Jul 2006) | 3 lines
-Changed paths:
-   M /trunk/Imager/lib/Imager/Files.pod
-
-added examples for fh, fd, file, data and callback mechanisms for
-reading/writing files.
-
-------------------------------------------------------------------------
-r1058 | tony | 2006-07-24 17:15:49 +1000 (Mon, 24 Jul 2006) | 2 lines
-Changed paths:
-   M /trunk/Imager/image.c
-   M /trunk/Imager/t/t1000files.t
-
-add detection of BZIP2 and gzip data
-
-------------------------------------------------------------------------
-r1057 | tony | 2006-07-24 14:46:00 +1000 (Mon, 24 Jul 2006) | 2 lines
-Changed paths:
-   M /trunk/Imager/MANIFEST
-   A /trunk/Imager/dynfilt/t
-   A /trunk/Imager/dynfilt/t/t00dummy.t
-
-add dummy test to dynfilt to since it was confusing smoke testers
-
-------------------------------------------------------------------------
-r1056 | tony | 2006-07-24 14:44:28 +1000 (Mon, 24 Jul 2006) | 2 lines
-Changed paths:
-   M /trunk/Imager/fontfiles/SpaceTest.sfd
-
-commit changes to SpaceTest font source caused by exports
-
-------------------------------------------------------------------------
-r1055 | tony | 2006-07-21 10:01:57 +1000 (Fri, 21 Jul 2006) | 2 lines
-Changed paths:
-   M /trunk/Imager/image.c
-   M /trunk/Imager/t/t1000files.t
-
-add a magic entry to detect XWD files
-
-------------------------------------------------------------------------
-r1054 | tony | 2006-07-21 00:35:22 +1000 (Fri, 21 Jul 2006) | 5 lines
-Changed paths:
-   M /trunk/Imager/font.c
-   M /trunk/Imager/t/t30t1font.t
-
-bounding_box() for the t1 driver wasn't converting from UTF8 to ascii
-when calculating the advance width.
-
-fixes http://rt.cpan.org/Ticket/Display.html?id=20554
-
-------------------------------------------------------------------------
-r1053 | tony | 2006-07-20 23:42:04 +1000 (Thu, 20 Jul 2006) | 11 lines
-Changed paths:
-   M /trunk/Imager/MANIFEST
-   M /trunk/Imager/font.c
-   M /trunk/Imager/fontfiles/ExistenceTest.afm
-   M /trunk/Imager/fontfiles/ExistenceTest.pfb
-   M /trunk/Imager/fontfiles/ExistenceTest.sfd
-   A /trunk/Imager/fontfiles/SpaceTest.afm
-   A /trunk/Imager/fontfiles/SpaceTest.pfb
-   A /trunk/Imager/fontfiles/SpaceTest.sfd
-   M /trunk/Imager/t/t30t1font.t
-
-bounding_box() for t1 driver fonts was treating spaces as empty space
-when calculating the bounds, which they are, but this is inconsistent
-with other drivers.  This was especially a problem for strings
-containing only spaces where the left bound would end up far to the
-right of the right bound, and similarly for the ascent and descent.
-
-calculating the bounding box for an empty string invoked special
-behaviour in t1lib, making it unreliable.
-
-Fixes: http://rt.cpan.org/Ticket/Display.html?id=20555
-
-------------------------------------------------------------------------
-r1052 | tony | 2006-07-19 10:39:58 +1000 (Wed, 19 Jul 2006) | 2 lines
-Changed paths:
-   M /trunk/Imager/Imager.pm
-   M /trunk/Imager/META.yml
-
-bump to 0.51_03
-
-------------------------------------------------------------------------
-r1051 | tony | 2006-07-19 00:34:52 +1000 (Wed, 19 Jul 2006) | 3 lines
-Changed paths:
-   M /trunk/Imager/jpeg.c
-
-make the selection of a transfer function check that it's getting the
-right number of channels
-
-------------------------------------------------------------------------
-r1050 | tony | 2006-07-18 23:34:56 +1000 (Tue, 18 Jul 2006) | 2 lines
-Changed paths:
-   M /trunk/Imager/lib/Imager/APIRef.pod
-
-set eol-style so that generation doesn't make svn burp
-
-------------------------------------------------------------------------
-r1049 | tony | 2006-07-18 23:21:21 +1000 (Tue, 18 Jul 2006) | 3 lines
-Changed paths:
-   M /trunk/Imager/image.c
-   M /trunk/Imager/jpeg.c
-
-cast 2 signed/unsigned char pointer conversions to prevent warnings
-(errors on some compilers)
-
-------------------------------------------------------------------------
-r1048 | tony | 2006-07-18 22:49:31 +1000 (Tue, 18 Jul 2006) | 2 lines
-Changed paths:
-   M /trunk/Imager/t/t106tiff.t
-
-report the error if we can't read the alpha test images
-
-------------------------------------------------------------------------
-r1047 | tony | 2006-07-18 22:43:02 +1000 (Tue, 18 Jul 2006) | 3 lines
-Changed paths:
-   M /trunk/Imager/testimg/scmyka.tif
-   M /trunk/Imager/testimg/scmykaa.tif
-   M /trunk/Imager/testimg/srgba.tif
-   M /trunk/Imager/testimg/srgbaa.tif
-
-newer versions of libtiff were choking on the bad values corel was
-putting into EXTRASAMPLES, corrected via hex editing
-
-------------------------------------------------------------------------
-r1046 | tony | 2006-07-15 00:57:44 +1000 (Sat, 15 Jul 2006) | 21 lines
-Changed paths:
-   M /trunk/Imager/MANIFEST
-   M /trunk/Imager/jpeg.c
-   M /trunk/Imager/t/t101jpeg.t
-   A /trunk/Imager/testimg/scmyk.jpg
-
-CMYK jpeg images were being read as 4 channel images, even though they
-have no alpha channel.
-
-The colors were being transferred directly from the JPEG image data,
-this only looked correct because of an old bug in photoshop, kept for
-compatibility in later versions.  Photoshop inverts the ink values in
-the file, so max cyan coverage is stored at 0, and min as 255, and so
-on.
-
-CMYK jpegs are now read as 3 channel images.  The colors are now
-converted adjusting for the photoshop bug, cmyk images from the only
-other source I have, corel draw 9, are inverted in the same way,
-presumably for compatibility with photoshop.
-
-If anyone has an application that produces technically correct CMYK
-jpegs, please provide a sample in jpeg and tiff form so I can attempt
-to deal with it.
-
-Fixes: http://rt.cpan.org/Ticket/Display.html?id=20416
-
-
-------------------------------------------------------------------------
-r1045 | tony | 2006-07-13 21:04:53 +1000 (Thu, 13 Jul 2006) | 10 lines
-Changed paths:
-   M /trunk/Imager/MANIFEST
-   M /trunk/Imager/lib/Imager/Files.pod
-   M /trunk/Imager/t/t106tiff.t
-   A /trunk/Imager/testimg/scmyk.tif
-   A /trunk/Imager/testimg/scmyka.tif
-   A /trunk/Imager/testimg/scmykaa.tif
-   A /trunk/Imager/testimg/slab.tif
-   A /trunk/Imager/testimg/srgb.tif
-   A /trunk/Imager/testimg/srgba.tif
-   A /trunk/Imager/testimg/srgbaa.tif
-   M /trunk/Imager/tiff.c
-
-http://rt.cpan.org/Ticket/Display.html?id=20415
-
-Reading a CMYK TIFF with no alpha would result in a 4-channel image.
-
-Also, reading a CMYK TIFF with an alpha channel would fail to read.
-
-Reading a CMYK TIFF with 2 alpha channels would fail to read.
-
-Reading a RGB TIFF with 2 alpha channels would also fail to read.
-
-------------------------------------------------------------------------
-r1044 | tony | 2006-07-13 15:20:09 +1000 (Thu, 13 Jul 2006) | 8 lines
-Changed paths:
-   M /trunk/Imager/freetyp2.c
-   M /trunk/Imager/t/t38ft2font.t
-
-attempting to render a space non-antialiased from freetype 2 could
-crash or fail, depending on the version of freetype.
-
-Fixed by checking if the glyph has anything to render before calling
-FT_Render_Glyph().
-
-https://rt.cpan.org/Ticket/Display.html?id=20403
-
-------------------------------------------------------------------------
-r1043 | tony | 2006-07-11 23:21:31 +1000 (Tue, 11 Jul 2006) | 2 lines
-Changed paths:
-   M /trunk/Imager/Imager.pm
-   M /trunk/Imager/lib/Imager/Cookbook.pod
-   M /trunk/Imager/lib/Imager/ImageTypes.pod
-
-add some examples using the i_xres and i_yres tags
-
-------------------------------------------------------------------------
-r1042 | tony | 2006-07-10 18:07:18 +1000 (Mon, 10 Jul 2006) | 3 lines
-Changed paths:
-   M /trunk/Imager/lib/Imager/Cookbook.pod
-
-the cookbook said we couldn't limit image sizes, but we can now.  Fix
-that and add some simple examples.
-
-------------------------------------------------------------------------
-r1035 | tony | 2006-07-07 20:59:07 +1000 (Fri, 07 Jul 2006) | 2 lines
-Changed paths:
-   M /trunk/Imager/Makefile.PL
-
-it's libgif not libguf
-
-------------------------------------------------------------------------
-r1034 | tony | 2006-07-07 20:57:26 +1000 (Fri, 07 Jul 2006) | 3 lines
-Changed paths:
-   M /trunk/Imager/Makefile.PL
-
-move linker flags from freetype-config/pkg-config up to the front to
-match the placement of C flags.
-
-------------------------------------------------------------------------
-r1033 | tony | 2006-07-06 00:21:07 +1000 (Thu, 06 Jul 2006) | 6 lines
-Changed paths:
-   M /trunk/Imager/Makefile.PL
-
-we search /usr/local/include by default but we weren't searching
-/usr/local/lib, fixed that
-
-don't rebuild META.yml if we're not setting AUTHOR, this was producing
-a bad META.yml on older EU::MMs
-
-------------------------------------------------------------------------
-r1032 | tony | 2006-07-05 21:54:33 +1000 (Wed, 05 Jul 2006) | 3 lines
-Changed paths:
-   M /trunk/Imager/ICO/t/t60writefail.t
-
-implement limited writes as a closure instead of as an overloaded
-class to support 5.005_03
-
-------------------------------------------------------------------------
-r1031 | tony | 2006-07-05 21:41:04 +1000 (Wed, 05 Jul 2006) | 2 lines
-Changed paths:
-   M /trunk/Imager/ICO/ICO.xs
-   M /trunk/Imager/ICO/t/t10icon.t
-   M /trunk/Imager/ICO/t/t20readone.t
-   M /trunk/Imager/ICO/t/t21readmult.t
-   M /trunk/Imager/ICO/t/t30cursor.t
-   M /trunk/Imager/ICO/t/t40readcurone.t
-   M /trunk/Imager/ICO/t/t41curmultread.t
-   M /trunk/Imager/ICO/t/t50readfail.t
-   M /trunk/Imager/ICO/t/t60writefail.t
-   M /trunk/Imager/ICO/t/t70icosing.t
-   M /trunk/Imager/ICO/t/t71icomult.t
-   M /trunk/Imager/ICO/t/t72cursing.t
-   M /trunk/Imager/ICO/t/t73curmult.t
-   M /trunk/Imager/t/t07iolayer.t
-   M /trunk/Imager/t/t69rubthru.t
-   M /trunk/Imager/t/tr18561.t
-   M /trunk/Imager/t/tr18561b.t
-
-minor changes for compatibility with 5.005_03
-
-------------------------------------------------------------------------
-r1028 | tony | 2006-07-04 23:54:13 +1000 (Tue, 04 Jul 2006) | 2 lines
-Changed paths:
-   M /trunk/Imager/Imager.pm
-   M /trunk/Imager/META.yml
-
-bump to 0.51_02
-
-------------------------------------------------------------------------
-r1027 | tony | 2006-07-04 22:52:08 +1000 (Tue, 04 Jul 2006) | 3 lines
-Changed paths:
-   M /trunk/Imager/Imager.pm
-   M /trunk/Imager/t/t93podcover.t
-
-make sure the method index includes all documented Imager methods and
-is properly sorted.
-
-------------------------------------------------------------------------
-r1026 | tony | 2006-07-04 22:06:22 +1000 (Tue, 04 Jul 2006) | 3 lines
-Changed paths:
-   M /trunk/Imager/Imager.xs
-   M /trunk/Imager/ppport.h
-
-update to a newer ppport.h and modify Imager.xs a bit based on its
-recommendations
-
-------------------------------------------------------------------------
-r1025 | tony | 2006-07-04 21:39:37 +1000 (Tue, 04 Jul 2006) | 2 lines
-Changed paths:
-   M /trunk/Imager/filters.c
-
-addition memory allocation checks
-
-------------------------------------------------------------------------
-r1024 | tony | 2006-07-04 21:28:34 +1000 (Tue, 04 Jul 2006) | 2 lines
-Changed paths:
-   M /trunk/Imager/lib/Imager/Matrix2d.pm
-   M /trunk/Imager/lib/Imager/Transform.pm
-   M /trunk/Imager/t/t93podcover.t
-
-add more pod coverage tests (and the coverage needed)
-
-------------------------------------------------------------------------
-r1023 | tony | 2006-07-04 21:17:12 +1000 (Tue, 04 Jul 2006) | 6 lines
-Changed paths:
-   M /trunk/Imager
-   M /trunk/Imager/CountColor
-   M /trunk/Imager/DynTest
-   M /trunk/Imager/Flines
-   M /trunk/Imager/ICO
-   M /trunk/Imager/Imager.pm
-   M /trunk/Imager/MANIFEST
-   M /trunk/Imager/Mandelbrot
-   M /trunk/Imager/lib/Imager/Color/Float.pm
-   M /trunk/Imager/lib/Imager/Color/Table.pm
-   M /trunk/Imager/lib/Imager/Color.pm
-   M /trunk/Imager/lib/Imager/Expr.pm
-   M /trunk/Imager/lib/Imager/Files.pod
-   M /trunk/Imager/lib/Imager/Fill.pm
-   M /trunk/Imager/lib/Imager/Font/BBox.pm
-   M /trunk/Imager/lib/Imager/Font/Wrap.pm
-   M /trunk/Imager/lib/Imager/Font.pm
-   A /trunk/Imager/lib/Imager/Handy.pod
-   M /trunk/Imager/lib/Imager/ImageTypes.pod
-   M /trunk/Imager/t/t93podcover.t
-
-svn:ignore some more profiler files and other junk
-
-we now pass the pod coverage test on the Imager class, remove the TODO
-
-add pod coverage tests for several other classes, and pass them
-
-------------------------------------------------------------------------
-r1021 | tony | 2006-07-01 15:38:11 +1000 (Sat, 01 Jul 2006) | 4 lines
-Changed paths:
-   M /trunk/Imager/apidocs.perl
-   M /trunk/Imager/lib/Imager/APIRef.pod
-
-don't include the line number in the From comment so since unrelated edits
-were causing changes to APIRef.pm.  This is still possible but they should
-be a lot less frequence.
-
-------------------------------------------------------------------------
-r1020 | tony | 2006-07-01 15:31:35 +1000 (Sat, 01 Jul 2006) | 3 lines
-Changed paths:
-   M /trunk/Imager/t/t023palette.t
-
-added error handling tests for bad colors supplied to addcolors()
-and setcolors()
-
-------------------------------------------------------------------------
-r1019 | tony | 2006-06-30 23:51:45 +1000 (Fri, 30 Jun 2006) | 6 lines
-Changed paths:
-   M /trunk/Imager/Imager.xs
-   M /trunk/Imager/iolayer.c
-   A /trunk/Imager/lib/Imager/IO.pod
-   M /trunk/Imager/t/t07iolayer.t
-
-add more iolayer tests
-callback handler fixes to return errors correctly
-Imager::IO XS changes to make errors return empty lists
-iolayer error handling fixes
-documented Imager::IO methods
-
-------------------------------------------------------------------------
-r1018 | tony | 2006-06-29 21:39:10 +1000 (Thu, 29 Jun 2006) | 3 lines
-Changed paths:
-   M /trunk/Imager/Imager.pm
-   M /trunk/Imager/t/t023palette.t
-
-setcolors() and addcolors() can now accept non-object colors like most
-other methods
-
-------------------------------------------------------------------------
-r1017 | tony | 2006-06-29 21:06:16 +1000 (Thu, 29 Jun 2006) | 2 lines
-Changed paths:
-   M /trunk/Imager/t/t101jpeg.t
-
-extra jpeg tests to improve code coverage of jpeg.c
-
-------------------------------------------------------------------------
-r1016 | tony | 2006-06-29 20:56:09 +1000 (Thu, 29 Jun 2006) | 3 lines
-Changed paths:
-   M /trunk/Imager/bmp.c
-   M /trunk/Imager/datatypes.c
-   M /trunk/Imager/error.c
-   M /trunk/Imager/filters.c
-   M /trunk/Imager/font.c
-   M /trunk/Imager/gif.c
-   M /trunk/Imager/hlines.c
-   M /trunk/Imager/image.c
-   M /trunk/Imager/imexif.c
-   M /trunk/Imager/iolayer.c
-   M /trunk/Imager/log.c
-
-long delayed renaming of m_fatal() to i_fatal() to match Imager's
-functions in general
-
-------------------------------------------------------------------------
-r1015 | tony | 2006-06-29 20:53:07 +1000 (Thu, 29 Jun 2006) | 2 lines
-Changed paths:
-   M /trunk/Imager/META.yml
-
-META.yml changed due to release
-
-------------------------------------------------------------------------
-r1014 | tony | 2006-06-29 20:51:12 +1000 (Thu, 29 Jun 2006) | 2 lines
-Changed paths:
-   M /trunk/Imager/jpeg.c
-
-add missing parameter required by format in wiol_empty_output_buffer
-
-------------------------------------------------------------------------
-r1012 | tony | 2006-06-28 23:22:25 +1000 (Wed, 28 Jun 2006) | 2 lines
-Changed paths:
-   M /trunk/Imager/Imager.pm
-
-bump to 0.51_01 for release
-
-------------------------------------------------------------------------
-r1011 | tony | 2006-06-28 00:38:10 +1000 (Wed, 28 Jun 2006) | 1 line
-Changed paths:
-   M /trunk/Imager/Makefile.PL
-
-handle a missing Changes file when checking if we need to generate one.
-------------------------------------------------------------------------
-r1010 | tony | 2006-06-28 00:25:03 +1000 (Wed, 28 Jun 2006) | 2 lines
-Changed paths:
-   M /trunk/Imager/lib/Imager/APIRef.pod
-   M /trunk/Imager/limits.c
-
-document the image file limit functions for the API
-
-------------------------------------------------------------------------
-r1009 | tony | 2006-06-27 22:50:28 +1000 (Tue, 27 Jun 2006) | 1 line
-Changed paths:
-   M /trunk/Imager/iolayert.h
-
-include stddef.h for size_t
-------------------------------------------------------------------------
-r1008 | tony | 2006-06-27 22:20:47 +1000 (Tue, 27 Jun 2006) | 10 lines
-Changed paths:
-   M /trunk/Imager/Imager.pm
-   M /trunk/Imager/Imager.xs
-   M /trunk/Imager/draw.c
-   M /trunk/Imager/fills.c
-   M /trunk/Imager/imager.h
-   M /trunk/Imager/imext.c
-   M /trunk/Imager/imext.h
-   M /trunk/Imager/imexttypes.h
-   M /trunk/Imager/lib/Imager/APIRef.pod
-   M /trunk/Imager/lib/Imager/Draw.pod
-   M /trunk/Imager/t/t20fill.t
-   M /trunk/Imager/t/t82inline.t
-
-implement a flood_fill that stops at a given color rather than filling
-a region of the color at the start poiint.
-
-from perl you can call flood_fill() with a border parameter to specify
-a fill to border.
-
-from the API call the i_flood_fill_border() or i_flood_cfill_border()
-function.
-
-
-------------------------------------------------------------------------
-r1007 | tony | 2006-06-27 22:12:12 +1000 (Tue, 27 Jun 2006) | 3 lines
-Changed paths:
-   M /trunk/Imager/Makefile.PL
-
-Makefile was generating lib/Imager/APIRef.pod, not
-lib/Imager/APIRef.pm
-
-------------------------------------------------------------------------
-r1006 | tony | 2006-06-26 23:14:54 +1000 (Mon, 26 Jun 2006) | 3 lines
-Changed paths:
-   M /trunk/Imager/Makefile.PL
-
-use the ExtUtils::MakeMaker prompt() function to ask about including
-gif support instead of <STDIN>
-
-------------------------------------------------------------------------
-r1005 | tony | 2006-06-26 22:57:00 +1000 (Mon, 26 Jun 2006) | 3 lines
-Changed paths:
-   M /trunk/Imager/Imager.pm
-   M /trunk/Imager/lib/Imager/Files.pod
-
-document parseiptc()
-  https://rt.cpan.org/Ticket/Display.html?id=17894
-
-------------------------------------------------------------------------
-r1004 | tony | 2006-06-26 22:34:40 +1000 (Mon, 26 Jun 2006) | 3 lines
-Changed paths:
-   M /trunk/Imager/lib/Imager/Files.pod
-
-clarify that FORMATGUESS is only used when writing to a file.
-  http://rt.cpan.org/Ticket/Display.html?id=18773
-
-------------------------------------------------------------------------
-r1003 | tony | 2006-06-26 22:20:27 +1000 (Mon, 26 Jun 2006) | 10 lines
-Changed paths:
-   M /trunk/Imager
-   M /trunk/Imager/CountColor
-   M /trunk/Imager/DynTest
-   M /trunk/Imager/Flines
-   M /trunk/Imager/ICO
-   M /trunk/Imager/ICO/ICO.pm
-   M /trunk/Imager/ICO/ICO.xs
-   M /trunk/Imager/ICO/Makefile.PL
-   M /trunk/Imager/ICO/imicon.c
-   M /trunk/Imager/ICO/imicon.h
-   A /trunk/Imager/ICO/lib (from /branches/Imager/ico/ICO/lib:1002)
-   M /trunk/Imager/ICO/msicon.c
-   M /trunk/Imager/ICO/msicon.h
-   M /trunk/Imager/ICO/t/t10icon.t
-   A /trunk/Imager/ICO/t/t30cursor.t (from /branches/Imager/ico/ICO/t/t30cursor.t:1002)
-   A /trunk/Imager/ICO/t/t40readcurone.t (from /branches/Imager/ico/ICO/t/t40readcurone.t:1002)
-   A /trunk/Imager/ICO/t/t41curmultread.t (from /branches/Imager/ico/ICO/t/t41curmultread.t:1002)
-   A /trunk/Imager/ICO/t/t50readfail.t (from /branches/Imager/ico/ICO/t/t50readfail.t:1002)
-   A /trunk/Imager/ICO/t/t60writefail.t (from /branches/Imager/ico/ICO/t/t60writefail.t:1002)
-   A /trunk/Imager/ICO/t/t70icosing.t (from /branches/Imager/ico/ICO/t/t70icosing.t:1002)
-   A /trunk/Imager/ICO/t/t71icomult.t (from /branches/Imager/ico/ICO/t/t71icomult.t:1002)
-   A /trunk/Imager/ICO/t/t72cursing.t (from /branches/Imager/ico/ICO/t/t72cursing.t:1002)
-   A /trunk/Imager/ICO/t/t73curmult.t (from /branches/Imager/ico/ICO/t/t73curmult.t:1002)
-   A /trunk/Imager/ICO/testimg/pal43232.cur (from /branches/Imager/ico/ICO/testimg/pal43232.cur:1002)
-   M /trunk/Imager/Imager.pm
-   M /trunk/Imager/Imager.xs
-   M /trunk/Imager/MANIFEST
-   M /trunk/Imager/MANIFEST.SKIP
-   M /trunk/Imager/Makefile.PL
-   M /trunk/Imager/Mandelbrot
-   M /trunk/Imager/dynfilt
-   M /trunk/Imager/image.c
-   M /trunk/Imager/imager.h
-   M /trunk/Imager/imageri.h
-   M /trunk/Imager/imext.c
-   M /trunk/Imager/imext.h
-   M /trunk/Imager/imexttypes.h
-   M /trunk/Imager/iolayer.c
-   M /trunk/Imager/iolayert.h
-   M /trunk/Imager/lib/Imager/Files.pod
-   M /trunk/Imager/t/t106tiff.t
-
-add support for file write plugins
-
-fix write_multi() writing to scalars
-  https://rt.cpan.org/Ticket/Display.html?id=19982
-
-add support for writing to ICO/CUR image files
-
-added file limit check functions to the API
-
-
-------------------------------------------------------------------------
-r996 | tony | 2006-05-22 13:46:15 +1000 (Mon, 22 May 2006) | 2 lines
-Changed paths:
-   M /trunk/Imager/MANIFEST
-   M /trunk/Imager/samples/README
-   A /trunk/Imager/samples/inline_capture2image.pl
-
-add inline_capture2image.pl sample
-
-------------------------------------------------------------------------
-r995 | tony | 2006-05-22 13:29:51 +1000 (Mon, 22 May 2006) | 2 lines
-Changed paths:
-   M /trunk/Imager/MANIFEST
-   M /trunk/Imager/Makefile.PL
-   D /trunk/Imager/lib/Imager/API.pm
-   A /trunk/Imager/lib/Imager/API.pod (from /trunk/Imager/lib/Imager/API.pm:959)
-   D /trunk/Imager/lib/Imager/APIRef.pm
-   A /trunk/Imager/lib/Imager/APIRef.pod (from /trunk/Imager/lib/Imager/APIRef.pm:959)
-
-rename APIRef.pm, API.pm to *.pod since they contain no code
-
-------------------------------------------------------------------------
-r994 | tony | 2006-05-22 13:24:49 +1000 (Mon, 22 May 2006) | 2 lines
-Changed paths:
-   M /trunk/Imager/tags.c
-
-fix documentation nit
-
-------------------------------------------------------------------------
-r993 | tony | 2006-05-22 13:24:20 +1000 (Mon, 22 May 2006) | 2 lines
-Changed paths:
-   M /trunk/Imager/MANIFEST
-
-added kwalitee test script to the MANIFEST
-
-------------------------------------------------------------------------
-r992 | tony | 2006-05-22 13:23:50 +1000 (Mon, 22 May 2006) | 2 lines
-Changed paths:
-   M /trunk/Imager/lib/Imager/ExtUtils.pm
-
-give lib/Imager/ExtUtils.pm a version number
-
-------------------------------------------------------------------------
-r991 | tony | 2006-05-22 13:23:11 +1000 (Mon, 22 May 2006) | 4 lines
-Changed paths:
-   M /trunk/Imager/CountColor/Makefile.PL
-   M /trunk/Imager/DynTest/Makefile.PL
-   M /trunk/Imager/Flines/Makefile.PL
-   M /trunk/Imager/Mandelbrot/Makefile.PL
-   M /trunk/Imager/dynfilt/Makefile.PL
-   M /trunk/Imager/t/Pod/Coverage/Imager.pm
-   A /trunk/Imager/t/t94kwalitee.t
-   M /trunk/Imager/t/testtools.pl
-
-added "kwalitee" test script:
- - currently tests all pl/pm/PL files have use strict
- - added use strict to all pl/pm/PL files with code in them
-
-------------------------------------------------------------------------
-r990 | tony | 2006-05-22 13:18:27 +1000 (Mon, 22 May 2006) | 5 lines
-Changed paths:
-   M /trunk/Imager/image.c
-   M /trunk/Imager/t/t1000files.t
-
-i_test_format_probe:
- - added Utah RLE, 
- - separated ICO and CUR file formats, 
- - fix duplicate PCX entry
-
-------------------------------------------------------------------------
-r989 | tony | 2006-04-30 00:53:11 +1000 (Sun, 30 Apr 2006) | 4 lines
-Changed paths:
-   M /trunk/Imager/lib/Imager/interface.pod
-
-minor updates, make it clear in the title this documents the C level.
-tags is now used.
-there's been a double image type for a while now.
-
-------------------------------------------------------------------------
-r988 | tony | 2006-04-30 00:44:27 +1000 (Sun, 30 Apr 2006) | 4 lines
-Changed paths:
-   M /trunk/Imager/lib/Imager/ImageTypes.pod
-
-changed the title to better reflect what it documents - model, not
-internals.
-Split out the initial paragraphs into more concise statements.
-
-------------------------------------------------------------------------
-r983 | tony | 2006-04-19 22:19:56 +1000 (Wed, 19 Apr 2006) | 9 lines
-Changed paths:
-   M /trunk/Imager/Imager.pm
-   M /trunk/Imager/MANIFEST
-   A /trunk/Imager/t/tr18561.t
-   A /trunk/Imager/t/tr18561b.t
-
-- Calling setpixel() with color set to [ 0, 0, 0 ] would crash with 
-Can't locate object method "new" via package "Imager::Color::Float" ...
-
-- having the color parameter code create floating point colors could
-cause other problems too, since most of the underlying functions can't
-handle them, so removed the attempt to create float colors.
-
-Fixes #18561
-
-------------------------------------------------------------------------
-r980 | tony | 2006-04-19 14:05:45 +1000 (Wed, 19 Apr 2006) | 4 lines
-Changed paths:
-   M /trunk/Imager/Imager.pm
-   M /trunk/Imager/t/t66paste.t
-
-Specifying the bottom edge of the source image to paste was broken in
-a couple of different ways.
-Fixes #18712
-
-------------------------------------------------------------------------
-r978 | tony | 2006-04-04 09:53:26 +1000 (Tue, 04 Apr 2006) | 2 lines
-Changed paths:
-   M /trunk/Imager/lib/Imager/Filters.pod
-
-add AUTHOR, SEE ALSO, REVISION sections
-
-------------------------------------------------------------------------
-r977 | tony | 2006-04-02 16:57:56 +1000 (Sun, 02 Apr 2006) | 4 lines
-Changed paths:
-   M /trunk/Imager/MANIFEST
-   M /trunk/Imager/imexif.c
-   M /trunk/Imager/t/t101jpeg.t
-   A /trunk/Imager/testimg/zerotype.jpg
-
-fix range checking on IFD entry data types.  This could cause various 
-crashes.
-Fixes #18496
-
-------------------------------------------------------------------------
-r976 | tony | 2006-03-30 18:14:17 +1100 (Thu, 30 Mar 2006) | 2 lines
-Changed paths:
-   M /trunk/Imager/jpeg.c
-   M /trunk/Imager/t/t101jpeg.t
-   M /trunk/Imager/t/t108tga.t
-   M /trunk/Imager/tga.c
-
-backport fix for RT issue 18397
-
-------------------------------------------------------------------------
-r975 | tony | 2006-03-30 15:41:41 +1100 (Thu, 30 Mar 2006) | 5 lines
-Changed paths:
-   M /trunk/Imager/image.c
-   M /trunk/Imager/t/t1000files.t
-
-add format probes for SGI RGB, ILBM, XPM, PCX, FITS, Photoshop, EPS
-
-if you have an entry for some other format you want to implement let 
-me know.
-
-------------------------------------------------------------------------
-r964 | tony | 2006-03-24 20:49:57 +1100 (Fri, 24 Mar 2006) | 6 lines
-Changed paths:
-   A /trunk/Imager/ICO
-   A /trunk/Imager/ICO/ICO.pm
-   A /trunk/Imager/ICO/ICO.xs
-   A /trunk/Imager/ICO/Makefile.PL
-   A /trunk/Imager/ICO/imicon.c
-   A /trunk/Imager/ICO/imicon.h
-   A /trunk/Imager/ICO/msicon.c
-   A /trunk/Imager/ICO/msicon.h
-   A /trunk/Imager/ICO/t
-   A /trunk/Imager/ICO/t/t10icon.t
-   A /trunk/Imager/ICO/t/t20readone.t
-   A /trunk/Imager/ICO/t/t21readmult.t
-   A /trunk/Imager/ICO/testimg
-   A /trunk/Imager/ICO/testimg/combo.ico
-   A /trunk/Imager/ICO/testimg/pal13232.ico
-   A /trunk/Imager/ICO/testimg/pal43232.ico
-   A /trunk/Imager/ICO/testimg/pal43232.ppm
-   A /trunk/Imager/ICO/testimg/pal83232.ico
-   A /trunk/Imager/ICO/testimg/pal83232.ppm
-   A /trunk/Imager/ICO/testimg/rgba3232.ico
-   A /trunk/Imager/ICO/testimg/rgba3232.ppm
-   M /trunk/Imager/MANIFEST
-   M /trunk/Imager/MANIFEST.SKIP
-
-- implement reading MS Windows icon files
-
-- add t/Pod/Coverage/Imager.pm to MANIFEST
-
-- skip some more trash in MANIFEST.SKIP
-
-------------------------------------------------------------------------
-r963 | tony | 2006-03-24 15:26:24 +1100 (Fri, 24 Mar 2006) | 2 lines
-Changed paths:
-   M /trunk/Imager/tga.c
-
-make the targa probe even stricter
-
-------------------------------------------------------------------------
-r962 | tony | 2006-03-24 01:09:57 +1100 (Fri, 24 Mar 2006) | 10 lines
-Changed paths:
-   M /trunk/Imager/Imager.pm
-   M /trunk/Imager/Imager.xs
-   M /trunk/Imager/lib/Imager/Files.pod
-   M /trunk/Imager/t/t70newgif.t
-
-- added support for registering file readers
-
-- if you supply and unknown type value (or Imager probes and finds
-one) then Imager will attempt to load "Imager::File::\Utypecode" (this
-can register a file reader.)
-
-- note: these changes may mean slightly different errors if you call
-read_multi() with no file or type parameters, since read_multi() now
-attempts to do the same file format probe that read() does.
-
-------------------------------------------------------------------------
-r961 | tony | 2006-03-24 00:41:56 +1100 (Fri, 24 Mar 2006) | 5 lines
-Changed paths:
-   M /trunk/Imager/image.c
-   M /trunk/Imager/imager.h
-   M /trunk/Imager/t/t1000files.t
-   M /trunk/Imager/tga.c
-
-- i_test_format_probe() now attempts to detect MS Windows Icon/cursor files
-
-- made the TGA probe a bit more specific since it was giving false
-  positives on icon files.
-
-------------------------------------------------------------------------
-r960 | tony | 2006-03-22 12:01:15 +1100 (Wed, 22 Mar 2006) | 8 lines
-Changed paths:
-   M /trunk/Imager/Imager.xs
-   M /trunk/Imager/MANIFEST
-   M /trunk/Imager/imdatatypes.h
-   M /trunk/Imager/imperl.h
-   M /trunk/Imager/iolayer.c
-   M /trunk/Imager/iolayer.h
-   A /trunk/Imager/iolayert.h
-
-More iolayers work:
-
-- rename the callback types
-- move types and the call macros into iolayer.t
-- move typedef for Imager__IO to imperl.h
-
-so now io glue objects can be used from XS/Inline
-
-------------------------------------------------------------------------
-r957 | tony | 2006-03-16 16:41:10 +1100 (Thu, 16 Mar 2006) | 6 lines
-Changed paths:
-   M /trunk/Imager/Imager.xs
-   M /trunk/Imager/iolayer.c
-   M /trunk/Imager/iolayer.h
-   M /trunk/Imager/t/t07iolayer.t
-
-more iolayer goodness:
-
-- make write/read/seek/close on an IO object visible as methods from perl
-
-- allow SEEK_CUR on bufchains
-
-------------------------------------------------------------------------
-r956 | tony | 2006-03-15 23:49:49 +1100 (Wed, 15 Mar 2006) | 3 lines
-Changed paths:
-   M /trunk/Imager/Imager.xs
-   M /trunk/Imager/iolayer.c
-   M /trunk/Imager/iolayer.h
-
-io_glue_destroy() now uses an extra callback to handle type specific
-destruction, instead of switching on "class"
-
-------------------------------------------------------------------------
-r955 | tony | 2006-03-15 23:08:47 +1100 (Wed, 15 Mar 2006) | 7 lines
-Changed paths:
-   M /trunk/Imager/iolayer.c
-   M /trunk/Imager/iolayer.h
-
-iolayer modifications:
-
-- move private types and functions into iolayers.c
-
-- make each layer "new" function do the initialization that
-io_commit_types() was doing.
-
-------------------------------------------------------------------------
-r954 | tony | 2006-03-15 22:32:59 +1100 (Wed, 15 Mar 2006) | 2 lines
-Changed paths:
-   M /trunk/Imager/MANIFEST
-
-fixed incorrect filename for t/t93podcover.t in MANIFEST
-
-------------------------------------------------------------------------
-r953 | tony | 2006-03-14 11:50:09 +1100 (Tue, 14 Mar 2006) | 6 lines
-Changed paths:
-   M /trunk/Imager/Imager.pm
-
-remove the reference to IRC from SUPPORT, I'm not paying enough
-attention there for it to be useful.  Yes, there is a channel, but the
-mailing list/perlmonks/direct email/cpanratings are more likely to get
-you some help.
-
-
-------------------------------------------------------------------------
-r952 | tony | 2006-03-13 13:46:48 +1100 (Mon, 13 Mar 2006) | 3 lines
-Changed paths:
-   M /trunk/Imager/Imager.pm
-   M /trunk/Imager/t/t101jpeg.t
-
-prevent the parseiptc method from warning when there's no IPTC data to
-process
-
-------------------------------------------------------------------------
-r951 | tony | 2006-03-13 12:58:44 +1100 (Mon, 13 Mar 2006) | 2 lines
-Changed paths:
-   M /trunk/Imager
-   M /trunk/Imager/MANIFEST
-   A /trunk/Imager/t/Pod
-   A /trunk/Imager/t/Pod/Coverage
-   A /trunk/Imager/t/Pod/Coverage/Imager.pm
-   M /trunk/Imager/t/t101jpeg.t
-   A /trunk/Imager/t/t93podcover.t
-
-POD coverage tests, as a TODO for now
-
-------------------------------------------------------------------------
-r950 | tony | 2006-03-12 00:16:47 +1100 (Sun, 12 Mar 2006) | 2 lines
-Changed paths:
-   M /trunk/Imager/Imager.pm
-   M /trunk/Imager/Imager.xs
-   M /trunk/Imager/log.c
-   M /trunk/Imager/log.h
-   M /trunk/Imager/t/t50basicoo.t
-
-rename some private functions to private names
-
-------------------------------------------------------------------------
-r949 | tony | 2006-03-09 11:56:19 +1100 (Thu, 09 Mar 2006) | 3 lines
-Changed paths:
-   M /trunk/Imager/io.c
-
-malloc_state() no longer writes to stdout when Imager is built without
-memory debugging
-
-------------------------------------------------------------------------
-r948 | tony | 2006-03-08 23:11:41 +1100 (Wed, 08 Mar 2006) | 2 lines
-Changed paths:
-   M /trunk/Imager/TODO
-
-initial targets for 0.50
-
-------------------------------------------------------------------------
-r947 | tony | 2006-03-08 22:56:41 +1100 (Wed, 08 Mar 2006) | 7 lines
-Changed paths:
-   M /trunk/Imager/t/t82inline.t
-
-Skip Inline tests when we're in a directory containing spaces in the
-path, since Inline itself errors out when used in such a directory.
-See #4150.
-
-Fixes: 18049.
-
-
-------------------------------------------------------------------------
-r946 | tony | 2006-03-07 23:06:50 +1100 (Tue, 07 Mar 2006) | 2 lines
-Changed paths:
-   M /trunk/Imager/png.c
-
-removed unreachable code (mymalloc() succeeds or exit()s)
-
-------------------------------------------------------------------------
-r945 | tony | 2006-03-07 23:01:38 +1100 (Tue, 07 Mar 2006) | 2 lines
-Changed paths:
-   M /trunk/Imager/Makefile.PL
-
-Actually get the changes in the right order.
-
-------------------------------------------------------------------------
-r944 | tony | 2006-03-07 22:54:01 +1100 (Tue, 07 Mar 2006) | 5 lines
-Changed paths:
-   D /trunk/Imager/Changes
-   A /trunk/Imager/Changes.old (from /trunk/Imager/Changes:943)
-   M /trunk/Imager/MANIFEST
-   M /trunk/Imager/Makefile.PL
-
-New changes will be listed most recent first, and is generated from
-svn log.
-
-Changes for older revisions of Imager can be found in Changes.old.
-
-------------------------------------------------------------------------
+ - skip Inline::C tests when building in a directory with spaces
+   http://rt.cpan.org/Public/Bug/Display.html?id=18049

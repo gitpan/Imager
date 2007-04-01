@@ -39,6 +39,7 @@ my @libpaths; # places to look for libraries
 my $noprobe; # non-zero to disable newer probes
 my $noexif; # non-zero to disable EXIF parsing of JPEGs
 my $no_gif_set_version; # disable calling EGifSetGifVersion
+my $coverage; # build for coverage testing
 GetOptions("help" => \$help,
            "enable=s" => \@enable,
            "disable=s" => \@disable,
@@ -48,7 +49,8 @@ GetOptions("help" => \$help,
            "verbose|v" => \$VERBOSE,
            "nolog" => \$NOLOG,
 	   "noexif" => \$noexif,
-           "nogifsetversion" => \$no_gif_set_version);
+           "nogifsetversion" => \$no_gif_set_version,
+	   'coverage' => \$coverage);
 
 if ($VERBOSE) { 
   print "Verbose mode\n"; 
@@ -84,7 +86,6 @@ my @libs; # all the places to look for libraries
 
 init();       # initialize global data
 pathcheck();  # Check if directories exist
-distcheck();  # for building dists
 
 if (exists $ENV{IM_ENABLE}) {
   my %en = map { $_, 1 } split ' ', $ENV{IM_ENABLE};
@@ -157,7 +158,7 @@ my @objs = qw(Imager.o draw.o polygon.o image.o io.o iolayer.o
               regmach.o trans2.o quant.o error.o convert.o
               map.o tags.o palimg.o maskimg.o img16.o rotate.o
               bmp.o tga.o rgb.o color.o fills.o imgdouble.o limits.o hlines.o
-              imext.o scale.o rubthru.o);
+              imext.o scale.o rubthru.o render.o);
 
 $Recommends{Imager} =
   { 'Parse::RecDescent' => 0 };
@@ -173,6 +174,16 @@ my %opts=(
           PM             => gen_PM(),
 	  PREREQ_PM      => { 'Test::More' => 0.47 },
          );
+
+if ($coverage) {
+    if ($Config{gccversion}) {
+	push @ARGV, 'OPTIMIZE=-ftest-coverage -fprofile-arcs';
+	#$opts{dynamic_lib} = { OTHERLDFLAGS => '-ftest-coverage -fprofile-arcs' };
+    }
+    else {
+	die "Don't know the coverage C flags for your compiler\n";
+    }
+}
 
 # eval to prevent warnings about versions with _ in them
 my $MM_ver = eval $ExtUtils::MakeMaker::VERSION;
@@ -889,31 +900,3 @@ YAML
   }
 }
 
-# this is intended to only be running on the development
-# machines
-sub distcheck {
-  if (-e '.svn') {
-    # update Changes if needed
-    my $write_changes;
-    # get the last revision from Changes
-    if (open CHANGES, "< Changes") {
-      <CHANGES>;
-      my ($changes_rev) = <CHANGES> =~ /^r(\d+)/
-	or ++$write_changes;
-
-      my ($revision) = grep s/^Revision: //, `svn info`
-	or die "Could not get Revision from svn";
-      chomp $revision;
-
-      $write_changes ||= $changes_rev != $revision;
-      close CHANGES;
-    }
-    else {
-      ++$write_changes;
-    }
-    if ($write_changes) {
-      print "Updating Changes file\n";
-      system 'svn log -v -r HEAD:943 >Changes';
-    }
-  }
-}

@@ -478,13 +478,35 @@ giving more detail.
 
 =item unsharpmask
 
-performs an unsharp mask on the image.  This is the result of
-subtracting a gaussian blurred version of the image from the original.
-I<stddev> controls the stddev parameter of the gaussian blur.  Each
-output pixel is: in + I<scale> * (in - blurred).
+performs an unsharp mask on the image.  This increases the contrast of
+edges in the image.
+
+This is the result of subtracting a gaussian blurred version of the
+image from the original.  I<stddev> controls the stddev parameter of
+the gaussian blur.  Each output pixel is: in + I<scale> * (in -
+blurred).
 
   $img->filter(type=>"unsharpmask", stddev=>1, scale=>0.5)
     or die $img->errstr;
+
+unsharpmark has the following parameters:
+
+=over
+
+=item *
+
+stddev - this is equivalent to the C<Radius> value in the GIMP's
+unsharpmask filter.  This controls the size of the contrast increase
+around edges, larger values will remove fine detail. You should
+probably experiement on the types of images you plan to work with.
+Default: 2.0.
+
+=item *
+
+scale - controls the strength of the edge enhancement, equivalent to
+I<Amount> in the GIMP's unsharp mask filter.  Default: 1.0.
+
+=back
 
 =item watermark
 
@@ -646,6 +668,6 @@ Imager, Imager::Filter::Flines, Imager::Filter::Mandelbrot
 
 =head1 REVISION
 
-$Revision: 1113 $
+$Revision: 1192 $
 
 =cut
