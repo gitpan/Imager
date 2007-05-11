@@ -1,5 +1,42 @@
 Imager release history.  Older releases can be found in Changes.old
 
+Imager 0.57_01 - 11 May 2007
+==============
+
+ - added to_rgb16 to produce a 16-bit/sample version of an image
+
+ - improve freetype 1.x text output efficiency
+
+Bug fixes:
+
+ - search another place for rgb.txt, and check all the places 
+   Imager::Color checks when deciding whether to skip testing it
+   http://rt.cpan.org/Ticket/Display.html?id=26064
+
+ - use a convolution kernel size based on the stddev rather than a
+   fixed size when performing a gaussian blur
+   http://rt.cpan.org/Ticket/Display.html?id=25645
+
+ - document the difference() method's mindist parameter, and debug it.
+
+ - put the Imager releaser number in the Inline::C generated code to
+   regenerate Inline code when a new release of Imager is installed.
+   http://rt.cpan.org/Ticket/Display.html?id=26278
+
+ - fix rendering on alpha channel images for the FreeType 1.x driver.
+   http://rt.cpan.org/Ticket/Display.html?id=11972
+
+ - fix rendering on alpha channel images for the T1lib driver.
+   http://rt.cpan.org/Ticket/Display.html?id=11972
+
+ - reworked library probing, we can now set more than one probe
+   function for a library.  Disabled the default (non-freetype-config)
+   library probe and added an extra probe function that searches for
+   both ft2build.h and whatever it includes, and adds -I as needed.
+   Hopefully this will fix build problems like
+   http://www.nntp.perl.org/group/perl.cpan.testers/2007/05/msg472281.html
+   http://rt.cpan.org/Ticket/Display.html?id=26086
+
 Imager 0.57 - 30 Apr 2007
 ===========
 
@@ -9,6 +46,7 @@ This is a maintenence release fixing a security issue in Imager.
    overflow in malloced memory.  There will be further discussion of
    this issue in the ticket below.
    http://rt.cpan.org/Ticket/Display.html?id=26811
+   CVE-2007-2459
 
 Imager 0.56 - 1 Apr 2007
 ===========

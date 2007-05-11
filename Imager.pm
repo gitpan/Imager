@@ -155,7 +155,7 @@ my %attempted_to_load;
 BEGIN {
   require Exporter;
   @ISA = qw(Exporter);
-  $VERSION = '0.57';
+  $VERSION = '0.57_01';
   eval {
     require XSLoader;
     XSLoader::load(Imager => $VERSION);
@@ -891,6 +891,26 @@ sub to_rgb8 {
   if ($self->{IMG}) {
     $result = Imager->new;
     $result->{IMG} = i_img_to_rgb($self->{IMG})
+      or undef $result;
+  }
+
+  return $result;
+}
+
+# convert a paletted (or any image) to an 8-bit/channel RGB images
+sub to_rgb16 {
+  my $self = shift;
+  my $result;
+
+  unless (defined wantarray) {
+    my @caller = caller;
+    warn "to_rgb16() called in void context - to_rgb8() returns the converted image at $caller[1] line $caller[2]\n";
+    return;
+  }
+
+  if ($self->{IMG}) {
+    $result = Imager->new;
+    $result->{IMG} = i_img_to_rgb16($self->{IMG})
       or undef $result;
   }
 
@@ -2826,25 +2846,32 @@ sub setpixel {
   if (ref $x && ref $y) {
     unless (@$x == @$y) {
       $self->{ERRSTR} = 'length of x and y mismatch';
-      return undef;
+      return;
     }
+    my $set = 0;
     if ($color->isa('Imager::Color')) {
       for my $i (0..$#{$opts{'x'}}) {
-        i_ppix($self->{IMG}, $x->[$i], $y->[$i], $color);
+        i_ppix($self->{IMG}, $x->[$i], $y->[$i], $color)
+	  or ++$set;
       }
     }
     else {
       for my $i (0..$#{$opts{'x'}}) {
-        i_ppixf($self->{IMG}, $x->[$i], $y->[$i], $color);
+        i_ppixf($self->{IMG}, $x->[$i], $y->[$i], $color)
+	  or ++$set;
       }
     }
+    $set or return;
+    return $set;
   }
   else {
     if ($color->isa('Imager::Color')) {
-      i_ppix($self->{IMG}, $x, $y, $color);
+      i_ppix($self->{IMG}, $x, $y, $color)
+	and return;
     }
     else {
-      i_ppixf($self->{IMG}, $x, $y, $color);
+      i_ppixf($self->{IMG}, $x, $y, $color)
+	and return;
     }
   }
 
@@ -3807,6 +3834,8 @@ string() - L<Imager::Draw/string> - draw text on an image
 tags() -  L<Imager::ImageTypes/tags> - fetch image tags
 
 to_paletted() -  L<Imager::ImageTypes/to_paletted>
+
+to_rgb16() - L<Imager::ImageTypes/to_rgb16>
 
 to_rgb8() - L<Imager::ImageTypes/to_rgb8>
 

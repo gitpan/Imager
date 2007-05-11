@@ -187,7 +187,7 @@ undef_int i_flood_cfill_border(i_img *im, int seedx, int seedy, i_fill_t *fill, 
 
 /* image processing functions */
 
-void i_gaussian    (i_img *im,float stdev);
+int i_gaussian    (i_img *im, double stdev);
 void i_conv        (i_img *im,const float *coeff,int len);
 void i_unsharp_mask(i_img *im, double stddev, double scale);
 
@@ -349,6 +349,7 @@ extern i_img *i_img_masked_new(i_img *targ, i_img *mask, int x, int y,
                                int w, int h);
 extern i_img *i_img_16_new(int x, int y, int ch);
 extern i_img *i_img_16_new_low(i_img *im, int x, int y, int ch);
+extern i_img *i_img_to_rgb16(i_img *im);
 extern i_img *i_img_double_new(int x, int y, int ch);
 extern i_img *i_img_double_new_low(i_img *im, int x, int y, int ch);
 
@@ -447,7 +448,7 @@ void i_radnoise(i_img *im,int xo,int yo,float rscale,float ascale);
 void i_turbnoise(i_img *im,float xo,float yo,float scale);
 void i_gradgen(i_img *im, int num, int *xo, int *yo, i_color *ival, int dmeasure);
 int i_nearest_color(i_img *im, int num, int *xo, int *yo, i_color *ival, int dmeasure);
-i_img *i_diff_image(i_img *im, i_img *im2, int mindist);
+i_img *i_diff_image(i_img *im, i_img *im2, double mindist);
 int
 i_fountain(i_img *im, double xa, double ya, double xb, double yb, 
            i_fountain_type type, i_fountain_repeat repeat, 

@@ -472,6 +472,12 @@ Default: white.
 
 =back
 
+When called with array parameters, returns the number of pixels
+successfully set, or false if none.
+
+When called with scalars for x and y, return $img on success, false on
+failure.
+
 =item getpixel
 
   my $color = $img->getpixel(x=>50, y=>70);
@@ -1002,6 +1008,6 @@ L<Imager>(3), L<Imager::Cookbook>(3)
 
 =head1 REVISION
 
-$Revision: 1074 $
+$Revision: 1202 $
 
 =cut

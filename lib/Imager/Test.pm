@@ -4,7 +4,7 @@ use Test::Builder;
 require Exporter;
 use vars qw(@ISA @EXPORT_OK);
 @ISA = qw(Exporter);
-@EXPORT_OK = qw(diff_text_with_nul test_image_raw test_image_16 is_color3 is_color1 is_image);
+@EXPORT_OK = qw(diff_text_with_nul test_image_raw test_image_16 test_image is_color3 is_color1 is_image is_image_similar image_bounds_checks);
 
 sub diff_text_with_nul {
   my ($desc, $text1, $text2, @params) = @_;
@@ -98,6 +98,19 @@ sub test_image_raw {
   $img;
 }
 
+sub test_image {
+  my $green = Imager::Color->new(0, 255, 0, 255);
+  my $blue  = Imager::Color->new(0, 0, 255, 255);
+  my $red   = Imager::Color->new(255, 0, 0, 255);
+  my $img = Imager->new(xsize => 150, ysize => 150);
+  $img->box(filled => 1, color => $green, box => [ 70, 25, 130, 125 ]);
+  $img->box(filled => 1, color => $blue,  box => [ 20, 25, 80, 125 ]);
+  $img->arc(x => 75, y => 75, r => 30, color => $red);
+  $img->filter(type => 'conv', coef => [ 0.1, 0.2, 0.4, 0.2, 0.1 ]);
+
+  $img;
+}
+
 sub test_image_16 {
   my $green = Imager::Color->new(0, 255, 0, 255);
   my $blue  = Imager::Color->new(0, 0, 255, 255);
@@ -111,8 +124,8 @@ sub test_image_16 {
   $img;
 }
 
-sub is_image($$$) {
-  my ($left, $right, $comment) = @_;
+sub is_image_similar($$$$) {
+  my ($left, $right, $limit, $comment) = @_;
 
   my $builder = Test::Builder->new;
 
@@ -155,13 +168,47 @@ sub is_image($$$) {
     return;
   }
   my $diff = Imager::i_img_diff($left->{IMG}, $right->{IMG});
-  unless ($diff == 0) {
+  if ($diff > $limit) {
     $builder->ok(0, $comment);
-    $builder->diag("image data different - $diff");
+    $builder->diag("image data difference > $limit - $diff");
     return;
   }
   
   return $builder->ok(1, $comment);
+}
+
+sub is_image($$$) {
+  my ($left, $right, $comment) = @_;
+
+  local $Test::Builder::Level = $Test::Builder::Level + 1;
+
+  return is_image_similar($left, $right, 0, $comment);
+}
+
+sub image_bounds_checks {
+  my $im = shift;
+
+  my $builder = Test::Builder->new;
+
+  $builder->ok(!$im->getpixel(x => -1, y => 0), 'bounds check get (-1, 0)');
+  $builder->ok(!$im->getpixel(x => 10, y => 0), 'bounds check get (10, 0)');
+  $builder->ok(!$im->getpixel(x => 0, y => -1), 'bounds check get (0, -1)');
+  $builder->ok(!$im->getpixel(x => 0, y => 10), 'bounds check get (0, 10)');
+  $builder->ok(!$im->getpixel(x => -1, y => 0), 'bounds check get (-1, 0) float');
+  $builder->ok(!$im->getpixel(x => 10, y => 0), 'bounds check get (10, 0) float');
+  $builder->ok(!$im->getpixel(x => 0, y => -1), 'bounds check get (0, -1) float');
+  $builder->ok(!$im->getpixel(x => 0, y => 10), 'bounds check get (0, 10) float');
+  my $black = Imager::Color->new(0, 0, 0);
+  require Imager::Color::Float;
+  my $blackf = Imager::Color::Float->new(0, 0, 0);
+  $builder->ok(!$im->setpixel(x => -1, y => 0, color => $black), 'bounds check set (-1, 0)');
+  $builder->ok(!$im->setpixel(x => 10, y => 0, color => $black), 'bounds check set (10, 0)');
+  $builder->ok(!$im->setpixel(x => 0, y => -1, color => $black), 'bounds check set (0, -1)');
+  $builder->ok(!$im->setpixel(x => 0, y => 10, color => $black), 'bounds check set (0, 10)');
+  $builder->ok(!$im->setpixel(x => -1, y => 0, color => $blackf), 'bounds check set (-1, 0) float');
+  $builder->ok(!$im->setpixel(x => 10, y => 0, color => $blackf), 'bounds check set (10, 0) float');
+  $builder->ok(!$im->setpixel(x => 0, y => -1, color => $blackf), 'bounds check set (0, -1) float');
+  $builder->ok(!$im->setpixel(x => 0, y => 10, color => $blackf), 'bounds check set (0, 10) float');
 }
 
 1;
@@ -200,7 +247,16 @@ Tests if the 2 images have the same content.  Both images must be
 defined, have the same width, height, channels and the same color in
 each pixel.  The color comparison is done at 8-bits per pixel.  The
 color representation such as direct vs paletted, bits per sample are
-not checked.
+not checked.  Equivalent to is_image_similar($im1, $im2, 0, $comment).
+
+=item is_image_similar($im1, $im2, $maxdiff, $comment)
+
+Tests if the 2 images have similar content.  Both images must be
+defined, have the same width, height and channels.  The cum of the
+squares of the differences of each sample are calculated and must be
+less than or equal to I<$maxdiff> for the test to pass.  The color
+comparison is done at 8-bits per pixel.  The color representation such
+as direct vs paletted, bits per sample are not checked.
 
 =item test_image_raw()
 
@@ -220,6 +276,13 @@ Extra options that should be supplied include the font and either a
 color or channel parameter.
 
 This was explicitly created for regression tests on #21770.
+
+=item image_bounds_checks($im)
+
+Attempts to write to various pixel positions outside the edge of the
+image to ensure that it fails in those locations.
+
+Any new image type should pass these tests.  Does 16 separate tests.
 
 =back
 

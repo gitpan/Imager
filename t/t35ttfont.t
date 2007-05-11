@@ -1,18 +1,18 @@
 #!perl -w
 use strict;
-use Test::More tests => 85;
+use Test::More tests => 91;
 
 $|=1;
 
 BEGIN { use_ok(Imager => ':all') }
 require "t/testtools.pl";
-use Imager::Test qw(diff_text_with_nul);
+use Imager::Test qw(diff_text_with_nul is_color3);
 
 init_log("testout/t35ttfont.log",2);
 
 SKIP:
 {
-  skip("freetype 1.x unavailable or disabled", 84) 
+  skip("freetype 1.x unavailable or disabled", 90) 
     unless i_has_format("tt");
   print "# has tt\n";
   
@@ -21,14 +21,15 @@ SKIP:
 
   if (!ok(-f $fontname, "check test font file exists")) {
     print "# cannot find fontfile for truetype test $fontname\n";
-    skip('Cannot load test font', 83);
+    skip('Cannot load test font', 89);
   }
 
   i_init_fonts();
   #     i_tt_set_aa(1);
   
   my $bgcolor = i_color_new(255,0,0,0);
-  my $overlay = Imager::ImgRaw::new(200,70,3);
+  my $overlay = Imager::ImgRaw::new(320,140,3);
+  i_box_filled($overlay, 0, 0, 319, 139, i_color_new(128, 128, 128));
   
   my $ttraw = Imager::i_tt_new($fontname);
   ok($ttraw, "create font");
@@ -38,6 +39,7 @@ SKIP:
   print "#bbox: ($bbox[0], $bbox[1]) - ($bbox[2], $bbox[3])\n";
 
   ok(i_tt_cp($ttraw,$overlay,5,50,1,50.0,'XM CLH',6,1,0), "cp output");
+  ok(i_tt_cp($ttraw,$overlay,5,120,1,50.0,'XM CLH',6,0,0), "cp output (non AA)");
   i_line($overlay,0,50,100,50,$bgcolor,1);
 
   open(FH,">testout/t35ttfont.ppm") || die "cannot open testout/t35ttfont.ppm\n";
@@ -53,6 +55,8 @@ SKIP:
   
   ok(i_tt_text($ttraw,$backgr,100,120,$bgcolor,50.0,'te st',5,1,0),
       "normal output");
+  ok(i_tt_text($ttraw,$backgr,100,200,$bgcolor,50.0,'te st',5,0,0),
+      "normal output (non AA)");
 
   my $ugly = Imager::i_tt_new("./fontfiles/ImUgly.ttf");
   ok($ugly, "create ugly font");
@@ -256,7 +260,7 @@ SKIP:
   { # introduced in 0.46 - outputting just space crashes
     my $im = Imager->new(xsize=>100, ysize=>100);
     my $font = Imager::Font->new(file=>'fontfiles/ImUgly.ttf', size=>14);
-    ok($im->string(font=>$font, x=> 5, y => 50, string=>' '),
+    ok($im->string(font=>$font, x=> 5, 'y' => 50, string=>' '),
       "outputting just a space was crashing");
   }
 
@@ -276,6 +280,24 @@ SKIP:
 		       font => $font, color => '#FFFFFF', utf8 => 1);
     diff_text_with_nul("utf8 dash\0dash vs dash", "$dash\0$dash", $dash,
 		       font => $font, channel => 1, utf8 => 1);
+  }
+
+  { # RT 11972
+    # when rendering to a transparent image the coverage should be
+    # expressed in terms of the alpha channel rather than the color
+    my $font = Imager::Font->new(file=>'fontfiles/ImUgly.ttf', type=>'tt');
+    my $im = Imager->new(xsize => 40, ysize => 20, channels => 4);
+    ok($im->string(string => "AB", size => 20, aa => 1, color => '#F00',
+		   x => 0, y => 15, font => $font),
+       "draw to transparent image");
+    #$im->write(file => "foo.png");
+    my $im_noalpha = $im->convert(preset => 'noalpha');
+    my $im_pal = $im->to_paletted(make_colors => 'mediancut');
+    my @colors = $im_pal->getcolors;
+    is(@colors, 2, "should be only 2 colors");
+    @colors = sort { ($a->rgba)[0] <=> ($b->rgba)[0] } @colors;
+    is_color3($colors[0], 0, 0, 0, "check we got black");
+    is_color3($colors[1], 255, 0, 0, "and red");
   }
 
   ok(1, "end of code");
