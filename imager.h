@@ -69,6 +69,8 @@ i_img *i_img_pal_new(int x, int y, int ch, int maxpal);
 void   i_img_setmask    (i_img *im,int ch_mask);
 int    i_img_getmask    (i_img *im);
 int    i_img_getchannels(i_img *im);
+i_img_dim i_img_get_width(i_img *im);
+i_img_dim i_img_get_height(i_img *im);
 
 /* Base functions */
 
@@ -192,7 +194,7 @@ void i_conv        (i_img *im,const float *coeff,int len);
 void i_unsharp_mask(i_img *im, double stddev, double scale);
 
 /* colour manipulation */
-extern int i_convert(i_img *im, i_img *src, const float *coeff, int outchan, int inchan);
+extern i_img *i_convert(i_img *src, const float *coeff, int outchan, int inchan);
 extern void i_map(i_img *im, unsigned char (*maps)[256], unsigned int mask);
 
 float i_img_diff   (i_img *im1,i_img *im2);
@@ -282,6 +284,7 @@ extern int i_wf_text(const char *face, i_img *im, int tx, int ty, const i_color 
 extern int i_wf_cp(const char *face, i_img *im, int tx, int ty, int channel, 
 		   int size, const char *text, int len, int align, int aa, int utf8);
 extern int i_wf_addfont(char const *file);
+extern int i_wf_delfont(char const *file);
 
 #endif
 
@@ -422,6 +425,7 @@ i_img * i_scale_nn(i_img *im, float scx, float scy);
 i_img * i_scale_mixing(i_img *src, int width, int height);
 i_img * i_haar(i_img *im);
 int     i_count_colors(i_img *im,int maxc);
+int i_get_anonymous_color_histo(i_img *im, unsigned int **col_usage, int maxc);
 
 i_img * i_transform(i_img *im, int *opx,int opxl,int *opy,int opyl,double parm[],int parmlen);
 

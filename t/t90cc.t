@@ -1,27 +1,69 @@
-# Before `make install' is performed this script should be runnable with
-# `make test'. After `make install' it should work as `perl test.pl'
-
-######################### We start with some black magic to print on failure.
-
-# Change 1..1 below to 1..last_test_to_print .
-# (It may become useful if the test is moved to ./t subdirectory.)
-
-
-BEGIN { $| = 1; print "1..3\n"; }
-END {print "not ok 1\n" unless $loaded;}
+#!perl -w
+use strict;
+use Test::More tests => 16;
 
 use Imager;
-$loaded=1;
-
-print "ok 1\n";
 
 Imager::init('log'=>'testout/t90cc.log');
 
-$img=Imager->new();
-$img->open(file=>'testimg/scale.ppm') || print "failed: ",$img->{ERRSTR},"\n";
-print "ok 2\n";
+{
+  my $img=Imager->new();
+  ok($img->open(file=>'testimg/scale.ppm'), 'load test image')
+    or print "failed: ",$img->{ERRSTR},"\n";
+  
+  ok(defined($img->getcolorcount(maxcolors=>10000)), 'check color count is small enough');
+  print "# color count: ".$img->getcolorcount()."\n";
+  is($img->getcolorcount(), 86, 'expected number of colors');
+  is($img->getcolorcount(maxcolors => 50), undef, 'check overflow handling');
+}
 
-print "# Less than 10K colors in image\n" if !defined($img->getcolorcount(maxcolors=>10000));
-print "# color count: ".$img->getcolorcount()."\n";
+{
+  my $black = Imager::Color->new(0, 0, 0);
+  my $blue  = Imager::Color->new(0, 0, 255);
+  my $red   = Imager::Color->new(255, 0, 0);
+  
+  my $im    = Imager->new(xsize=>50, ysize=>50);
+  
+  my $count = $im->getcolorcount();
+  is ($count, 1, "getcolorcount is 1");
+  my @colour_usage = $im->getcolorusage();
+  is_deeply (\@colour_usage, [2500], "2500 are in black");
+  
+  $im->box(filled=>1, color=>$blue, xmin=>25);
+  
+  $count = $im->getcolorcount();
+  is ($count, 2, "getcolorcount is 2");
+  @colour_usage = $im->getcolorusage();
+  is_deeply(\@colour_usage, [1250, 1250] , "1250, 1250: Black and blue");
+  
+  $im->box(filled=>1, color=>$red, ymin=>25);
+  
+  $count = $im->getcolorcount();
+  is ($count, 3, "getcolorcount is 3");
+  @colour_usage = $im->getcolorusage();
+  is_deeply(\@colour_usage, [625, 625, 1250] , 
+	    "625, 625, 1250: Black blue and red");
+  @colour_usage = $im->getcolorusage(maxcolors => 2);
+  is(@colour_usage, 0, 'test overflow check');
+  
+  my $colour_usage = $im->getcolorusagehash();
+  my $red_pack = pack("CCC", 255, 0, 0);
+  my $blue_pack = pack("CCC", 0, 0, 255);
+  my $black_pack = pack("CCC", 0, 0, 0);
+  is_deeply( $colour_usage, 
+	     { $black_pack => 625, $blue_pack => 625, $red_pack => 1250 },
+	     "625, 625, 1250: Black blue and red (hash)");
+  is($im->getcolorusagehash(maxcolors => 2), undef,
+     'test overflow check');
 
-print "ok 3\n";
+  # test with a greyscale image
+  my $im_g = $im->convert(preset => 'grey');
+  # since the grey preset scales each source channel differently
+  # each of the original colors will be converted to different colors
+  is($im_g->getcolorcount, 3, '3 colors (grey)');
+  is_deeply([ $im_g->getcolorusage ], [ 625, 625, 1250 ], 
+	    'color counts (grey)');
+  is_deeply({ "\x00" => 625, "\x12" => 625, "\x38" => 1250 },
+	    $im_g->getcolorusagehash,
+	    'color usage hash (grey)');
+}

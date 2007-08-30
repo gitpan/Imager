@@ -540,87 +540,91 @@ use most of them when writing to GIF:
 
 =over
 
-=item gif_left
+=item *
 
-the offset of the image from the left of the "screen" ("Image Left
-Position")
+gif_left - the offset of the image from the left of the "screen"
+("Image Left Position")
 
-=item gif_top
+=item *
 
-the offset of the image from the top of the "screen" ("Image Top Position")
+gif_top - the offset of the image from the top of the "screen" ("Image
+Top Position")
 
-=item gif_interlace
+=item *
 
-non-zero if the image was interlaced ("Interlace Flag")
+gif_interlace - non-zero if the image was interlaced ("Interlace
+Flag")
 
-=item gif_screen_width
+=item *
 
-=item gif_screen_height
+gif_screen_width, gif_screen_height - the size of the logical
+screen. When writing this is used as the minimum.  If any image being
+written would extend beyond this then the screen size is extended.
+("Logical Screen Width", "Logical Screen Height").
 
-the size of the logical screen. When writing this is used as the
-minimum.  If any image being written would extend beyond this the
-screen size is extended.  ("Logical Screen Width", "Logical Screen
-Height").
+=item *
 
-When writing this is used as a minimum, if the combination of the
-image size and the image's C<gif_left> and C<gif_top> is beyond this
-size then the screen size will be expanded.
+gif_local_map - Non-zero if this image had a local color map.  If set
+for an image when writing the image is quantized separately from the
+other images in the file.
 
-=item gif_local_map
+=item *
 
-Non-zero if this image had a local color map.  If set for an image
-when writing the image is quantized separately from the other images
-in the file.
+gif_background - The index in the global colormap of the logical
+screen's background color.  This is only set if the current image uses
+the global colormap.  You can set this on write too, but for it to
+choose the color you want, you will need to supply only paletted
+images and set the C<gif_eliminate_unused> tag to 0.
 
-=item gif_background
+=item *
 
-The index in the global colormap of the logical screen's background
-color.  This is only set if the current image uses the global
-colormap.  You can set this on write too, but for it to choose the
-color you want, you will need to supply only paletted images and set
-the C<gif_eliminate_unused> tag to 0.
+gif_trans_index - The index of the color in the colormap used for
+transparency.  If the image has a transparency then it is returned as
+a 4 channel image with the alpha set to zero in this palette entry.
+This value is not used when writing. ("Transparent Color Index")
 
-=item gif_trans_index
+=item *
 
-The index of the color in the colormap used for transparency.  If the
-image has a transparency then it is returned as a 4 channel image with
-the alpha set to zero in this palette entry.  This value is not used
-when writing. ("Transparent Color Index")
+gif_trans_color - A reference to an Imager::Color object, which is the
+colour to use for the palette entry used to represent transparency in
+the palette.  You need to set the transp option (see L<Quantization
+options>) for this value to be used.
 
-=item gif_trans_color
+=item *
 
-A reference to an Imager::Color object, which is the colour to use for
-the palette entry used to represent transparency in the palette.  You
-need to set the transp option (see L<Quantization options>) for this
-value to be used.
+gif_delay - The delay until the next frame is displayed, in 1/100 of a
+second.  ("Delay Time").
 
-=item gif_delay
+=item *
 
-The delay until the next frame is displayed, in 1/100 of a second. 
-("Delay Time").
+gif_user_input - whether or not a user input is expected before
+continuing (view dependent) ("User Input Flag").
 
-=item gif_user_input
+=item *
 
-whether or not a user input is expected before continuing (view dependent) 
-("User Input Flag").
+gif_disposal - how the next frame is displayed ("Disposal Method")
 
-=item gif_disposal
+=item *
 
-how the next frame is displayed ("Disposal Method")
+gif_loop - the number of loops from the Netscape Loop extension.  This
+may be zero to loop forever.
 
-=item gif_loop
+=item *
 
-the number of loops from the Netscape Loop extension.  This may be
-zero to loop forever.
+gif_comment - the first block of the first gif comment before each
+image.
 
-=item gif_comment
+=item *
 
-the first block of the first gif comment before each image.
+gif_eliminate_unused - If this is true, when you write a paletted
+image any unused colors will be eliminated from its palette.  This is
+set by default.
 
-=item gif_eliminate_unused
+=item *
 
-If this is true, when you write a paletted image any unused colors
-will be eliminated from its palette.  This is set by default.
+gif_colormap_size - the original size of the color map for the image.
+The color map of the image may have been expanded to include out of
+range color indexes.
 
 =back
 
@@ -633,38 +637,38 @@ by supplying the tag and value as options.
 
 =over
 
-=item gif_each_palette
+=item *
 
-Each image in the gif file has it's own palette if this is non-zero.
-All but the first image has a local colour table (the first uses the
-global colour table.
+gif_each_palette - Each image in the gif file has it's own palette if
+this is non-zero.  All but the first image has a local colour table
+(the first uses the global colour table.
 
 Use C<gif_local_map> in new code.
 
-=item interlace
+=item *
 
-The images are written interlaced if this is non-zero.
+interlace - The images are written interlaced if this is non-zero.
 
 Use C<gif_interlace> in new code.
 
-=item gif_delays
+=item *
 
-A reference to an array containing the delays between images, in 1/100
-seconds.
+gif_delays - A reference to an array containing the delays between
+images, in 1/100 seconds.
 
 Use C<gif_delay> in new code.
 
-=item gif_positions
+=item *
 
-A reference to an array of references to arrays which represent screen
-positions for each image.
+gif_positions - A reference to an array of references to arrays which
+represent screen positions for each image.
 
 New code should use the C<gif_left> and C<gif_top> tags.
 
-=item gif_loop_count
+=item *
 
-If this is non-zero the Netscape loop extension block is generated,
-which makes the animation of the images repeat.
+gif_loop_count - If this is non-zero the Netscape loop extension block
+is generated, which makes the animation of the images repeat.
 
 This is currently unimplemented due to some limitations in giflib.
 
@@ -1039,6 +1043,27 @@ clipped to the size of the image when written to the file.
 
 =back
 
+The following parameters can be supplied to read() or read_multi() to
+control reading of ICO/CUR files:
+
+=over
+
+=item *
+
+ico_masked - if true, the default, then the icon/cursors mask is
+applied as an alpha channel to the image.  This may result in a
+paletted image being returned as a direct color image.  Default: 1
+
+  # retrieve the image as stored, without using the mask as an alpha
+  # channel
+  $img->read(file => 'foo.ico', ico_masked => 0)
+    or die $img->errstr;
+
+This was introduced in Imager 0.60.  Previously reading ICO images
+acted as if C<<ico_masked => 0>>.
+
+=back
+
 C<cur_bits> is set when reading a cursor.
 
 Examples:
@@ -1050,6 +1075,43 @@ Examples:
   $im->settag(name => 'cur_hotspotx', value => 16);
   $im->settag(name => 'cur_hotspoty', value => 16);
   $im->write(file => 'box.cur');
+
+=head2 SGI (RGB, BW)
+
+SGI images, often called by the extensions, RGB or BW, can be stored
+either uncompressed or compressed using an RLE compression.
+
+By default, when saving to an extension of C<rgb>, C<bw>, C<sgi>,
+C<rgba> the file will be saved in SGI format.  The file extension is
+otherwise ignored, so saving a 3-channel image to a C<.bw> file will
+result in a 3-channel image on disk.
+
+The following tags are set when reading a SGI image:
+
+=over
+
+=item *
+
+i_comment - the IMAGENAME field from the image.  Also written to the
+file when writing.
+
+=item *
+
+sgi_pixmin, sgi_pixmax - the PIXMIN and PIXMAX fields from the image.
+On reading image data is expanded from this range to the full range of
+samples in the image.
+
+=item *
+
+sgi_bpc - the number of bytes per sample for the image.  Ignored when
+writing.
+
+=item *
+
+sgi_rle - whether or not the image is compressed.  If this is non-zero
+when writing the image will be compressed.
+
+=back
 
 =head1 ADDING NEW FORMATS
 

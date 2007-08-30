@@ -155,7 +155,7 @@ my %attempted_to_load;
 BEGIN {
   require Exporter;
   @ISA = qw(Exporter);
-  $VERSION = '0.59';
+  $VERSION = '0.60';
   eval {
     require XSLoader;
     XSLoader::load(Imager => $VERSION);
@@ -1356,7 +1356,7 @@ sub read {
       my $page = $input{'page'};
       defined $page or $page = 0;
       $self->{IMG} = i_readgif_single_wiol( $IO, $page );
-      if ($input{colors}) {
+      if ($self->{IMG} && $input{colors}) {
 	${ $input{colors} } =
 	  [ i_getcolors($self->{IMG}, 0, i_colorcount($self->{IMG})) ];
       }
@@ -1377,16 +1377,6 @@ sub read {
     }
     $self->{DEBUG} && print "loading a tga file\n";
   }
-
-  if ( $input{'type'} eq 'rgb' ) {
-    $self->{IMG}=i_readrgb_wiol( $IO, -1 ); # Fixme, check if that length parameter is ever needed
-    if ( !defined($self->{IMG}) ) {
-      $self->{ERRSTR}=$self->_error_as_msg();
-      return undef;
-    }
-    $self->{DEBUG} && print "loading a tga file\n";
-  }
-
 
   if ( $input{'type'} eq 'raw' ) {
     my %params=(datachannels=>3,storechannels=>3,interleave=>1,%input);
@@ -3155,9 +3145,9 @@ sub convert {
     $matrix = $opts{matrix};
   }
 
-  my $new = Imager->new();
-  $new->{IMG} = i_img_new();
-  unless (i_convert($new->{IMG}, $self->{IMG}, $matrix)) {
+  my $new = Imager->new;
+  $new->{IMG} = i_convert($self->{IMG}, $matrix);
+  unless ($new->{IMG}) {
     # most likely a bad matrix
     $self->{ERRSTR} = _error_as_msg();
     return undef;
@@ -3277,6 +3267,61 @@ sub getcolorcount {
   if (!defined($self->{IMG})) { $self->{ERRSTR}='image is empty'; return undef; }
   my $rc=i_count_colors($self->{IMG},$opts{'maxcolors'});
   return ($rc==-1? undef : $rc);
+}
+
+# Returns a reference to a hash. The keys are colour named (packed) and the
+# values are the number of pixels in this colour.
+sub getcolorusagehash {
+  my $self = shift;
+  
+  my %opts = ( maxcolors => 2**30, @_ );
+  my $max_colors = $opts{maxcolors};
+  unless (defined $max_colors && $max_colors > 0) {
+    $self->_set_error('maxcolors must be a positive integer');
+    return;
+  }
+
+  unless (defined $self->{IMG}) {
+    $self->_set_error('empty input image'); 
+    return;
+  }
+
+  my $channels= $self->getchannels;
+  # We don't want to look at the alpha channel, because some gifs using it
+  # doesn't define it for every colour (but only for some)
+  $channels -= 1 if $channels == 2 or $channels == 4;
+  my %color_use;
+  my $height = $self->getheight;
+  for my $y (0 .. $height - 1) {
+    my $colors = $self->getsamples('y' => $y, channels => [ 0 .. $channels - 1 ]);
+    while (length $colors) {
+      $color_use{ substr($colors, 0, $channels, '') }++;
+    }
+    keys %color_use > $max_colors
+      and return;
+  }
+  return \%color_use;
+}
+
+# This will return a ordered array of the colour usage. Kind of the sorted
+# version of the values of the hash returned by getcolorusagehash.
+# You might want to add safety checks and change the names, etc...
+sub getcolorusage {
+  my $self = shift;
+
+  my %opts = ( maxcolors => 2**30, @_ );
+  my $max_colors = $opts{maxcolors};
+  unless (defined $max_colors && $max_colors > 0) {
+    $self->_set_error('maxcolors must be a positive integer');
+    return;
+  }
+
+  unless (defined $self->{IMG}) {
+    $self->_set_error('empty input image'); 
+    return undef;
+  }
+
+  return i_get_anonymous_color_histo($self->{IMG}, $max_colors);
 }
 
 # draw string to an image
@@ -3409,7 +3454,7 @@ sub def_guess_type {
   return 'png'  if ($ext eq "png");
   return 'bmp'  if ($ext eq "bmp" || $ext eq "dib");
   return 'tga'  if ($ext eq "tga");
-  return 'rgb'  if ($ext eq "rgb");
+  return 'sgi'  if ($ext eq "rgb" || $ext eq "bw" || $ext eq "sgi" || $ext eq "rgba");
   return 'gif'  if ($ext eq "gif");
   return 'raw'  if ($ext eq "raw");
   return lc $ext; # best guess
@@ -3743,6 +3788,10 @@ getcolorcount() -  L<Imager::ImageTypes/getcolorcount>
 getcolors() - L<Imager::ImageTypes/getcolors> - get colors from the image
 palette, if it has one
 
+getcolorusage() - L<Imager::ImageTypes/getcolorusage>
+
+getcolorusagehash() - L<Imager::ImageTypes/getcolorusagehash>
+
 get_file_limits() - L<Imager::Files/"Limiting the sizes of images you read">
 
 getheight() - L<Imager::ImageTypes/getwidth>
@@ -3888,6 +3937,8 @@ convolution - L<Imager::Filter/conv>
 
 cropping - L<Imager::Transformations/crop>
 
+CUR files - L<Imager::Files/"ICO (Microsoft Windows Icon) and CUR (Microsoft Windows Cursor)">
+
 C<diff> images - L<Imager::Filter/"Image Difference">
 
 dpi - L<Imager::ImageTypes/i_xres>, 
@@ -3938,6 +3989,8 @@ guassian blur - L<Imager::Filter/guassian>
 
 hatch fills - L<Imager::Fill/"Hatched fills">
 
+ICO files - L<Imager::Files/"ICO (Microsoft Windows Icon) and CUR (Microsoft Windows Cursor)">
+
 invert image - L<Imager::Filter/hardinvert>
 
 JPEG - L<Imager::Files/"JPEG">
@@ -3976,9 +4029,13 @@ rectangles, drawing - L<Imager::Draw/box>
 resizing an image - L<Imager::Transformations/scale>, 
 L<Imager::Transformations/crop>
 
+RGB (SGI) files - L<Imager::Files/"SGI (RGB, BW)">
+
 saving an image - L<Imager::Files>
 
 scaling - L<Imager::Transformations/scale>
+
+SGI files - L<Imager::Files/"SGI (RGB, BW)">
 
 sharpen - L<Imager::Filters/unsharpmask>, L<Imager::Filters/conv>
 
@@ -4027,6 +4084,14 @@ You can report bugs by pointing your browser at:
 =over
 
 L<https://rt.cpan.org/NoAuth/ReportBug.html?Queue=Imager>
+
+=back
+
+or by sending an email to:
+
+=over
+
+bug-Imager@rt.cpan.org
 
 =back
 

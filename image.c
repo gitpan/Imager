@@ -481,6 +481,9 @@ i_img_info(i_img *im,int *info) {
 /*
 =item i_img_setmask(im, ch_mask)
 
+=synopsis // only channel 0 writeable 
+=synopsis i_img_setmask(img, 0x01);
+
 Set the image channel mask for I<im> to I<ch_mask>.
 
 =cut
@@ -492,6 +495,8 @@ i_img_setmask(i_img *im,int ch_mask) { im->ch_mask=ch_mask; }
 /*
 =item i_img_getmask(im)
 
+=synopsis mask = i_img_getmask(img);
+
 Get the image channel mask for I<im>.
 
 =cut
@@ -502,6 +507,8 @@ i_img_getmask(i_img *im) { return im->ch_mask; }
 /*
 =item i_img_getchannels(im)
 
+=synopsis channels = i_img_getchannels(img);
+
 Get the number of channels in I<im>.
 
 =cut
@@ -509,7 +516,33 @@ Get the number of channels in I<im>.
 int
 i_img_getchannels(i_img *im) { return im->channels; }
 
+/*
+=item i_img_get_width(im)
 
+=synopsis width = i_img_get_width(im);
+
+Returns the width in pixels of the image.
+
+=cut
+*/
+i_img_dim
+i_img_get_width(i_img *im) {
+  return im->xsize;
+}
+
+/*
+=item i_img_get_height(im)
+
+=synopsis height = i_img_get_height(im);
+
+Returns the height in pixels of the image.
+
+=cut
+*/
+i_img_dim
+i_img_get_height(i_img *im) {
+  return im->ysize;
+}
 
 /*
 =item i_copyto_trans(im, src, x1, y1, x2, y2, tx, ty, trans)
@@ -1221,26 +1254,139 @@ to indicate that it was more than max colors
 
 =cut
 */
+/* This function has been changed and is now faster. It's using
+ * i_gsamp instead of i_gpix */
 int
 i_count_colors(i_img *im,int maxc) {
   struct octt *ct;
   int x,y;
-  int xsize,ysize;
-  i_color val;
   int colorcnt;
+  int channels[3];
+  int *samp_chans;
+  i_sample_t * samp;
+  int xsize = im->xsize; 
+  int ysize = im->ysize;
+  int samp_cnt = 3 * xsize;
 
-  mm_log((1,"i_count_colors(im 0x%08X,maxc %d)\n"));
-
-  xsize=im->xsize; 
-  ysize=im->ysize;
-  ct=octt_new();
- 
-  colorcnt=0;
-  for(y=0;y<ysize;y++) for(x=0;x<xsize;x++) {
-    i_gpix(im,x,y,&val);
-    colorcnt+=octt_add(ct,val.rgb.r,val.rgb.g,val.rgb.b);
-    if (colorcnt > maxc) { octt_delete(ct); return -1; }
+  if (im->channels >= 3) {
+    samp_chans = NULL;
   }
+  else {
+    channels[0] = channels[1] = channels[2] = 0;
+    samp_chans = channels;
+  }
+
+  ct = octt_new();
+
+  samp = (i_sample_t *) mymalloc( xsize * 3 * sizeof(i_sample_t));
+
+  colorcnt = 0;
+  for(y = 0; y < ysize; ) {
+      i_gsamp(im, 0, xsize, y++, samp, samp_chans, 3);
+      for(x = 0; x < samp_cnt; ) {
+          colorcnt += octt_add(ct, samp[x], samp[x+1], samp[x+2]);
+          x += 3;
+          if (colorcnt > maxc) { 
+              octt_delete(ct); 
+              return -1; 
+          }
+      }
+  }
+  myfree(samp);
+  octt_delete(ct);
+  return colorcnt;
+}
+
+/* sorts the array ra[0..n-1] into increasing order using heapsort algorithm 
+ * (adapted from the Numerical Recipes)
+ */
+/* Needed by get_anonymous_color_histo */
+static void
+hpsort(unsigned int n, unsigned *ra) {
+    unsigned int i,
+                 ir,
+                 j,
+                 l, 
+                 rra;
+
+    if (n < 2) return;
+    l = n >> 1;
+    ir = n - 1;
+    for(;;) {
+        if (l > 0) {
+            rra = ra[--l];
+        }
+        else {
+            rra = ra[ir];
+            ra[ir] = ra[0];
+            if (--ir == 0) {
+                ra[0] = rra;
+                break;
+            }
+        }
+        i = l;
+        j = 2 * l + 1;
+        while (j <= ir) {
+            if (j < ir && ra[j] < ra[j+1]) j++;
+            if (rra < ra[j]) {
+                ra[i] = ra[j];
+                i = j;
+                j++; j <<= 1; j--;
+            }
+            else break;
+        }
+        ra[i] = rra;
+    }
+}
+
+/* This function constructs an ordered list which represents how much the
+ * different colors are used. So for instance (100, 100, 500) means that one
+ * color is used for 500 pixels, another for 100 pixels and another for 100
+ * pixels. It's tuned for performance. You might not like the way I've hardcoded
+ * the maxc ;-) and you might want to change the name... */
+/* Uses octt_histo */
+int
+i_get_anonymous_color_histo(i_img *im, unsigned int **col_usage, int maxc) {
+  struct octt *ct;
+  int x,y;
+  int colorcnt;
+  unsigned int *col_usage_it;
+  i_sample_t * samp;
+  int channels[3];
+  int *samp_chans;
+  
+  int xsize = im->xsize; 
+  int ysize = im->ysize;
+  int samp_cnt = 3 * xsize;
+  ct = octt_new();
+  
+  samp = (i_sample_t *) mymalloc( xsize * 3 * sizeof(i_sample_t));
+  
+  if (im->channels >= 3) {
+    samp_chans = NULL;
+  }
+  else {
+    channels[0] = channels[1] = channels[2] = 0;
+    samp_chans = channels;
+  }
+
+  colorcnt = 0;
+  for(y = 0; y < ysize; ) {
+    i_gsamp(im, 0, xsize, y++, samp, samp_chans, 3);
+    for(x = 0; x < samp_cnt; ) {
+      colorcnt += octt_add(ct, samp[x], samp[x+1], samp[x+2]);
+      x += 3;
+      if (colorcnt > maxc) { 
+	octt_delete(ct); 
+	return -1; 
+      }
+    }
+  }
+  myfree(samp);
+  /* Now that we know the number of colours... */
+  col_usage_it = *col_usage = (unsigned int *) mymalloc(colorcnt * sizeof(unsigned int));
+  octt_histo(ct, &col_usage_it);
+  hpsort(colorcnt, *col_usage);
   octt_delete(ct);
   return colorcnt;
 }
@@ -2079,10 +2225,10 @@ i_test_format_probe(io_glue *data, int length) {
        on similar files 
        values are: 2 byte magic, rle flags (0 or 1), bytes/sample (1 or 2)
     */
-    FORMAT_ENTRY("\x01\xDA\x00\x01", "rgb"),
-    FORMAT_ENTRY("\x01\xDA\x00\x02", "rgb"),
-    FORMAT_ENTRY("\x01\xDA\x01\x01", "rgb"),
-    FORMAT_ENTRY("\x01\xDA\x01\x02", "rgb"),
+    FORMAT_ENTRY("\x01\xDA\x00\x01", "sgi"),
+    FORMAT_ENTRY("\x01\xDA\x00\x02", "sgi"),
+    FORMAT_ENTRY("\x01\xDA\x01\x01", "sgi"),
+    FORMAT_ENTRY("\x01\xDA\x01\x02", "sgi"),
     
     FORMAT_ENTRY2("FORM    ILBM", "ilbm", "xxxx    xxxx"),
 
