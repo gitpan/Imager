@@ -1,5 +1,68 @@
 Imager release history.  Older releases can be found in Changes.old
 
+Imager 0.61 - 5 November 2007
+===========
+
+ - added samples/gifscale.pl, which adjusts the screen size/position tags
+   when scaling an animated gif
+   http://rt.cpan.org/Ticket/Display.html?id=27591
+
+Bug fixes:
+
+ - correct handling of sz in matrix_transform() - this should allow
+   perspective type transformations to work now.
+   http://rt.cpan.org/Ticket/Display.html?id=29936
+
+ - prevent a cast to integer warning on x64 builds in datatypes.c
+   also fixed some other type warnings
+   https://rt.cpan.org/Ticket/Display.html?id=30204
+
+ - some sub-directory tests depended on files produced by the parent
+   directory tests
+   http://rt.cpan.org/Ticket/Display.html?id=30203
+
+ - Imager::Font::Wrap doesn't correctly set savepos
+   thanks to Nikita Dedik and Eleneldil G. Arilou for reporting this.
+   http://rt.cpan.org/Ticket/Display.html?id=29771
+
+ - test 171 in t/t01introvert.t was failing on perls configured to
+   use long double.
+   http://rt.cpan.org/Ticket/Display.html?id=29413
+
+ - the code for the transform2() uminus operator was missing a break.
+   Added tests for better code coverage of the ops.
+   http://rt.cpan.org/Ticket/Display.html?id=29296
+
+ - the SGI RLE compression code could overflow its compression buffer
+   http://rt.cpan.org/Ticket/Display.html?id=30334
+
+ - the 32-bit output function used by the SGI code only handled values
+   under 0x10000.  This was most noticable when writing large RLE images.
+   http://rt.cpan.org/Ticket/Display.html?id=30335
+
+ - validate chan_count for chans == NULL for each of the i_gsamp()
+   implementations.
+   http://rt.cpan.org/Ticket/Display.html?id=28985
+
+ - attempt to work around the test failure at 
+   http://www.nntp.perl.org/group/perl.cpan.testers/2007/09/msg650810.html
+   http://rt.cpan.org/Ticket/Display.html?id=29562
+
+ - improve the error messages produced when attempting to read or write
+   an unknown image file format.
+   http://rt.cpan.org/Ticket/Display.html?id=30103
+
+ - improve the transform2() documentation
+   http://rt.cpan.org/Ticket/Display.html?id=29267
+
+ - correctly generate the author key in META.yml
+   http://rt.cpan.org/Ticket/Display.html?id=30377
+
+ - correctly blend a rotated (or matrix_transformed()) image when
+   performing interpolation in the presence of an alpha channel.
+   Also corrected the centring of the rotated image on the output
+   image.
+
 Imager 0.60 - 30 August 2007
 ===========
 

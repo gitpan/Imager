@@ -81,7 +81,8 @@ static i_img IIM_base_double_direct =
 /*
 =item i_img_double_new(int x, int y, int ch)
 
-=category Image creation
+=category Image creation/destruction
+=synopsis i_img *img = i_img_double_new(width, height, channels);
 
 Creates a new double per sample image.
 
@@ -344,6 +345,11 @@ static int i_gsamp_ddoub(i_img *im, int l, int r, int y, i_sample_t *samps,
       }
     }
     else {
+      if (chan_count <= 0 || chan_count > im->channels) {
+	i_push_errorf(0, "chan_count %d out of range, must be >0, <= channels", 
+		      chan_count);
+	return 0;
+      }
       for (i = 0; i < w; ++i) {
         for (ch = 0; ch < chan_count; ++ch) {
           *samps++ = SampleFTo8(((double *)im->idata)[off+ch]);
@@ -389,6 +395,11 @@ static int i_gsampf_ddoub(i_img *im, int l, int r, int y, i_fsample_t *samps,
       }
     }
     else {
+      if (chan_count <= 0 || chan_count > im->channels) {
+	i_push_errorf(0, "chan_count %d out of range, must be >0, <= channels", 
+		      chan_count);
+	return 0;
+      }
       for (i = 0; i < w; ++i) {
         for (ch = 0; ch < chan_count; ++ch) {
           *samps++ = ((double *)im->idata)[off+ch];
