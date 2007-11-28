@@ -1,5 +1,45 @@
 Imager release history.  Older releases can be found in Changes.old
 
+Imager 0.61_02 - 28 November 2007
+==============
+
+ - major TIFF support re-work
+   http://rt.cpan.org/Ticket/Display.html?id=20329
+
+ - added a C level image interface for accessing samples from 1-32
+   bits, exposed this at the perl level in getsamples()
+
+ - the conv filter now works at floating point precision for high bit
+   images
+
+ - added is_bilevel method to test whether an image should be written as
+   a bilevel image if the image format supports it.
+
+ - added -log-stderr as an Imager import list option
+
+ - added some important types to Imager::APIRef
+
+ - added test_image_double() to Imager::Test
+
+Bug fixes:
+
+ - Imager::Fountain couldn't read GIMP gradient files with 10 or more
+   segments
+
+ - the scale() method with qtype mixing now handles images with an
+   alpha channel correctly.
+
+ - fixed a broken link from the "animated GIF" entry in the concept index.
+   Thanks to Slaven Rezic.
+   http://rt.cpan.org/Ticket/Display.html?id=30889
+
+ - on some perl's the infix expression parser test would fail due to
+   actions in the grammar returning false.  Made sure all actions return
+   a true value.
+   Thanks to Richard Fairhurst for spending a lot of time in tracking
+   down this problem.
+   http://rt.cpan.org/Public/Bug/Display.html?id=29562
+
 Imager 0.61 - 5 November 2007
 ===========
 
