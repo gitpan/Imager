@@ -1,5 +1,41 @@
 Imager release history.  Older releases can be found in Changes.old
 
+Imager 0.62 - 10 December 2007
+===========
+
+ - Makefile.PL now expands ~/path supplied to --incpath or --libpath
+   to /path under your home directory.
+   http://rt.cpan.org/Ticket/Display.html?id=29484
+
+ - the old dynaload code used Mach API functions to load dynamic
+   libraries on Mac OS X.  These APIs have been deprecated in OS X
+   10.5 and were causing some build problems.
+   So henceforth Imager uses the dlopen() family of functions, and you 
+   will need version 10.3 or later of OS X.
+
+ - added the det() function to the transform2() engine.
+   added the sample quad_to_square.pl
+   Courtesy Richard Fairhurst.
+   http://rt.cpan.org/Ticket/Display.html?id=31244
+
+Bug fixes:
+
+ - samples/gifscale.pl sourced the base value for gif_top from
+   gif_left.
+   Thanks to Eleneldil G. Arilou for pointing this out.
+
+ - t/t82inline.t no longer loads B at runtime, to work around a bug
+   in some 5.005_0[45] installations.
+   http://rt.cpan.org/Ticket/Display.html?id=30508
+
+ - work around Module::Depends::Intrusive bug #21229
+   http://rt.cpan.org/Ticket/Display.html?id=30520
+
+ - the hardinvert filter no-longer inverts the alpha channel.
+   http://rt.cpan.org/Ticket/Display.html?id=30002
+
+ - the hardinvert filter now supports large samples
+
 Imager 0.61_02 - 28 November 2007
 ==============
 
