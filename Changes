@@ -1,5 +1,85 @@
 Imager release history.  Older releases can be found in Changes.old
 
+Imager 0.63 - 7 April 2008
+===========
+
+This release primarily contains changes to improve ease of use -
+rather than you having to convert images to the appropriate number of
+channels, Imager handles it internally.  How to handle drawing colors
+and the default combine mode is a thornier problem left for some other
+release.
+
+ - the font libraries are now only initialized when needed.
+   http://rt.cpan.org/Ticket/Display.html?id=28825
+
+ - moved the imtoc.perl code into Imager::Preprocess
+
+ - paste() and rubthrough() now adapt the source image data to the
+   destination, so you can now safely paste/rubthrough from greyscale
+   images to color images or back, or from alpha channel images to
+   noalpha channels or back.
+   https://rt.cpan.org/Ticket/Display.html?id=30908
+
+ - rubthrough() now falls back to pasting when the source doesn't have
+   an alpha channel.  This effectively treats the source as having a
+   max alpha channel, the right thing to do.
+   http://rt.cpan.org/Ticket/Display.html?id=29944
+
+ - re-worked most of the area filling code to use a common set of
+   functions when filling.
+   Corrected normal combine mode.
+   Rewrote most of the combine modes to match the way the SVG draft
+   defines them with respect to a translucent source and destination.
+   Added tests for translucent source and destination.
+   Added tests to check 8-bit/sample and double/sample combines work
+   similarly.
+   https://rt.cpan.org/Ticket/Display.html?id=29879
+
+ - writing a 2 or 4 channel image to a JPEG file will now write that
+   image as if composited against a background, black by default,
+   overridable with the i_background tag/parameter.
+   https://rt.cpan.org/Ticket/Display.html?id=29876
+
+ - writing a 2 or 4 channel image to a PGM/PPM file will now write
+   that image as if composited against a background, black by default,
+   overridable with the i_background tag/parameter.
+   http://rt.cpan.org/Ticket/Display.html?id=30074
+
+ - writing a 2 or 4 channel image to a BMP file will now write that
+   image as if composited against a background, black by default,
+   overridable with the i_background tag/parameter.
+   http://rt.cpan.org/Ticket/Display.html?id=30075
+
+Bug fixes:
+
+ - Imager::Matrix2d->translate() now only requires one of the x or y
+   parameters.
+   http://rt.cpan.org/Ticket/Display.html?id=29937
+
+ - mixing qtype scaling now sets all channels of a pixel to zero if
+   the pixel has zero coverage (zero alpha).  This should produce more
+   compressible output files.
+   http://rt.cpan.org/Ticket/Display.html?id=32324
+
+ - removed the pointless #! line from lib/Imager/Font/Wrap.pm
+   Noticed when I saw:
+   https://bugzilla.redhat.com/show_bug.cgi?id=166254
+   I'm not changing the #! lines of the sample code, since it's sample
+   code, not intended for installation.
+   http://rt.cpan.org/Ticket/Display.html?id=33408
+
+ - some TGA images weren't being detected correctly as TGA images
+   https://rt.cpan.org/Ticket/Display.html?id=32925
+
+ - handling of the left-over bit for 16-bit/pixel TGA images has been
+   changed to match the behaviour of the GIMP.  Previously the bit
+   being set was treated as an opaque pixel, but one user reported a
+   problem with loading such an image.  I haven't been able to find any
+   tools beyond the GIMP that handle alpha-channel 16-bit TGAs, so
+   I'll match it's behaviour.  See issue 114913 in the GIMP's
+   bugzilla.
+   http://rt.cpan.org/Ticket/Display.html?id=32926
+
 Imager 0.62 - 10 December 2007
 ===========
 

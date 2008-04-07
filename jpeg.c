@@ -572,6 +572,7 @@ i_writejpeg_wiol(i_img *im, io_glue *ig, int qfactor) {
   int got_xres, got_yres, aspect_only, resunit;
   double xres, yres;
   int comment_entry;
+  int want_channels = im->channels;
 
   struct jpeg_compress_struct cinfo;
   struct my_error_mgr jerr;
@@ -579,6 +580,7 @@ i_writejpeg_wiol(i_img *im, io_glue *ig, int qfactor) {
   JSAMPROW row_pointer[1];	/* pointer to JSAMPLE row[s] */
   int row_stride;		/* physical row width in image buffer */
   unsigned char * data = NULL;
+  i_color *line_buf = NULL;
 
   mm_log((1,"i_writejpeg(im %p, ig %p, qfactor %d)\n", im, ig, qfactor));
   
@@ -586,8 +588,7 @@ i_writejpeg_wiol(i_img *im, io_glue *ig, int qfactor) {
   io_glue_commit_types(ig);
 
   if (!(im->channels==1 || im->channels==3)) { 
-    i_push_error(0, "only 1 or 3 channels images can be saved as JPEG");
-    return 0;
+    want_channels = im->channels - 1;
   }
   quality = qfactor;
 
@@ -601,6 +602,8 @@ i_writejpeg_wiol(i_img *im, io_glue *ig, int qfactor) {
     jpeg_destroy_compress(&cinfo);
     if (data)
       myfree(data);
+    if (line_buf)
+      myfree(line_buf);
     return 0;
   }
 
@@ -609,12 +612,12 @@ i_writejpeg_wiol(i_img *im, io_glue *ig, int qfactor) {
   cinfo.image_width  = im -> xsize; 	/* image width and height, in pixels */
   cinfo.image_height = im -> ysize;
 
-  if (im->channels==3) {
+  if (want_channels==3) {
     cinfo.input_components = 3;		/* # of color components per pixel */
     cinfo.in_color_space = JCS_RGB; 	/* colorspace of input image */
   }
 
-  if (im->channels==1) {
+  if (want_channels==1) {
     cinfo.input_components = 1;		/* # of color components per pixel */
     cinfo.in_color_space = JCS_GRAYSCALE; 	/* colorspace of input image */
   }
@@ -657,7 +660,8 @@ i_writejpeg_wiol(i_img *im, io_glue *ig, int qfactor) {
 
   row_stride = im->xsize * im->channels;	/* JSAMPLEs per row in image_buffer */
 
-  if (!im->virtual && im->type == i_direct_type && im->bits == i_8_bits) {
+  if (!im->virtual && im->type == i_direct_type && im->bits == i_8_bits
+      && im->channels == want_channels) {
     image_buffer=im->idata;
 
     while (cinfo.next_scanline < cinfo.image_height) {
@@ -670,6 +674,9 @@ i_writejpeg_wiol(i_img *im, io_glue *ig, int qfactor) {
     }
   }
   else {
+    i_color bg;
+
+    i_get_file_background(im, &bg);
     data = mymalloc(im->xsize * im->channels);
     if (data) {
       while (cinfo.next_scanline < cinfo.image_height) {
@@ -677,8 +684,8 @@ i_writejpeg_wiol(i_img *im, io_glue *ig, int qfactor) {
          * Here the array is only one element long, but you could pass
          * more than one scanline at a time if that's more convenient.
          */
-        i_gsamp(im, 0, im->xsize, cinfo.next_scanline, data, 
-                NULL, im->channels);
+        i_gsamp_bg(im, 0, im->xsize, cinfo.next_scanline, data, 
+		   want_channels, &bg);
         row_pointer[0] = data;
         (void) jpeg_write_scanlines(&cinfo, row_pointer, 1);
       }

@@ -644,75 +644,6 @@ i_copyto_trans(i_img *im,i_img *src,int x1,int y1,int x2,int y2,int tx,int ty,co
 }
 
 /*
-=item i_copyto(dest, src, x1, y1, x2, y2, tx, ty)
-
-=category Image
-
-Copies image data from the area (x1,y1)-[x2,y2] in the source image to
-a rectangle the same size with it's top-left corner at (tx,ty) in the
-destination image.
-
-If x1 > x2 or y1 > y2 then the corresponding co-ordinates are swapped.
-
-=cut
-*/
-
-void
-i_copyto(i_img *im, i_img *src, int x1, int y1, int x2, int y2, int tx, int ty) {
-  int x, y, t, ttx, tty;
-  
-  if (x2<x1) { t=x1; x1=x2; x2=t; }
-  if (y2<y1) { t=y1; y1=y2; y2=t; }
-  if (tx < 0) {
-    /* adjust everything equally */
-    x1 += -tx;
-    x2 += -tx;
-    tx = 0;
-  }
-  if (ty < 0) {
-    y1 += -ty;
-    y2 += -ty;
-    ty = 0;
-  }
-  if (x1 >= src->xsize || y1 >= src->ysize)
-    return; /* nothing to do */
-  if (x2 > src->xsize)
-    x2 = src->xsize;
-  if (y2 > src->ysize)
-    y2 = src->ysize;
-  if (x1 == x2 || y1 == y2)
-    return; /* nothing to do */
-
-  mm_log((1,"i_copyto(im* %p, src %p, x1 %d, y1 %d, x2 %d, y2 %d, tx %d, ty %d)\n",
-	  im, src, x1, y1, x2, y2, tx, ty));
-  
-  if (im->bits == i_8_bits) {
-    i_color *row = mymalloc(sizeof(i_color) * (x2-x1));
-    tty = ty;
-    for(y=y1; y<y2; y++) {
-      ttx = tx;
-      i_glin(src, x1, x2, y, row);
-      i_plin(im, tx, tx+x2-x1, tty, row);
-      tty++;
-    }
-    myfree(row);
-  }
-  else {
-    i_fcolor pv;
-    tty = ty;
-    for(y=y1; y<y2; y++) {
-      ttx = tx;
-      for(x=x1; x<x2; x++) {
-        i_gpixf(src, x,   y,   &pv);
-        i_ppixf(im,  ttx, tty, &pv);
-        ttx++;
-      }
-      tty++;
-    }
-  }
-}
-
-/*
 =item i_copy(src)
 
 =category Image
@@ -2500,6 +2431,50 @@ i_img_is_monochrome(i_img *im, int *zero_is_white) {
 
   *zero_is_white = 0;
   return 0;
+}
+
+/*
+=item i_get_file_background(im, &bg)
+
+Retrieve the file write background color tag from the image.
+
+If not present, returns black.
+
+=cut
+*/
+
+void
+i_get_file_background(i_img *im, i_color *bg) {
+  if (!i_tags_get_color(&im->tags, "i_background", 0, bg)) {
+    /* black default */
+    bg->channel[0] = bg->channel[1] = bg->channel[2] = 0;
+  }
+  /* always full alpha */
+  bg->channel[3] = 255;
+}
+
+/*
+=item i_get_file_backgroundf(im, &bg)
+
+Retrieve the file write background color tag from the image as a
+floating point color.
+
+Implemented in terms of i_get_file_background().
+
+If not present, returns black.
+
+=cut
+*/
+
+void
+i_get_file_backgroundf(i_img *im, i_fcolor *fbg) {
+  i_color bg;
+
+  i_get_file_background(im, &bg);
+  fbg->rgba.r = Sample8ToF(bg.rgba.r);
+  fbg->rgba.g = Sample8ToF(bg.rgba.g);
+  fbg->rgba.b = Sample8ToF(bg.rgba.b);
+  fbg->rgba.a = 1.0;
 }
 
 /*
