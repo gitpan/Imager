@@ -1147,7 +1147,7 @@ Returns a list of possible combine types.
 
 =head1 BUGS
 
-box, arc, do not support antialiasing yet.  Arc, is only filled as of
+box() does not support antialiasing yet.  Arc, is only filled as of
 yet.  Default color is not unified yet.
 
 =head1 AUTHOR
@@ -1160,6 +1160,6 @@ L<Imager>(3), L<Imager::Cookbook>(3)
 
 =head1 REVISION
 
-$Revision: 1431 $
+$Revision: 1465 $
 
 =cut
