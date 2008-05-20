@@ -1,5 +1,21 @@
 Imager release history.  Older releases can be found in Changes.old
 
+Imager 0.65 - unreleased
+===========
+
+Bug fixes:
+
+ - In some cases when an error occurs reading those parts of a JPEG
+   file after the image the scan-line buffer could be freed a second
+   time.  In cases where the the error occured while reading the image
+   data it's possible that the buffer could have leaked.
+   Thanks to Gabriel Vasseur for reporting this and help in tracking
+   it down.
+
+ - the gif_screen_height tag was overriding the screen width and being
+   ignored for the screen height when present.
+   https://rt.cpan.org/Public/Bug/Display.html?id=35568
+
 Imager 0.64 - 23 April 2008
 ===========
 
@@ -12,6 +28,7 @@ Bug fixes:
    based fills had a buffer overflow.  This would overwrite the end of
    a malloc()ed buffer with double precision floats.
    http://rt.cpan.org/Ticket/Display.html?id=35324
+   CVE-2008-1928
 
  - check that the result of fileno($fh) is defined rather than simply
    true when read() or write() is supplied with an fh parameter.
