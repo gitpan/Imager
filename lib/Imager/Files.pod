@@ -8,8 +8,17 @@ Imager::Files - working with image files
   $img->write(file=>$filename, type=>$type)
     or die "Cannot write: ",$img->errstr;
 
+  # type is optional if we can guess the format from the filename
+  $img->write(file => "foo.png")
+    or die "Cannot write: ",$img->errstr;
+
   $img = Imager->new;
   $img->read(file=>$filename, type=>$type)
+    or die "Cannot read: ", $img->errstr;
+
+  # type is optional if we can guess the type from the file data
+  # and we normally can guess
+  $img->read(file => $filename)
     or die "Cannot read: ", $img->errstr;
 
   Imager->write_multi({ file=> $filename, ... }, @images)
@@ -22,6 +31,24 @@ Imager::Files - working with image files
 
   my @read_types = Imager->read_types;
   my @write_types = Imager->write_types;
+
+  # we can write/write_multi to things other than filenames
+  my $data;
+  $img->write(data => \$data, type => $type) or die;
+
+  my $fh = ... ; # eg. IO::File
+  $img->write(fh => $fh, type => $type) or die;
+
+  $img->write(fd => fileno($fh), type => $type) or die;
+
+  # some file types need seek callbacks too
+  $img->write(callback => \&write_callback, type => $type) or die;
+
+  # and similarly for read/read_multi
+  $img->read(data => $data) or die;
+  $img->read(fh => $fh) or die;
+  $img->read(fd => fileno($fh)) or die;
+  $img->read(callback => \&read_callback) or die;
 
 =head1 DESCRIPTION
 
@@ -164,7 +191,7 @@ file you do not need to supply a C<type>.
   $image->read(file => 'example.tif')
     or die $image->errstr;
 
-=item 
+=item *
 
 fh - C<fh> is a file handle, typically either returned from
 C<<IO::File->new()>>, or a glob from an C<open> call.  You should call
@@ -181,7 +208,7 @@ fileno()) rather than writing at the perl level.
   $image->read(fd => $cgi->param('file')) 
     or die $image->errstr;
 
-=item 
+=item *
 
 fd - C<fd> is a file descriptor.  You can get this by calling the
 C<fileno()> function on a file handle, or by using one of the standard
@@ -194,7 +221,7 @@ the image.
   $image->write(fd => file(STDOUT), type => 'gif')
     or die $image->errstr;
 
-=item 
+=item *
 
 data - When reading data, C<data> is a scalar containing the image
 file data, when writing, C<data> is a reference to the scalar to save
@@ -725,6 +752,10 @@ You can return to the previous behaviour by calling read with the
 C<gif_consolidate> parameter set to a true value:
 
   $img->read(file=>$some_gif_file, gif_consolidate=>1);
+
+As with the to_paletted() method, if you supply a colors parameter as
+a reference to an array, this will be filled with Imager::Color
+objects of the color table generated for the image file.
 
 =head2 TIFF (Tagged Image File Format)
 

@@ -40,6 +40,7 @@ ICO/testimg/pal43232.ico
 ICO/testimg/pal43232.ppm
 ICO/testimg/pal83232.ico
 ICO/testimg/pal83232.ppm
+ICO/testimg/rgb1616.ico
 ICO/testimg/rgba3232.ico
 ICO/testimg/rgba3232.ppm
 Imager.pm
@@ -268,6 +269,7 @@ t/t75polyaa.t
 t/t80texttools.t        Test text wrapping
 t/t81hlines.t		Test hlines.c
 t/t82inline.t           Test Inline::C integration
+t/t83extutil.t		Test Imager::ExtUtils
 t/t90cc.t
 t/t91pod.t		Test POD with Test::Pod
 t/t92samples.t
