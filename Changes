@@ -1,5 +1,44 @@
 Imager release history.  Older releases can be found in Changes.old
 
+Imager 0.67_01 - 02 Sep 2009
+==============
+
+Bug fixes:
+
+ - correct documentation of default of raw image interleave read
+   parameter
+   https://rt.cpan.org/Ticket/Display.html?id=42074
+
+ - add raw_ prefix to raw read parameters, though the original names
+   still work.
+
+ - fail the read if an invalid raw_interleave parameter is supplied
+
+ - warn if no interleave or raw_interleave parameter is supplied,
+   since the documented default was wrong, and incompatible with the
+   write format
+
+ - for reading raw images, if raw_storechannels > raw_datachannels,
+   set the extra channels in the image to 0
+
+ - when probing for executables like freetype-config, search for .bat
+   and .cmd on MSWin32, as well as .exe.
+   https://rt.cpan.org/Ticket/Display.html?id=49275
+
+ - re-work the external libraries section of README:
+   - list Debian and Redhat package names for each library
+   - reformatting
+   - update URLs
+
+ - use the new EU::MM META_MERGE facility instead of generating
+   META.yml from scratch
+   https://rt.cpan.org/Ticket/Display.html?id=47888
+
+ - use Devel::CheckLib (bundled, modified) to check which release of
+   libtiff is installed and reject 3.9.0
+   http://bugzilla.maptools.org/show_bug.cgi?id=2088
+   http://bugs.debian.org/cgi-bin/bugreport.cgi?bug=543079
+
 Imager 0.67 - 12 Dec 2008
 ===========
 

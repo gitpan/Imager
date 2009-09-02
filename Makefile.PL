@@ -5,9 +5,10 @@ use Cwd;
 use Config;
 use File::Spec;
 use Getopt::Long;
-use vars qw(%Recommends);
 use ExtUtils::Manifest qw(maniread);
 use vars qw(%formats $VERBOSE $INCPATH $LIBPATH $NOLOG $DEBUG_MALLOC $MANUAL $CFLAGS $LFLAGS $DFLAGS);
+use lib 'inc';
+use Devel::CheckLib;
 
 #
 # IM_INCPATH      colon seperated list of paths to extra include paths
@@ -25,6 +26,8 @@ use vars qw(%formats $VERBOSE $INCPATH $LIBPATH $NOLOG $DEBUG_MALLOC $MANUAL $CF
 # IM_LFLAGS       Extra flags to pass to the linker
 # IM_DFLAGS       Extra flags to pass to the preprocessor
 # IM_SUPPRESS_PROMPT  Suppress the prompt asking about gif support
+
+my $KEEP_FILES = $ENV{IMAGER_KEEP_FILES};
 
 getenv();     # get environment variables
 
@@ -158,9 +161,6 @@ my @objs = qw(Imager.o draw.o polygon.o image.o io.o iolayer.o
               bmp.o tga.o color.o fills.o imgdouble.o limits.o hlines.o
               imext.o scale.o rubthru.o render.o paste.o compose.o);
 
-$Recommends{Imager} =
-  { 'Parse::RecDescent' => 0 };
-
 my %opts=(
           'NAME'         => 'Imager',
           'VERSION_FROM' => 'Imager.pm',
@@ -168,7 +168,7 @@ my %opts=(
           'DEFINE'       => "$OSDEF $CFLAGS",
           'INC'          => "$lib_cflags $DFLAGS $F_INC",
           'OBJECT'       => join(' ', @objs, $F_OBJECT),
-          clean          => { FILES=>'testout meta.tmp rubthru.c scale.c conv.c  filters.c gaussian.c render.c rubthru.c' },
+          clean          => { FILES=>'testout rubthru.c scale.c conv.c  filters.c gaussian.c render.c rubthru.c' },
           PM             => gen_PM(),
 	  PREREQ_PM      => { 'Test::More' => 0.47 },
          );
@@ -189,8 +189,17 @@ if ($MM_ver > 6.06) {
   $opts{AUTHOR} = 'Tony Cook <tony@imager.perl.org>, Arnar M. Hrafnkelsson';
   $opts{ABSTRACT} = 'Perl extension for Generating 24 bit Images';
 }
-if ($MM_ver > 6.10) {
-  $opts{NO_META} = 1;
+
+if ($MM_ver >= 6.46) {
+  $opts{META_MERGE} =
+    {
+     recommends =>
+     {
+      "Parse::RecDescent" => 0
+     },
+     license => "perl",
+     dynamic_config => 1,
+    };
 }
 
 make_imconfig(\@defines);
@@ -198,7 +207,7 @@ make_imconfig(\@defines);
 if ($VERBOSE) { print Dumper(\%opts); }
 mkdir('testout',0777); # since we cannot include it in the archive.
 
-make_metafile(\%opts);
+-d "probe" and rmdir "probe";
 
 WriteMakefile(%opts);
 
@@ -335,22 +344,8 @@ sub grep_directory {
   return map $path, @l;
 }
 
-
-sub checkformat {
-  my $frm=shift;
-
-  print "  checkformat($frm)\n" if $VERBOSE;
-  
-  my $probe_array = $formats{$frm}{'code'};
-  if ($probe_array) {
-    print "    Calling probe function\n" if $VERBOSE;
-    if (ref $probe_array ne 'ARRAY') {
-      $probe_array = [ $probe_array ];
-    }
-    for my $func (@$probe_array) {
-      return 1 if $func->($formats{$frm}, $frm);
-    }
-  }
+sub _probe_default {
+  my ($format, $frm) = @_;
 
   my $lib_check=$formats{$frm}{'libcheck'};
   my $inc_check=$formats{$frm}{'inccheck'};
@@ -376,6 +371,44 @@ sub checkformat {
   }
 
   return 0;
+}
+
+sub checkformat {
+  my $frm=shift;
+
+  print "  checkformat($frm)\n" if $VERBOSE;
+  
+  my $format = $formats{$frm};
+
+  my @probes;
+  if (my $code = $format->{'code'}) {
+    if (ref $code eq 'ARRAY') {
+      push @probes, @$code;
+    }
+    else {
+      push @probes, $code;
+    }
+  }
+  push @probes, \&_probe_default;
+
+  print "    Calling probe function\n" if $VERBOSE;
+  my $found;
+  for my $func (@probes) {
+    if ($func->($format, $frm)) {
+      ++$found;
+      last;
+    }
+  }
+
+  $found or return;
+
+  if ($format->{postcheck}) {
+    print "    Calling postcheck function\n" if $VERBOSE;
+    $format->{postcheck}->($format, $frm)
+      or return;
+  }
+
+  return 1;
 }
 
 
@@ -487,7 +520,8 @@ sub init {
 		    objfiles=>'tiff.o',
 		    docs=>q{
 			    In order to use tiff with this module you need to have libtiff
-			    installed on your computer}
+			    installed on your computer},
+		    postcheck => \&postcheck_tiff,
 		   };
 
   $formats{'png'}={
@@ -870,9 +904,16 @@ sub catfile {
 sub is_exe {
   my ($name) = @_;
 
+  my @exe_suffix = $Config{_exe};
+  if ($^O eq 'MSWin32') {
+    push @exe_suffix, qw/.bat .cmd/;
+  }
+
   for my $dir (File::Spec->path) {
-    -x catfile($dir, "$name$Config{_exe}")
-      and return 1;
+    for my $suffix (@exe_suffix) {
+      -x catfile($dir, "$name$suffix")
+	and return 1;
+    }
   }
 
   return;
@@ -934,70 +975,6 @@ sub gen_PM {
   \%pm;
 }
 
-sub make_metafile {
-  my ($opts) = @_;
-
-  # extract the version
-  my $version = MM->parse_version($opts->{VERSION_FROM})
-    or die "Could not extract version number from $opts->{VERSION_FROM}\n";
-
-  # we don't set this on older EU::MM and it corrupts META.yml
-  # so don't generate it
-  return unless $opts->{AUTHOR};
-
-  my $meta = <<YAML;
---- #YAML:1.0
-name: $opts->{NAME}
-version: $version
-version_from: $opts->{VERSION_FROM}
-author:
-YAML
-  for my $author (split /,\s*/, $opts->{AUTHOR}) {
-    $meta .= " - $author\n";
-  }
-  $meta .= <<YAML;
-abstract: $opts->{ABSTRACT}
-installdirs: site
-YAML
-  if (keys %{$Recommends{$opts->{NAME}}}) {
-    $meta .= "recommends:\n";
-    while (my ($module, $version) = each %{$Recommends{$opts->{NAME}}}) {
-      $meta .= "  $module: $version\n";
-    }
-  }
-  if ($opts->{PREREQ_PM}) {
-    $meta .= "requires:\n";
-    while (my ($module, $version) = each %{$opts->{PREREQ_PM}}) {
-      $meta .= "  $module: $version\n";
-    }
-  }
-  $meta .= <<YAML;
-license: perl
-dynamic_config: 1
-distribution_type: module
-meta-spec:
-  version: 1.3
-  url: http://module-build.sourceforge.net/META-spec-v1.3.html
-generated_by: $opts->{NAME} version $version
-YAML
-  my $save_meta;
-  if (open META, "< META.yml") {
-    my $old_meta = do { local $/; <META> };
-    close META;
-
-    $save_meta = $old_meta ne $meta;
-  }
-  else {
-    ++$save_meta;
-  }
-  if ($save_meta) {
-    print "Updating META.yml\n";
-    open META, "> META.yml" or die "Cannot create META.yml: $!";
-    print META $meta;
-    close META;
-  }
-}
-
 my $home;
 sub _tilde_expand {
   my ($path) = @_;
@@ -1017,6 +994,74 @@ sub _tilde_expand {
   }
 
   $path;
+}
+
+sub postcheck_tiff {
+  my ($format, $frm) = @_;
+
+  -d "probe" or mkdir "probe";
+
+  my $tiffver_name = "probe/tiffver.txt";
+
+  my $lib;
+  if ($Config{cc} =~ /\b(cl|bcc)\b/) {
+    $lib = "libtiff";
+  }
+  else {
+    $lib = "tiff";
+  }
+
+  my $good =
+    eval {
+      assert_lib
+	(
+	 debug => $VERBOSE,
+	 incpath => $format->{incdir},
+	 libpath => $format->{libdir},
+	 lib => $lib,
+	 header => [ qw(stdio.h tiffio.h) ],
+	 function => <<FUNCTION,
+  {
+    const char *vers = TIFFGetVersion();
+    FILE *f = fopen("$tiffver_name", "wb");
+    if (!f)
+      return 1;
+    fputs(vers, f);
+    if (fclose(f))
+      return 1;
+    return 0;
+  }
+FUNCTION
+	);
+      1;
+    };
+
+  unless ($good && -s $tiffver_name
+	  && open(VERS, "< probe/tiffver.txt")) {
+    unlink $tiffver_name unless $KEEP_FILES;
+    print <<EOS;
+    **tiff: cannot determine libtiff version number
+      tiff: DISABLED
+EOS
+    return;
+  }
+
+  # version file seems to be there, load it up
+  my $ver_str = do { local $/; <VERS> };
+  close VERS;
+  unlink $tiffver_name unless $KEEP_FILES;
+
+  my ($version) = $ver_str =~ /(\d+\.\d+\.\d+)/;
+
+  if ($version eq '3.9.0') {
+    print <<EOS;
+    **tiff: libtiff 3.9.0 introduced a serious bug, please install 3.9.1
+      tiff: DISABLED
+EOS
+    return;
+  }
+
+  return 1;
 }
 
 # This isn't a module, but some broken tools, like
