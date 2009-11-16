@@ -1756,27 +1756,26 @@ i_unsharp_mask(im,stdev,scale)
 	     float     stdev
              double    scale
 
-void
-i_conv(im,pcoef)
-    Imager::ImgRaw     im
-	     PREINIT:
-	     float*    coeff;
-	     int     len;
-	     AV* av;
-	     SV* sv1;
-	     int i;
-	     PPCODE:
-	     if (!SvROK(ST(1))) croak("Imager: Parameter 1 must be a reference to an array\n");
-	     if (SvTYPE(SvRV(ST(1))) != SVt_PVAV) croak("Imager: Parameter 1 must be a reference to an array\n");
-	     av=(AV*)SvRV(ST(1));
-	     len=av_len(av)+1;
-	     coeff=mymalloc( len*sizeof(float) );
-	     for(i=0;i<len;i++) {
-	       sv1=(*(av_fetch(av,i,0)));
-	       coeff[i]=(float)SvNV(sv1);
-	     }
-	     i_conv(im,coeff,len);
-	     myfree(coeff);
+int
+i_conv(im,coef)
+	Imager::ImgRaw     im
+	AV *coef
+     PREINIT:
+	double*    c_coef;
+	int     len;
+	SV* sv1;
+	int i;
+    CODE:
+	len = av_len(coef) + 1;
+	c_coef=mymalloc( len * sizeof(double) );
+	for(i = 0; i  < len; i++) {
+	  sv1 = (*(av_fetch(coef, i, 0)));
+	  c_coef[i] = (double)SvNV(sv1);
+	}
+	RETVAL = i_conv(im, c_coef, len);
+	myfree(c_coef);
+    OUTPUT:
+	RETVAL
 
 Imager::ImgRaw
 i_convert(src, avmain)
@@ -3379,6 +3378,11 @@ i_new_fill_fount(xa, ya, xb, yb, type, repeat, combine, super_sample, ssample_pa
         myfree(segs);        
       OUTPUT:
         RETVAL
+
+Imager::FillHandle
+i_new_fill_opacity(other_fill, alpha_mult)
+    Imager::FillHandle other_fill
+    double alpha_mult
 
 void
 i_errors()

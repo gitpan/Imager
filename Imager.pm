@@ -173,7 +173,7 @@ my %defaults;
 BEGIN {
   require Exporter;
   @ISA = qw(Exporter);
-  $VERSION = '0.70';
+  $VERSION = '0.71';
   eval {
     require XSLoader;
     XSLoader::load(Imager => $VERSION);
@@ -243,11 +243,17 @@ BEGIN {
 		       callsub => sub { my %hsh=@_; i_radnoise($hsh{image},$hsh{xo},$hsh{yo},$hsh{rscale},$hsh{ascale}); }
 		      };
 
-  $filters{conv} ={
-		       callseq => ['image', 'coef'],
-		       defaults => { },
-		       callsub => sub { my %hsh=@_; i_conv($hsh{image},$hsh{coef}); }
-		      };
+  $filters{conv} =
+    {
+     callseq => ['image', 'coef'],
+     defaults => { },
+     callsub => 
+     sub { 
+       my %hsh=@_;
+       i_conv($hsh{image},$hsh{coef})
+	 or die Imager->_error_as_msg() . "\n";
+     }
+    };
 
   $filters{gradgen} =
     {

@@ -155,6 +155,7 @@ i_new_fill_hatchf(const i_fcolor *fg, const i_fcolor *bg, int combine, int hatch
                   const unsigned char *cust_hatch, int dx, int dy);
 extern i_fill_t *
 i_new_fill_image(i_img *im, const double *matrix, int xoff, int yoff, int combine);
+extern i_fill_t *i_new_fill_opacity(i_fill_t *, double alpha_mult);
 extern void i_fill_destroy(i_fill_t *fill);
 
 float i_gpix_pch(i_img *im,int x,int y,int ch);
@@ -205,7 +206,7 @@ undef_int i_flood_cfill_border(i_img *im, int seedx, int seedy, i_fill_t *fill, 
 /* image processing functions */
 
 int i_gaussian    (i_img *im, double stdev);
-void i_conv        (i_img *im,const float *coeff,int len);
+int i_conv        (i_img *im,const double *coeff,int len);
 void i_unsharp_mask(i_img *im, double stddev, double scale);
 
 /* colour manipulation */
