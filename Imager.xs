@@ -873,6 +873,8 @@ i_int_hlines_DESTROY(i_int_hlines *hlines) {
   myfree(hlines);
 }
 
+#define i_int_hlines_CLONE_SKIP(cls) 1
+
 static int seg_compare(const void *vleft, const void *vright) {
   const i_int_hline_seg *left = vleft;
   const i_int_hline_seg *right = vright;
@@ -1232,6 +1234,13 @@ i_io_close(ig)
 void
 i_io_DESTROY(ig)
         Imager::IO     ig
+
+int
+i_io_CLONE_SKIP(...)
+    CODE:
+	RETVAL = 1;
+    OUTPUT:
+	RETVAL
 
 MODULE = Imager		PACKAGE = Imager
 
@@ -1868,7 +1877,10 @@ i_img_diff(im1,im2)
     Imager::ImgRaw     im1
     Imager::ImgRaw     im2
 
-
+double
+i_img_diffd(im1,im2)
+    Imager::ImgRaw     im1
+    Imager::ImgRaw     im2
 
 undef_int	  
 i_init_fonts(t1log=0)
@@ -2071,6 +2083,13 @@ MODULE = Imager         PACKAGE = Imager::Font::TT      PREFIX=TT_
 void
 TT_DESTROY(handle)
      Imager::Font::TT   handle
+
+int
+TT_CLONE_SKIP(...)
+    CODE:
+        RETVAL = 1;
+    OUTPUT:
+        RETVAL
 
 
 MODULE = Imager         PACKAGE = Imager
@@ -4451,6 +4470,13 @@ void
 FT2_DESTROY(font)
         Imager::Font::FT2 font
 
+int
+FT2_CLONE_SKIP(...)
+    CODE:
+        RETVAL = 1;
+    OUTPUT:
+        RETVAL
+
 MODULE = Imager         PACKAGE = Imager::Font::FreeType2 
 
 Imager::Font::FT2
@@ -4785,6 +4811,13 @@ void
 IFILL_DESTROY(fill)
         Imager::FillHandle fill
 
+int
+IFILL_CLONE_SKIP(...)
+    CODE:
+        RETVAL = 1;
+    OUTPUT:
+        RETVAL
+
 MODULE = Imager         PACKAGE = Imager
 
 Imager::FillHandle
@@ -4909,6 +4942,10 @@ i_int_hlines_DESTROY(hlines)
 SV *
 i_int_hlines_dump(hlines)
 	Imager::Internal::Hlines hlines
+
+int
+i_int_hlines_CLONE_SKIP(cls)
+	SV *cls
 
 #endif
 
