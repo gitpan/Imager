@@ -1,9 +1,18 @@
 Imager release history.  Older releases can be found in Changes.old
 
-Imager 0.72
+Imager 0.73 - 15 Mar 2010
 ===========
 
-Bump version from release, since 0.71_03 is stable with CPAN testers.
+ - implement outline circles, both anti-aliased and not
+   https://rt.cpan.org/Ticket/Display.html?id=19755
+
+ - a combine => "none" fill to a 1 or 3 channel image would produce
+   the incorrect colour.
+
+Imager 0.72 - 09 Dec 2009
+===========
+
+Bump version for release, since 0.71_03 is stable with CPAN testers.
 
 Imager 0.71_03 - 5 Dec 2009
 ==============
