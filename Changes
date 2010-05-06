@@ -1,5 +1,24 @@
 Imager release history.  Older releases can be found in Changes.old
 
+Imager 0.74 - 7 May 2010
+===========
+
+Bug fixes:
+
+ - read_multi() didn't handle a missing file format library correctly,
+   aborting on failing to call i_readgif_multi_wiol() or
+   i_readtiff_multi_wiol().
+
+ - fix spelling errors patched by Debian
+   http://svn.debian.org/viewsvn/pkg-perl/trunk/libimager-perl/debian/patches/spelling.patch?revision=54839&view=markup
+
+ - add an (unshipped) author test to spellcheck Imager's POD.
+
+ - update the TIFF file format documentation
+   https://rt.cpan.org/Ticket/Display.html?id=56510
+
+ - lib/Imager/IO.pod was written almost 4 years ago but never shipped.
+
 Imager 0.73 - 15 Mar 2010
 ===========
 

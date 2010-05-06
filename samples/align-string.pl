@@ -72,8 +72,8 @@ align-string.pl - demo of the Imager align_string() method
 
 =head1 DESCRIPTION
 
-Create an image in output imagein I<outputfile> displaying a grid of
-the various valign and halign options for the Imager align_string
+Create an image in output C<imagein> C<outputfile> displaying a grid of
+the various C<valign> and C<halign> options for the Imager align_string()
 method.
 
 Try it with different fonts and strings to get a better understanding
@@ -89,7 +89,7 @@ Imager, Imager::Font
 
 =head1 REVISION
 
-$Revision: 840 $
+$Revision: 1724 $
 
 =cut
 

@@ -27,6 +27,8 @@ MainLoop;
 
 =head1 NAME
 
+=for stopwords tk-photo.pl
+
 tk-photo.pl - display an Imager image under Tk
 
 =head1 SYNOPSIS
@@ -58,7 +60,7 @@ the C<-data> parameter.
 
 =head1 REVISION
 
-$Revision: 830 $
+$Revision: 1724 $
 
 =head1 AUTHOR
 

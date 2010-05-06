@@ -124,10 +124,12 @@ might be useful.
 
 Tony Cook <tony@imager.perl.org>
 
+=for stopwords Oppenheim
+
 Thanks to Dan Oppenheim, who provided the impetus for this sample.
 
 =head1 REVISION
 
-$Revision: 718 $
+$Revision: 1724 $
 
 =cut

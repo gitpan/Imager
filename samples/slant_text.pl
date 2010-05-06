@@ -190,6 +190,7 @@ it.
 =item transformed_bounds
 
 Returns a list of bounds:
+
   (minx, miny, maxx, maxy)
 
 These are offsets from the text's starting point in font co-ordinates
@@ -208,7 +209,7 @@ Tony Cook <tony@imager.perl.org>
 
 =head1 REVISION
 
-$Revision: 1073 $
+$Revision: 1724 $
 
 =head1 SEE ALSO
 
