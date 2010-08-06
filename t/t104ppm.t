@@ -1,6 +1,6 @@
 #!perl -w
 use Imager ':all';
-use Test::More tests => 177;
+use Test::More tests => 191;
 use strict;
 use Imager::Test qw(test_image_raw test_image_16 is_color3 is_color1 is_image);
 
@@ -443,6 +443,20 @@ print "# check error handling\n";
 }
 
 {
+  my @imgs = Imager->read_multi(file => 'testimg/multiple.ppm');
+  is( 0+@imgs, 3, "Read 3 images");
+  is( $imgs[0]->tags( name => 'pnm_type' ), 1, "Image 1 is type 1" );
+  is( $imgs[0]->getwidth, 2, " ... width=2" );
+  is( $imgs[0]->getheight, 2, " ... width=2" );
+  is( $imgs[1]->tags( name => 'pnm_type' ), 6, "Image 2 is type 6" );
+  is( $imgs[1]->getwidth, 164, " ... width=164" );
+  is( $imgs[1]->getheight, 180, " ... width=180" );
+  is( $imgs[2]->tags( name => 'pnm_type' ), 5, "Image 3 is type 5" );
+  is( $imgs[2]->getwidth, 2, " ... width=2" );
+  is( $imgs[2]->getheight, 2, " ... width=2" );
+}
+
+{
   my $im = Imager->new;
   ok($im->read(file => 'testimg/bad_asc.ppm', type => 'pnm',
                 allow_incomplete => 1),
@@ -552,6 +566,20 @@ print "# check error handling\n";
   ok(!$im2, "no image when file failed to load");
   cmp_ok(Imager->errstr, '=~', "bad header magic, not a PNM file",
 	 "check error message transferred");
+
+  # load from data
+ SKIP:
+  {
+    ok(open(FH, "< testimg/penguin-base.ppm"), "open test file")
+      or skip("couldn't open data source", 4);
+    binmode FH;
+    my $imdata = do { local $/; <FH> };
+    close FH;
+    ok(length $imdata, "we got the data");
+    my $im3 = Imager->new(data => $imdata);
+    ok($im3, "read the file data");
+    is($im3->getwidth, 164, "check width matches image");
+  }
 }
 
 sub openimage {

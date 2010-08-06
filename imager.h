@@ -399,11 +399,6 @@ int i_tiff_has_compression(char const *name);
 
 #endif /* HAVE_LIBTIFF */
 
-#ifdef HAVE_LIBPNG
-i_img    *i_readpng_wiol(io_glue *ig, int length);
-undef_int i_writepng_wiol(i_img *im, io_glue *ig);
-#endif /* HAVE_LIBPNG */
-
 #ifdef HAVE_LIBGIF
 i_img *i_readgif(int fd, int **colour_table, int *colours);
 i_img *i_readgif_wiol(io_glue *ig, int **colour_table, int *colours);
@@ -429,6 +424,7 @@ i_img   * i_readraw_wiol(io_glue *ig, int x, int y, int datachannels, int storec
 undef_int i_writeraw_wiol(i_img* im, io_glue *ig);
 
 i_img   * i_readpnm_wiol(io_glue *ig, int allow_incomplete);
+i_img   ** i_readpnm_multi_wiol(io_glue *ig, int *count, int allow_incomplete);
 undef_int i_writeppm_wiol(i_img *im, io_glue *ig);
 
 extern int    i_writebmp_wiol(i_img *im, io_glue *ig);
@@ -462,6 +458,7 @@ i_img * i_transform2(int width, int height, int channels,
 
 void i_contrast(i_img *im, float intensity);
 void i_hardinvert(i_img *im);
+void i_hardinvertall(i_img *im);
 void i_noise(i_img *im, float amount, unsigned char type);
 void i_bumpmap(i_img *im,i_img *bump,int channel,int light_x,int light_y,int strength);
 void i_bumpmap_complex(i_img *im, i_img *bump, int channel, int tx, int ty, float Lx, float Ly, 

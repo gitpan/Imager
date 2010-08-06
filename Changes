@@ -1,6 +1,43 @@
 Imager release history.  Older releases can be found in Changes.old
 
-Imager 0.75
+Imager 0.75_01 - 06 Aug 2010
+==============
+
+Test release for the new PNG probe.
+
+ - added the ability to read multiple-image PNM files.
+   Note that unlike the pbm/pgm/ppm specification this accepts mixed
+   format files and allows white space padding between files.
+   Thanks to Philip Gwyn (Leolo) for this patch.
+
+ - moved the PNG file handling code into a sub-module in preparation
+   for separate distribution.
+   https://rt.cpan.org/Ticket/Display.html?id=49616 (partial)
+   Also helps avoid complications from -I/-L compile/link options from
+   other libraries.
+
+Bugs:
+
+ - Imager->new(data => $data) didn't try to process image file data in
+   $data
+   https://rt.cpan.org/Ticket/Display.html?id=58761
+
+ - t/t50basicoo.t no longer depends on the other tests to generate its 
+   input files.
+   https://rt.cpan.org/Ticket/Display.html?id=9798
+   Also, it wasn't testing pnm (pnm vs ppm mix-up)
+
+ - update the documentation of hardinvert to match the change in 0.62.
+   https://rt.cpan.org/Ticket/Display.html?id=59785
+
+ - added hardinvertall filter which also inverts the alpha channel
+   (sorry for the mess)
+
+ - when probing for TIFF, set LD_RUN_PATH just as the Makefile does so
+   the probe can find the library for the test run.
+   https://rt.cpan.org/Ticket/Display.html?id=57518
+
+Imager 0.75 - 20 Jun 2010
 ===========
 
  - use PERL_NO_GET_CONTEXT to slightly improve performance on threaded

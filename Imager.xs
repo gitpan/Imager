@@ -2502,18 +2502,6 @@ i_tiff_has_compression(name)
 
 #ifdef HAVE_LIBPNG
 
-Imager::ImgRaw
-i_readpng_wiol(ig, length)
-        Imager::IO     ig
-	       int     length
-
-
-undef_int
-i_writepng_wiol(im, ig)
-    Imager::ImgRaw     im
-        Imager::IO     ig
-
-
 #endif
 
 
@@ -3018,10 +3006,33 @@ i_readpnm_wiol(ig, allow_incomplete)
 	       int     allow_incomplete
 
 
+void
+i_readpnm_multi_wiol(ig, allow_incomplete)
+        Imager::IO ig
+	       int     allow_incomplete
+      PREINIT:
+        i_img **imgs;
+        int count=0;
+        int i;
+      PPCODE:
+        imgs = i_readpnm_multi_wiol(ig, &count, allow_incomplete);
+        if (imgs) {
+          EXTEND(SP, count);
+          for (i = 0; i < count; ++i) {
+            SV *sv = sv_newmortal();
+            sv_setref_pv(sv, "Imager::ImgRaw", (void *)imgs[i]);
+            PUSHs(sv);
+          }
+          myfree(imgs);
+        }
+
 undef_int
 i_writeppm_wiol(im, ig)
     Imager::ImgRaw     im
         Imager::IO     ig
+
+
+
 
 
 Imager::ImgRaw
@@ -3265,6 +3276,10 @@ i_contrast(im,intensity)
 
 void
 i_hardinvert(im)
+    Imager::ImgRaw     im
+
+void
+i_hardinvertall(im)
     Imager::ImgRaw     im
 
 void
