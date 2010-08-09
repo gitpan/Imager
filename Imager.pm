@@ -170,7 +170,7 @@ my %defaults;
 BEGIN {
   require Exporter;
   @ISA = qw(Exporter);
-  $VERSION = '0.75_02';
+  $VERSION = '0.75_03';
   eval {
     require XSLoader;
     XSLoader::load(Imager => $VERSION);
@@ -3998,7 +3998,8 @@ sub FIRSTKEY {
 
   unless (@{$self->[IX_LIST]}) {
     # full populate it
-    @{$self->[IX_LIST]} = keys %{$self->[IX_FORMATS]};
+    @{$self->[IX_LIST]} = grep $self->[IX_FORMATS]{$_},
+      keys %{$self->[IX_FORMATS]};
 
     for my $key (keys %{$self->[IX_CLASSES]}) {
       $self->[IX_FORMATS]{$key} and next;
