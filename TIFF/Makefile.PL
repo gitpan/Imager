@@ -18,9 +18,9 @@ my $MM_ver = eval $ExtUtils::MakeMaker::VERSION;
 
 my %opts = 
   (
-   NAME => 'Imager::File::PNG',
-   VERSION_FROM => 'PNG.pm',
-   OBJECT => 'PNG.o impng.o',
+   NAME => 'Imager::File::TIFF',
+   VERSION_FROM => 'TIFF.pm',
+   OBJECT => 'TIFF.o imtiff.o',
   );
 
 my @inc;
@@ -30,7 +30,7 @@ if ($BUILDING_IMAGER) {
 }
 else {
   unshift @INC, "inc";
-  print "PNG: building independently\n";
+  print "TIFF: building independently\n";
   require Imager::ExtUtils;
   push @inc, Imager::ExtUtils->includes;
   $opts{TYPEMAPS} = [ Imager::ExtUtils->typemap ];
@@ -54,8 +54,8 @@ else {
 	homepage => "http://imager.perl.org/",
 	repository =>
 	{
-	 url => "http://imager.perl.org/svn/trunk/Imager-File-PNG",
-	 web => "http://imager.perl.org/svnweb/public/browse/trunk/Imager-File-PNG",
+	 url => "http://imager.perl.org/svn/trunk/Imager-File-TIFF",
+	 web => "http://imager.perl.org/svnweb/public/browse/trunk/Imager-File-TIFF",
 	 type => "svn",
 	},
        },
@@ -71,45 +71,25 @@ require Imager::Probe;
 
 my %probe =
   (
-   name => "PNG",
-   altname => "Generic",
-   pkg => [ qw/libpng14 libpng12 libpng10 libpng/ ],
-   inccheck => sub { -e File::Spec->catfile($_[0], "png.h") },
-   libbase => "png",
-   testcode => _png_test_code(),
-   testcodeheaders => [ "png.h", "stdio.h" ],
+   name => "TIFF",
+   inccheck => sub { -e File::Spec->catfile($_[0], "tiffio.h") },
+   libbase => "tiff",
+   testcode => _tiff_test_code(),
+   testcodeheaders => [ "tiffio.h", "stdio.h", "string.h" ],
    incpath => join($Config{path_sep}, @incpaths),
    libpath => join($Config{path_sep}, @libpaths),
-   alternatives =>
-   [
-    {
-     altname => "v1.4",
-     incsuffix => "libpng14",
-     libbase => "png14",
-    },
-    {
-     altname => "v1.2",
-     incsuffix => "libpng12",
-     libbase => "png12",
-    },
-    {
-     altname => "v1.0",
-     incsuffix => "libpng10",
-     libbase => "png10",
-    },
-   ],
   );
 
 my $probe_res = Imager::Probe->probe(\%probe);
 if ($probe_res) {
   push @inc, $probe_res->{INC};
   $opts{LIBS} = $probe_res->{LIBS};
-  
+
   $opts{INC} = "@inc";
-  
+
   if ($MM_ver > 6.06) {
     $opts{AUTHOR} = 'Tony Cook <tony@imager.perl.org>';
-    $opts{ABSTRACT} = 'PNG Image file support';
+    $opts{ABSTRACT} = 'TIFF image file support for Imager';
   }
   
   WriteMakefile(%opts);
@@ -120,14 +100,37 @@ else {
   }
   else {
     # fail in good way
-    die "OS unsupported: PNG libraries or headers not found\n";
+    die "OS unsupported: TIFF libraries or headers not found\n";
   }
 }
 
-sub _png_test_code {
+sub _tiff_test_code {
   return <<'CODE';
+static const char ver_base[] = ", Version ";
+static const size_t ver_base_len = sizeof(ver_base) - 1;
+const char *ver_str = TIFFGetVersion();
+const char *ver_start = strstr(ver_str, ver_base);
+const char *ver_end;
+int ver_len;
 
-fprintf(stderr, "PNG: library version %ld, header version %ld\n", (long)png_access_version_number(),  (long)PNG_LIBPNG_VER);
+if (ver_start && ver_start[ver_base_len] >= '3' && ver_start[ver_base_len] < '9') {
+  ver_start += ver_base_len;
+  ver_end = ver_start;
+  while (*ver_end && (*ver_end == '.' || *ver_end >= '0' && *ver_end <= '9'))
+    ++ver_end;
+  ver_len = ver_end - ver_start;
+}
+else {
+  ver_start = "(unknown)";
+  ver_len = strlen(ver_start);
+}
+
+fprintf(stderr, "TIFF: library version %.*s, header version %ld\n", ver_len, ver_start, TIFFLIB_VERSION);
+if (TIFFLIB_VERSION == 20090820) {
+  fprintf(stderr, "TIFF: this appears to be libtiff 3.9.0 which introduced a serious bug\n");
+  fprintf(stderr, "TIFF: please install 3.9.1\n");
+  return 1;
+}
 return 0;
 CODE
 }

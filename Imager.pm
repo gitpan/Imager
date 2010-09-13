@@ -74,21 +74,6 @@ use Imager::Font;
 		i_tt_text
 		i_tt_bbox
 
-		i_readjpeg_wiol
-		i_writejpeg_wiol
-
-		i_readtiff_wiol
-		i_writetiff_wiol
-		i_writetiff_wiol_faxable
-
-		i_readgif
-		i_readgif_wiol
-		i_readgif_callback
-		i_writegif
-		i_writegifmc
-		i_writegif_gen
-		i_writegif_callback
-
 		i_readpnm_wiol
 		i_writeppm_wiol
 
@@ -170,7 +155,7 @@ my %defaults;
 BEGIN {
   require Exporter;
   @ISA = qw(Exporter);
-  $VERSION = '0.77';
+  $VERSION = '0.77_01';
   eval {
     require XSLoader;
     XSLoader::load(Imager => $VERSION);
@@ -1380,29 +1365,8 @@ sub read {
     return;
   }
 
-  # Setup data source
-  if ( $input{'type'} eq 'jpeg' ) {
-    ($self->{IMG},$self->{IPTCRAW}) = i_readjpeg_wiol( $IO );
-    if ( !defined($self->{IMG}) ) {
-      $self->{ERRSTR}=$self->_error_as_msg(); return undef;
-    }
-    $self->{DEBUG} && print "loading a jpeg file\n";
-    return $self;
-  }
-
   my $allow_incomplete = $input{allow_incomplete};
   defined $allow_incomplete or $allow_incomplete = 0;
-
-  if ( $input{'type'} eq 'tiff' ) {
-    my $page = $input{'page'};
-    defined $page or $page = 0;
-    $self->{IMG}=i_readtiff_wiol( $IO, $allow_incomplete, $page ); 
-    if ( !defined($self->{IMG}) ) {
-      $self->{ERRSTR}=$self->_error_as_msg(); return undef;
-    }
-    $self->{DEBUG} && print "loading a tiff file\n";
-    return $self;
-  }
 
   if ( $input{'type'} eq 'pnm' ) {
     $self->{IMG}=i_readpnm_wiol( $IO, $allow_incomplete );
@@ -1766,24 +1730,7 @@ sub write {
     ($IO, $fh) = $self->_get_writer_io(\%input, $input{'type'})
       or return undef;
     
-    if ($input{'type'} eq 'tiff') {
-      $self->_set_opts(\%input, "tiff_", $self)
-        or return undef;
-      $self->_set_opts(\%input, "exif_", $self)
-        or return undef;
-      
-      if (defined $input{class} && $input{class} eq 'fax') {
-        if (!i_writetiff_wiol_faxable($self->{IMG}, $IO, $input{fax_fine})) {
-          $self->{ERRSTR} = $self->_error_as_msg();
-          return undef;
-        }
-      } else {
-        if (!i_writetiff_wiol($self->{IMG}, $IO)) {
-          $self->{ERRSTR} = $self->_error_as_msg();
-          return undef;
-        }
-      }
-    } elsif ( $input{'type'} eq 'pnm' ) {
+    if ( $input{'type'} eq 'pnm' ) {
       $self->_set_opts(\%input, "pnm_", $self)
         or return undef;
       if ( ! i_writeppm_wiol($self->{IMG},$IO) ) {
@@ -1799,14 +1746,6 @@ sub write {
         return undef;
       }
       $self->{DEBUG} && print "writing a raw file\n";
-    } elsif ( $input{'type'} eq 'png' ) {
-      $self->_set_opts(\%input, "png_", $self)
-        or return undef;
-      if ( !i_writepng_wiol($self->{IMG}, $IO) ) {
-        $self->{ERRSTR}='unable to write png image';
-        return undef;
-      }
-      $self->{DEBUG} && print "writing a png file\n";
     } elsif ( $input{'type'} eq 'jpeg' ) {
       $self->_set_opts(\%input, "jpeg_", $self)
         or return undef;
@@ -1907,37 +1846,7 @@ sub write_multi {
     ($IO, $file) = $class->_get_writer_io($opts, $type)
       or return undef;
     
-    if ($type eq 'gif') {
-      $class->_set_opts($opts, "gif_", @images)
-        or return;
-      my $gif_delays = $opts->{gif_delays};
-      local $opts->{gif_delays} = $gif_delays;
-      if ($opts->{gif_delays} && !ref $opts->{gif_delays}) {
-        # assume the caller wants the same delay for each frame
-        $opts->{gif_delays} = [ ($gif_delays) x @images ];
-      }
-      unless (i_writegif_wiol($IO, $opts, @work)) {
-        $class->_set_error($class->_error_as_msg());
-        return undef;
-      }
-    }
-    elsif ($type eq 'tiff') {
-      $class->_set_opts($opts, "tiff_", @images)
-        or return;
-      $class->_set_opts($opts, "exif_", @images)
-        or return;
-      my $res;
-      $opts->{fax_fine} = 1 unless exists $opts->{fax_fine};
-      if ($opts->{'class'} && $opts->{'class'} eq 'fax') {
-        $res = i_writetiff_multi_wiol_faxable($IO, $opts->{fax_fine}, @work);
-      }
-      else {
-        $res = i_writetiff_multi_wiol($IO, @work);
-      }
-      unless ($res) {
-        $class->_set_error($class->_error_as_msg());
-        return undef;
-      }
+    if (0) { # eventually PNM in here, now that TIFF/GIF are elsewhere
     }
     else {
       if (@images == 1) {
@@ -1997,14 +1906,8 @@ sub read_multi {
     return;
   }
 
-    my @imgs;
-  if ($type eq 'gif') {
-    @imgs = i_readgif_multi_wiol($IO);
-  }
-  elsif ($type eq 'tiff') {
-    @imgs = i_readtiff_multi_wiol($IO, -1);
-    }
-  elsif ($type eq 'pnm') {
+  my @imgs;
+  if ($type eq 'pnm') {
     @imgs = i_readpnm_multi_wiol($IO, $opts{allow_incomplete}||0);
   }
   else {
@@ -2748,25 +2651,46 @@ sub i_color_set {
 # Draws a box between the specified corner points.
 sub box {
   my $self=shift;
-  unless ($self->{IMG}) { $self->{ERRSTR}='empty input image'; return undef; }
-  my $dflcl=i_color_new(255,255,255,255);
-  my %opts=(color=>$dflcl,xmin=>0,ymin=>0,xmax=>$self->getwidth()-1,ymax=>$self->getheight()-1,@_);
+  my $raw = $self->{IMG};
 
+  unless ($raw) {
+    $self->{ERRSTR}='empty input image';
+    return undef;
+  }
+
+  my %opts = @_;
+
+  my ($xmin, $ymin, $xmax, $ymax);
   if (exists $opts{'box'}) { 
-    $opts{'xmin'} = _min($opts{'box'}->[0],$opts{'box'}->[2]);
-    $opts{'xmax'} = _max($opts{'box'}->[0],$opts{'box'}->[2]);
-    $opts{'ymin'} = _min($opts{'box'}->[1],$opts{'box'}->[3]);
-    $opts{'ymax'} = _max($opts{'box'}->[1],$opts{'box'}->[3]);
+    $xmin = _min($opts{'box'}->[0],$opts{'box'}->[2]);
+    $xmax = _max($opts{'box'}->[0],$opts{'box'}->[2]);
+    $ymin = _min($opts{'box'}->[1],$opts{'box'}->[3]);
+    $ymax = _max($opts{'box'}->[1],$opts{'box'}->[3]);
+  }
+  else {
+    defined($xmin = $opts{xmin}) or $xmin = 0;
+    defined($xmax = $opts{xmax}) or $xmax = $self->getwidth()-1;
+    defined($ymin = $opts{ymin}) or $ymin = 0;
+    defined($ymax = $opts{ymax}) or $ymax = $self->getheight()-1;
   }
 
   if ($opts{filled}) { 
-    my $color = _color($opts{'color'});
-    unless ($color) { 
-      $self->{ERRSTR} = $Imager::ERRSTR; 
-      return; 
+    my $color = $opts{'color'};
+
+    if (defined $color) {
+      unless (_is_color_object($color)) {
+	$color = _color($color);
+	unless ($color) { 
+	  $self->{ERRSTR} = $Imager::ERRSTR; 
+	  return;
+	}
+      }
     }
-    i_box_filled($self->{IMG},$opts{xmin},$opts{ymin},$opts{xmax},
-                 $opts{ymax}, $color); 
+    else {
+      $color = i_color_new(255,255,255,255);
+    }
+
+    i_box_filled($raw, $xmin, $ymin,$xmax, $ymax, $color);
   }
   elsif ($opts{fill}) {
     unless (UNIVERSAL::isa($opts{fill}, 'Imager::Fill')) {
@@ -2777,18 +2701,29 @@ sub box {
         return undef;
       }
     }
-    i_box_cfill($self->{IMG},$opts{xmin},$opts{ymin},$opts{xmax},
-                $opts{ymax},$opts{fill}{fill});
+    i_box_cfill($raw, $xmin, $ymin, $xmax, $ymax, $opts{fill}{fill});
   }
   else {
-    my $color = _color($opts{'color'});
+    my $color = $opts{'color'};
+    if (defined $color) {
+      unless (_is_color_object($color)) {
+	$color = _color($color);
+	unless ($color) { 
+	  $self->{ERRSTR} = $Imager::ERRSTR;
+	  return;
+	}
+      }
+    }
+    else {
+      $color = i_color_new(255, 255, 255, 255);
+    }
     unless ($color) { 
       $self->{ERRSTR} = $Imager::ERRSTR;
       return;
     }
-    i_box($self->{IMG},$opts{xmin},$opts{ymin},$opts{xmax},$opts{ymax},
-          $color);
+    i_box($raw, $xmin, $ymin, $xmax, $ymax, $color);
   }
+
   return $self;
 }
 
@@ -3592,16 +3527,26 @@ sub border {
 
 sub getwidth {
   my $self = shift;
-  if (!defined($self->{IMG})) { $self->{ERRSTR} = 'image is empty'; return undef; }
-  return (i_img_info($self->{IMG}))[0];
+
+  if (my $raw = $self->{IMG}) {
+    return i_img_get_width($raw);
+  }
+  else {
+    $self->{ERRSTR} = 'image is empty'; return undef;
+  }
 }
 
 # Get the height of an image
 
 sub getheight {
   my $self = shift;
-  if (!defined($self->{IMG})) { $self->{ERRSTR} = 'image is empty'; return undef; }
-  return (i_img_info($self->{IMG}))[1];
+
+  if (my $raw = $self->{IMG}) {
+    return i_img_get_height($raw);
+  }
+  else {
+    $self->{ERRSTR} = 'image is empty'; return undef;
+  }
 }
 
 # Get number of channels in an image

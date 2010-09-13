@@ -1,5 +1,44 @@
 Imager release history.  Older releases can be found in Changes.old
 
+Imager 0.77_01 - 13 Sep 2010
+==============
+
+ - add each library-directory/pkgconfig/ to the pkg-config search path
+   in Imager::Probe.
+   Thanks to Justin Davis.
+   https://rt.cpan.org/Ticket/Display.html?id=60491
+
+ - moved GIF, TIFF, JPEG file handling code into sub-modules in
+   preparation for separate distribution.
+   https://rt.cpan.org/Ticket/Display.html?id=49616 (partial)
+
+ - optimize filled box drawing (color, not fill)
+
+Bug fixes:
+
+ - Imager::Probe was calling ExtUtils::Liblist to initialize
+   LD_RUN_PATH supplying an undefined value rather than the found
+   directory.  Thanks to Justin Davis.
+   https://rt.cpan.org/Ticket/Display.html?id=60491
+
+ - only prepend ./ to font filenames when passing them to T1Lib and
+   then only when it would use its search mechanisms.
+   https://rt.cpan.org/Ticket/Display.html?id=60509
+
+ - fix the cache check for the X rgb.txt loader.  This is typically
+   used for color translation on Unix-like systems, and the fix
+   improves performance of supplying colors by name by about 80 times.
+   Test code that managed 3400 10x10 pixel boxes/second sped up to
+   25700 boxes/second.
+
+ - clarify that Imager doesn't write EXIF metadata to images.
+   https://rt.cpan.org/Ticket/Display.html?id=60637
+
+ - Imager::Probe can now search subdirectories under its include path.
+   Used by the PNG Makefile.PL to find headers and libraries when they
+   aren't in the base directory, as in cygwin.
+   https://rt.cpan.org/Ticket/Display.html?id=60635
+
 Imager 0.77 - 11 Aug 2010
 ===========
 

@@ -1,6 +1,6 @@
 --- #YAML:1.0
 name:               Imager
-version:            0.77
+version:            0.77_01
 abstract:           Perl extension for Generating 24 bit Images
 author:
     - Tony Cook <tony@imager.perl.org>, Arnar M. Hrafnkelsson
@@ -19,13 +19,16 @@ resources:
     homepage:  http://imager.perl.org/
     repository:
         type:  svn
-        url:   http://imager.perl.org/svn/
+        url:   http://imager.perl.org/svn/trunk/Imager
         web:   http://imager.perl.org/svnweb/public/browse/trunk/Imager
 no_index:
     directory:
         - t
         - inc
         - PNG
+        - GIF
+        - TIFF
+        - JPEG
 generated_by:       ExtUtils::MakeMaker version 6.54
 meta-spec:
     url:      http://module-build.sourceforge.net/META-spec-v1.4.html

@@ -3,6 +3,8 @@ use strict;
 use File::Spec;
 use Config;
 
+my @alt_transfer = qw/altname incsuffix libbase/;
+
 sub probe {
   my ($class, $req) = @_;
 
@@ -17,7 +19,24 @@ sub probe {
     $result = _probe_pkg($req);
   }
   if (!$result && $req->{inccheck} && ($req->{libcheck} || $req->{libbase})) {
+    $req->{altname} ||= "main";
     $result = _probe_check($req);
+  }
+  if (!$result && $req->{alternatives}) {
+  ALTCHECK:
+    my $index = 1;
+    for my $alt (@{$req->{alternatives}}) {
+      $req->{altname} ||= "alt $index";
+      $req->{verbose}
+	and print "$req->{name}: Trying alternative $index\n";
+      my %work = %$req;
+      for my $key (@alt_transfer) {
+	exists $alt->{$key} and $work{$key} = $alt->{$key};
+      }
+      $result = _probe_check(\%work)
+	and last;
+      ++$index;
+    }
   }
 
   if (!$result && $req->{testcode}) {
@@ -69,6 +88,13 @@ sub is_exe {
 
 sub _probe_pkg {
   my ($req) = @_;
+
+  # Setup pkg-config's environment variable to search non-standard paths
+  # which may be provided by --libdirs.
+  my @pkgcfg_paths = map { "$_/pkgconfig" } _lib_paths( $req );
+  push @pkgcfg_paths, $ENV{ 'PKG_CONFIG_PATH' } if $ENV{ 'PKG_CONFIG_PATH' };
+
+  local $ENV{ 'PKG_CONFIG_PATH' } = join $Config{path_sep}, @pkgcfg_paths;
 
   is_exe('pkg-config') or return;
   my $redir = $^O eq 'MSWin32' ? '' : '2>/dev/null';
@@ -142,7 +168,11 @@ sub _probe_check {
     }
   }
 
-  print "$req->{name}: includes ", $found_incpath ? "" : "not ",
+  my $alt = "";
+  if ($req->{alternatives}) {
+    $alt = " $req->{altname}:";
+  }
+  print "$req->{name}:$alt includes ", $found_incpath ? "" : "not ",
     "found - libraries ", $found_libpath ? "" : "not ", "found\n";
 
   $found_libpath && $found_incpath
@@ -202,11 +232,11 @@ sub _probe_test {
   require Devel::CheckLib;
   # setup LD_RUN_PATH to match link time
   my ($extra, $bs_load, $ld_load, $ld_run_path) =
-    ExtUtils::Liblist->ext($req->{LIBS}, $req->{verbose});
+    ExtUtils::Liblist->ext($result->{LIBS}, $req->{verbose});
   local $ENV{LD_RUN_PATH};
 
   if ($ld_run_path) {
-    print "Setting LD_RUN_PATH=$ld_run_path for TIFF probe\n"
+    print "Setting LD_RUN_PATH=$ld_run_path for $req->{name} probe\n"
       if $req->{verbose};
     $ENV{LD_RUN_PATH} = $ld_run_path;
   }
@@ -248,7 +278,7 @@ sub _lib_paths {
 sub _inc_paths {
   my ($req) = @_;
 
-  return _paths
+  my @paths = _paths
     (
      $ENV{IM_INCPATH},
      $req->{incpath},
@@ -262,6 +292,12 @@ sub _inc_paths {
      "/usr/include",
      "/usr/local/include",
     );
+
+  if ($req->{incsuffix}) {
+    @paths = map File::Spec->catdir($_, $req->{incsuffix}), @paths;
+  }
+
+  return @paths;
 }
 
 sub _paths {

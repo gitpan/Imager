@@ -43,8 +43,6 @@ my @enable; # list of drivers to enable
 my @disable; # or list of drivers to disable
 my @incpaths; # places to look for headers
 my @libpaths; # places to look for libraries
-my $noexif; # non-zero to disable EXIF parsing of JPEGs
-my $no_gif_set_version; # disable calling EGifSetGifVersion
 my $coverage; # build for coverage testing
 my $assert; # build with assertions
 GetOptions("help" => \$help,
@@ -54,8 +52,6 @@ GetOptions("help" => \$help,
            "libpath=s" => \@libpaths,
            "verbose|v" => \$VERBOSE,
            "nolog" => \$NOLOG,
-	   "noexif" => \$noexif,
-           "nogifsetversion" => \$no_gif_set_version,
 	   'coverage' => \$coverage,
 	   "assert|a" => \$assert);
 
@@ -127,9 +123,6 @@ if ($MANUAL) {
   automatic();
 }
 
-# Make sure there isn't a clash between the gif libraries.
-gifcheck();
-
 my $lib_cflags = '';
 my $lib_lflags = '';
 my $F_LIBS = '';
@@ -150,12 +143,6 @@ for my $frmkey (sort { $formats{$a}{order} <=> $formats{$b}{order} } keys %forma
     $F_LIBS   .= ' '  .$frm->{libfiles};
   }
 
-}
-
-unless ($noexif) {
-  print "EXIF support enabled\n";
-  push @defines, [ 'IMEXIF_ENABLE', 1, "Enable experimental EXIF support" ];
-  $F_OBJECT .= ' imexif.o';
 }
 
 my $F_INC  = join ' ', map "-I$_", map / / ? qq{"$_"} : $_, 
@@ -220,6 +207,9 @@ if ($MM_ver >= 6.46) {
       directory =>
       [
        "PNG",
+       "GIF",
+       "TIFF",
+       "JPEG",
       ],
      },
      resources =>
@@ -227,7 +217,7 @@ if ($MM_ver >= 6.46) {
       homepage => "http://imager.perl.org/",
       repository =>
       {
-       url => "http://imager.perl.org/svn/",
+       url => "http://imager.perl.org/svn/trunk/Imager",
        web => "http://imager.perl.org/svnweb/public/browse/trunk/Imager",
        type => "svn",
       },
@@ -329,43 +319,43 @@ sub automatic {
 }
 
 
-sub gifcheck {
-  if ($formats{'gif'} and $formats{'ungif'}) {
-    print "ungif and gif can not coexist - removing ungif support\n";
-    delete $formats{'ungif'};
-  }
+# sub gifcheck {
+#   if ($formats{'gif'} and $formats{'ungif'}) {
+#     print "ungif and gif can not coexist - removing ungif support\n";
+#     delete $formats{'ungif'};
+#   }
 
-  for my $frm (qw(gif ungif)) {
-    checkformat($frm) if ($MANUAL and $formats{$frm});
-  }
+#   for my $frm (qw(gif ungif)) {
+#     checkformat($frm) if ($MANUAL and $formats{$frm});
+#   }
 
-  my @dirs;
-  for my $frm (grep $formats{$_}, qw(gif ungif)) {
-    push(@dirs, @{$formats{$frm}{incdir}}) if $formats{$frm}{incdir};
-  }
-  my $minor = 0;
-  my $major = 0;
-  FILES: for my $dir (@dirs) {
-    my $h = "$dir/gif_lib.h";
-    open H, "< $h" or next;
-    while (<H>) {
-      if (/GIF_LIB_VERSION\s+"\s*version\s*(\d+)\.(\d+)/i) {
-	$major = $1;
-	$minor = $2;
-	close H;
-	last FILES;
-      }
-    }
-    close H;
-  }
+#   my @dirs;
+#   for my $frm (grep $formats{$_}, qw(gif ungif)) {
+#     push(@dirs, @{$formats{$frm}{incdir}}) if $formats{$frm}{incdir};
+#   }
+#   my $minor = 0;
+#   my $major = 0;
+#   FILES: for my $dir (@dirs) {
+#     my $h = "$dir/gif_lib.h";
+#     open H, "< $h" or next;
+#     while (<H>) {
+#       if (/GIF_LIB_VERSION\s+"\s*version\s*(\d+)\.(\d+)/i) {
+# 	$major = $1;
+# 	$minor = $2;
+# 	close H;
+# 	last FILES;
+#       }
+#     }
+#     close H;
+#   }
 
-  # we need the version in a #ifdefable form
+#   # we need the version in a #ifdefable form
 
-  push @defines, [ IM_GIFMAJOR => $major, "Parsed giflib version" ];
-  push @defines, [ IM_GIFMINOR => $minor ];
-  push @defines, [ IM_NO_SET_GIF_VERSION => 1, "Disable EGifSetGifVersion" ]
-    if $no_gif_set_version;
-}
+#   push @defines, [ IM_GIFMAJOR => $major, "Parsed giflib version" ];
+#   push @defines, [ IM_GIFMINOR => $minor ];
+#   push @defines, [ IM_NO_SET_GIF_VERSION => 1, "Disable EGifSetGifVersion" ]
+#     if $no_gif_set_version;
+# }
 
 
 sub grep_directory {
@@ -537,30 +527,30 @@ sub init {
   }
   push @libs, grep -d, qw(/usr/local/lib);
 
-  $formats{'jpeg'}={
-		    order=>'21',
-		    def=>'HAVE_LIBJPEG',
-		    inccheck=>sub { -e catfile($_[0], 'jpeglib.h') },
-		    libcheck=>sub { $_[0] eq "libjpeg$aext" or $_ eq "libjpeg.$lext" },
-		    libfiles=>'-ljpeg',
-		    objfiles=>'jpeg.o',
-		    docs=>q{
-			    In order to use jpeg with this module you need to have libjpeg
-			    installed on your computer}
-		   };
+#   $formats{'jpeg'}={
+# 		    order=>'21',
+# 		    def=>'HAVE_LIBJPEG',
+# 		    inccheck=>sub { -e catfile($_[0], 'jpeglib.h') },
+# 		    libcheck=>sub { $_[0] eq "libjpeg$aext" or $_ eq "libjpeg.$lext" },
+# 		    libfiles=>'-ljpeg',
+# 		    objfiles=>'jpeg.o',
+# 		    docs=>q{
+# 			    In order to use jpeg with this module you need to have libjpeg
+# 			    installed on your computer}
+# 		   };
 
-  $formats{'tiff'}={
-		    order=>'23',
-		    def=>'HAVE_LIBTIFF',
-		    inccheck=>sub { -e catfile($_[0], 'tiffio.h') },
-		    libcheck=>sub { $_[0] eq "libtiff$aext" or $_ eq "libtiff.$lext" },
-		    libfiles=>'-ltiff',
-		    objfiles=>'tiff.o',
-		    docs=>q{
-			    In order to use tiff with this module you need to have libtiff
-			    installed on your computer},
-		    postcheck => \&postcheck_tiff,
-		   };
+#   $formats{'tiff'}={
+# 		    order=>'23',
+# 		    def=>'HAVE_LIBTIFF',
+# 		    inccheck=>sub { -e catfile($_[0], 'tiffio.h') },
+# 		    libcheck=>sub { $_[0] eq "libtiff$aext" or $_ eq "libtiff.$lext" },
+# 		    libfiles=>'-ltiff',
+# 		    objfiles=>'tiff.o',
+# 		    docs=>q{
+# 			    In order to use tiff with this module you need to have libtiff
+# 			    installed on your computer},
+# 		    postcheck => \&postcheck_tiff,
+# 		   };
 
 #   $formats{'png'}={
 # 		   order=>'22',
@@ -576,34 +566,34 @@ sub init {
 #                    code => \&png_probe,
 # 		  };
 
-  $formats{'gif'}={
-		   order=>'20',
-		   def=>'HAVE_LIBGIF',
-		   inccheck=>sub { -e catfile($_[0], 'gif_lib.h') },
-		   libcheck=>sub { $_[0] eq "libgif$aext" or $_[0] eq "libgif.$lext" },
-		   libfiles=>'-lgif',
-		   objfiles=>'gif.o',
-		   docs=>q{
-			   gif is the de facto standard for webgraphics at the moment,
-			   it does have some patent problems. If you have giflib and
-			   are not in violation with the unisys patent you should use
-			   this instead of the 'ungif' option.  Note that they cannot
-			   be in use at the same time}
-		  };
+#   $formats{'gif'}={
+# 		   order=>'20',
+# 		   def=>'HAVE_LIBGIF',
+# 		   inccheck=>sub { -e catfile($_[0], 'gif_lib.h') },
+# 		   libcheck=>sub { $_[0] eq "libgif$aext" or $_[0] eq "libgif.$lext" },
+# 		   libfiles=>'-lgif',
+# 		   objfiles=>'gif.o',
+# 		   docs=>q{
+# 			   gif is the de facto standard for webgraphics at the moment,
+# 			   it does have some patent problems. If you have giflib and
+# 			   are not in violation with the unisys patent you should use
+# 			   this instead of the 'ungif' option.  Note that they cannot
+# 			   be in use at the same time}
+# 		  };
 
-  $formats{'ungif'}={
-		     order=>'21',
-		     def=>'HAVE_LIBGIF',
-		     inccheck=>sub { -e catfile($_[0], 'gif_lib.h') },
-		     libcheck=>sub { $_[0] eq "libungif$aext" or $_[0] eq "libungif.$lext" },
-		     libfiles=>'-lungif',
-		     objfiles=>'gif.o',
-		     docs=>q{
-			     gif is the de facto standard for webgraphics at the moment,
-			     it does have some patent problems. If you have libungif and
-			     want to create images free from LZW patented compression you
-			     should use this option instead of the 'gif' option}
-		    };
+#   $formats{'ungif'}={
+# 		     order=>'21',
+# 		     def=>'HAVE_LIBGIF',
+# 		     inccheck=>sub { -e catfile($_[0], 'gif_lib.h') },
+# 		     libcheck=>sub { $_[0] eq "libungif$aext" or $_[0] eq "libungif.$lext" },
+# 		     libfiles=>'-lungif',
+# 		     objfiles=>'gif.o',
+# 		     docs=>q{
+# 			     gif is the de facto standard for webgraphics at the moment,
+# 			     it does have some patent problems. If you have libungif and
+# 			     want to create images free from LZW patented compression you
+# 			     should use this option instead of the 'gif' option}
+# 		    };
 
   $formats{'T1-fonts'}={
 			order=>'30',
@@ -970,7 +960,7 @@ Usage: $0 [--enable feature1,feature2,...] [other options]
        $0 [--disable feature1,feature2,...]  [other options]
        $0 --help
 Possible feature names are:
-  png gif ungif jpeg tiff T1-fonts TT-fonts freetype2
+  T1-fonts TT-fonts freetype2
 Other options:
   --verbose | -v
     Verbose library probing (or set IM_VERBOSE in the environment)
@@ -984,8 +974,6 @@ Other options:
     Build for coverage testing.
   --assert
     Build with assertions active.
-  --noexif
-    Disable EXIF parsing.
 EOS
   exit 1;
 
@@ -1047,84 +1035,84 @@ sub _tilde_expand {
   $path;
 }
 
-sub postcheck_tiff {
-  my ($format, $frm) = @_;
+# sub postcheck_tiff {
+#   my ($format, $frm) = @_;
 
-  -d "probe" or mkdir "probe";
+#   -d "probe" or mkdir "probe";
 
-  my $tiffver_name = "probe/tiffver.txt";
+#   my $tiffver_name = "probe/tiffver.txt";
 
-  my $lib;
-  if ($Config{cc} =~ /\b(cl|bcc)\b/) {
-    $lib = "libtiff";
-  }
-  else {
-    $lib = "tiff";
-  }
+#   my $lib;
+#   if ($Config{cc} =~ /\b(cl|bcc)\b/) {
+#     $lib = "libtiff";
+#   }
+#   else {
+#     $lib = "tiff";
+#   }
 
-  # setup LD_RUN_PATH to match link time
-  my $lopts = join " " , map("-L$_", @{$format->{libdir}}), " -ltiff";
-  my ($extra, $bs_load, $ld_load, $ld_run_path) =
-    ExtUtils::Liblist->ext($lopts, $VERBOSE);
-  local $ENV{LD_RUN_PATH};
+#   # setup LD_RUN_PATH to match link time
+#   my $lopts = join " " , map("-L$_", @{$format->{libdir}}), " -ltiff";
+#   my ($extra, $bs_load, $ld_load, $ld_run_path) =
+#     ExtUtils::Liblist->ext($lopts, $VERBOSE);
+#   local $ENV{LD_RUN_PATH};
 
-  if ($ld_run_path) {
-    print "Setting LD_RUN_PATH=$ld_run_path for TIFF probe\n" if $VERBOSE;
-    $ENV{LD_RUN_PATH} = $ld_run_path;
-  }
+#   if ($ld_run_path) {
+#     print "Setting LD_RUN_PATH=$ld_run_path for TIFF probe\n" if $VERBOSE;
+#     $ENV{LD_RUN_PATH} = $ld_run_path;
+#   }
 
-  my $good =
-    eval {
-      assert_lib
-	(
-	 debug => $VERBOSE,
-	 incpath => $format->{incdir},
-	 libpath => $format->{libdir},
-	 lib => $lib,
-	 header => [ qw(stdio.h tiffio.h) ],
-	 function => <<FUNCTION,
-  {
-    const char *vers = TIFFGetVersion();
-    FILE *f = fopen("$tiffver_name", "wb");
-    if (!f)
-      return 1;
-    fputs(vers, f);
-    if (fclose(f))
-      return 1;
-    return 0;
-  }
-FUNCTION
-	);
-      1;
-    };
+#   my $good =
+#     eval {
+#       assert_lib
+# 	(
+# 	 debug => $VERBOSE,
+# 	 incpath => $format->{incdir},
+# 	 libpath => $format->{libdir},
+# 	 lib => $lib,
+# 	 header => [ qw(stdio.h tiffio.h) ],
+# 	 function => <<FUNCTION,
+#   {
+#     const char *vers = TIFFGetVersion();
+#     FILE *f = fopen("$tiffver_name", "wb");
+#     if (!f)
+#       return 1;
+#     fputs(vers, f);
+#     if (fclose(f))
+#       return 1;
+#     return 0;
+#   }
+# FUNCTION
+# 	);
+#       1;
+#     };
 
-  unless ($good && -s $tiffver_name
-	  && open(VERS, "< $tiffver_name")) {
-    unlink $tiffver_name unless $KEEP_FILES;
-    print <<EOS;
-    **tiff: cannot determine libtiff version number
-      tiff: DISABLED
-EOS
-    return;
-  }
+#   unless ($good && -s $tiffver_name
+# 	  && open(VERS, "< $tiffver_name")) {
+#     unlink $tiffver_name unless $KEEP_FILES;
+#     print <<EOS;
+#     **tiff: cannot determine libtiff version number
+#       tiff: DISABLED
+# EOS
+#     return;
+#   }
 
-  # version file seems to be there, load it up
-  my $ver_str = do { local $/; <VERS> };
-  close VERS;
-  unlink $tiffver_name unless $KEEP_FILES;
+#   # version file seems to be there, load it up
+#   my $ver_str = do { local $/; <VERS> };
+#   close VERS;
+#   unlink $tiffver_name unless $KEEP_FILES;
 
-  my ($version) = $ver_str =~ /(\d+\.\d+\.\d+)/;
+#   my ($version) = $ver_str =~ /(\d+\.\d+\.\d+)/;
 
-  if ($version eq '3.9.0') {
-    print <<EOS;
-    **tiff: libtiff 3.9.0 introduced a serious bug, please install 3.9.1
-      tiff: DISABLED
-EOS
-    return;
-  }
+#   if ($version eq '3.9.0') {
+#     print <<EOS;
+#     **tiff: libtiff 3.9.0 introduced a serious bug, please install 3.9.1
+#       tiff: DISABLED
+# EOS
+#     return;
+#   }
 
-  return 1;
-}
+#   return 1;
+# }
 
 # This isn't a module, but some broken tools, like
 # Module::Depends::Instrusive insist on treating it like one.

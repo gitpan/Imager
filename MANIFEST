@@ -13,6 +13,23 @@ Flines/Flines.pm
 Flines/Flines.xs
 Flines/Makefile.PL
 Flines/t/t00flines.t
+GIF/GIF.pm
+GIF/GIF.xs
+GIF/Makefile.PL
+GIF/imgif.c
+GIF/imgif.h
+GIF/testimg/badindex.gif	GIF with a bad color index
+GIF/testimg/bandw.gif
+GIF/testimg/expected.gif
+GIF/testimg/loccmap.gif
+GIF/testimg/nocmap.gif
+GIF/testimg/scale.gif
+GIF/testimg/scalei.gif
+GIF/testimg/screen2.gif
+GIF/testimg/screen3.gif
+GIF/testimg/trimgdesc.gif
+GIF/testimg/trmiddesc.gif
+GIF/testimg/zerocomm.gif	Image with a zero-length comment extension
 ICO/ICO.pm	Windows Icon file support
 ICO/ICO.xs
 ICO/Makefile.PL
@@ -45,6 +62,19 @@ ICO/testimg/rgba3232.ico
 ICO/testimg/rgba3232.ppm
 Imager.pm
 Imager.xs
+JPEG/JPEG.pm
+JPEG/JPEG.xs
+JPEG/Makefile.PL
+JPEG/imexif.c	Experimental JPEG EXIF decoding
+JPEG/imexif.h
+JPEG/imjpeg.c
+JPEG/imjpeg.h
+JPEG/t/t00load.t
+JPEG/t/t10jpeg.t		Test jpeg support
+JPEG/testimg/209_yonge.jpg	Regression test: #17981
+JPEG/testimg/exiftest.jpg	Test image for EXIF parsing
+JPEG/testimg/scmyk.jpg	Simple CMYK JPEG image
+JPEG/testimg/zerotype.jpg	Image with a zero type entry in the EXIF data
 MANIFEST
 MANIFEST.SKIP
 META.yml        Module meta-data
@@ -81,6 +111,40 @@ SGI/testimg/verb.rgb
 SGI/testimg/verb12.rgb
 SGI/testimg/verb16.rgb
 SGI/testimg/verb6.rgb
+TIFF/Makefile.PL
+TIFF/TIFF.pm
+TIFF/TIFF.xs
+TIFF/imtiff.c
+TIFF/imtiff.h
+TIFF/t/t10tiff.t	Test tiff support
+TIFF/testimg/alpha.tif	Alpha scaling test image
+TIFF/testimg/comp4.bmp       Compressed 4-bit/pixel BMP
+TIFF/testimg/comp4.tif       4-bit/pixel paletted TIFF
+TIFF/testimg/comp4bad.tif    corrupted 4-bit/pixel paletted TIFF
+TIFF/testimg/comp4t.tif      4-bit/pixel paletted TIFF (tiled)
+TIFF/testimg/comp8.bmp       Compressed 8-bit/pixel BMP
+TIFF/testimg/comp8.tif       8-bit/pixel paletted TIFF
+TIFF/testimg/gralpha.tif	Grey alpha test image
+TIFF/testimg/grey16.tif	16-bit/sample greyscale TIFF
+TIFF/testimg/grey32.tif	32-bit/sample greyscale+alpha TIFF
+TIFF/testimg/imager.pbm	Test bi-level
+TIFF/testimg/imager.tif	Test bi-level
+TIFF/testimg/penguin-base.ppm
+TIFF/testimg/pengtile.tif	Tiled tiff image, same as penguin-base.ppm
+TIFF/testimg/rgb16.tif	16-bit/sample RGB image - strips
+TIFF/testimg/rgb16t.tif	16-bit/sample RGB image - tiled
+TIFF/testimg/rgbatsep.tif	Tiled/separated for testing RGBA codepath
+TIFF/testimg/scmyk.tif	Simple CMYK TIFF image
+TIFF/testimg/scmyka.tif	CMYK with one alpha channel
+TIFF/testimg/scmyka16.tif	CMYK with one alpha channel (16-bit)
+TIFF/testimg/scmykaa.tif	CMYK with 2 alpha channels
+TIFF/testimg/slab.tif	Lab color image
+TIFF/testimg/srgb.tif	Simple RGB image
+TIFF/testimg/srgba.tif	RGB with one alpha
+TIFF/testimg/srgba16.tif
+TIFF/testimg/srgba32.tif
+TIFF/testimg/srgbaa.tif	RGB with 2 alpha
+TIFF/testimg/tiffwarn.tif	Generates a warning while being read
 apidocs.perl    Build lib/Imager/APIRef.pm
 bigtest.perl	Library selection tester
 bmp.c           Reading and writing Windows BMP files
@@ -129,7 +193,6 @@ fontfiles/dcr10.pfb
 fontfiles/dodge.ttf
 freetyp2.c	Implements freetype2 font support
 gaussian.im
-gif.c
 hlines.c	Manage sets of horizontal line segments
 image.c
 imager.h
@@ -139,9 +202,9 @@ imerror.h	Error handling functions
 imext.c         Defines the function table
 imext.h         Included by external modules for API access
 imextdef.h
+imextpl.h	Included by external modules for Perl API access
+imextpltypes.h	Define Perl API function table type
 imexttypes.h    Define API function table type
-imexif.c	Experimental JPEG EXIF decoding
-imexif.h
 img16.c
 imgdouble.c     Implements double/sample images
 imio.h
@@ -153,7 +216,6 @@ io.c
 iolayer.c
 iolayer.h
 iolayert.h	IO layer types
-jpeg.c
 lib/Imager/API.pod
 lib/Imager/APIRef.pod    API function reference
 lib/Imager/Color.pm
@@ -245,15 +307,12 @@ t/t023palette.t		Test paletted images
 t/t05error.t
 t/t07iolayer.t
 t/t1000files.t          Format independent file tests
-t/t101jpeg.t		Test jpeg support
 t/t101nojpeg.t		Test handling when jpeg not available
 t/t102nopng.t		Test handling when png not available
 t/t103raw.t
 t/t104ppm.t
-t/t105gif.t		Test gif support
 t/t105nogif.t		Test handling when gif not available
 t/t106notiff.t		Test handling when tiff not available
-t/t106tiff.t		Test tiff support
 t/t107bmp.t
 t/t108tga.t
 t/t15color.t
@@ -279,7 +338,6 @@ t/t66paste.t
 t/t67convert.t
 t/t68map.t
 t/t69rubthru.t
-t/t70newgif.t
 t/t75polyaa.t
 t/t80texttools.t        Test text wrapping
 t/t81hlines.t		Test hlines.c
@@ -294,8 +352,6 @@ t/t99thread.t		Test wrt to perl threads
 t/tr18561.t		Regression tests
 t/tr18561b.t
 tags.c
-testimg/209_yonge.jpg	Regression test: #17981
-testimg/alpha.tif	Alpha scaling test image
 testimg/alpha16.tga	16-bit/pixel TGA with alpha "channel" RT 32926
 testimg/bad1oflow.bmp   1-bit/pixel, overflow integer on 32-bit machines
 testimg/bad1wid0.bmp    1-bit/pixel, zero width
@@ -312,7 +368,6 @@ testimg/bad8wid0.bmp    8-bit/pixel, width 0
 testimg/badbits.bmp     bad bits value in header
 testimg/badcomp1.bmp    bad compression for 1-bit/pixel
 testimg/badcomp4.bmp    bad compression for 4-bit/pixel
-testimg/badindex.gif	GIF with a bad color index
 testimg/badplanes.bmp   bad planes value in header
 testimg/badused1.bmp    1-bit/pixel, out of range colors used value
 testimg/badused4a.bmp   4-bit/pixel, badly out of range used value (SEGV test)
@@ -320,24 +375,12 @@ testimg/badused4b.bmp   4-bit/pixel, just out of range used value (SEGV test)
 testimg/bad_asc.pbm	ASCII PBM with invalid image data
 testimg/bad_asc.pgm	ASCII PGM with invalid image data
 testimg/bad_asc.ppm	ASCII PPM with invalid image data
-testimg/bandw.gif
 testimg/base.jpg	Base JPEG test image
 testimg/comp4.bmp       Compressed 4-bit/pixel BMP
-testimg/comp4.tif       4-bit/pixel paletted TIFF
-testimg/comp4bad.tif    corrupted 4-bit/pixel paletted TIFF
-testimg/comp4t.tif      4-bit/pixel paletted TIFF (tiled)
 testimg/comp8.bmp       Compressed 8-bit/pixel BMP
-testimg/comp8.tif       8-bit/pixel paletted TIFF
-testimg/exiftest.jpg	Test image for EXIF parsing
-testimg/expected.gif
 testimg/gimpgrad        A GIMP gradient file
-testimg/gralpha.tif	Grey alpha test image
-testimg/grey16.tif	16-bit/sample greyscale TIFF
-testimg/grey32.tif	32-bit/sample greyscale+alpha TIFF
 testimg/imager.pbm	Test bi-level
-testimg/imager.tif	Test bi-level
 testimg/junk.ppm
-testimg/loccmap.gif
 testimg/longid.tga      Test TGA with a long id string
 testimg/maxval.ppm	For ppm file maxval handling
 testimg/maxval_0.ppm
@@ -347,23 +390,9 @@ testimg/maxval_65536.ppm
 testimg/maxval_asc.ppm
 testimg/multiple.ppm	Test multiple PPM reading
 testimg/newgimpgrad.ggr Test GIMP Gradient file (newer type)
-testimg/nocmap.gif
 testimg/penguin-base.ppm
-testimg/pengtile.tif	Tiled tiff image, same as penguin-base.ppm
 testimg/pgm.pgm		Simple pgm for testing the right sample is in the right place
-testimg/rgb16.tif	16-bit/sample RGB image - strips
-testimg/rgb16t.tif	16-bit/sample RGB image - tiled
-testimg/rgbatsep.tif	Tiled/separated for testing RGBA codepath
-testimg/scale.gif
 testimg/scale.ppm
-testimg/scalei.gif
-testimg/scmyk.tif	Simple CMYK TIFF image
-testimg/scmyk.jpg	Simple CMYK JPEG image
-testimg/scmyka.tif	CMYK with one alpha channel
-testimg/scmyka16.tif	CMYK with one alpha channel (16-bit)
-testimg/scmykaa.tif	CMYK with 2 alpha channels
-testimg/screen2.gif
-testimg/screen3.gif
 testimg/short1.bmp      1-bit/pixel, data missing from EOF
 testimg/short24.bmp     24-bit/pixel, data missing from EOF
 testimg/short4.bmp      truncated 4bit/pixel uncompressed BMP
@@ -379,19 +408,10 @@ testimg/short_bin.ppm	Bin PPM with short image section
 testimg/short_bin16.pgm	16-bit Bin PGM with short image section
 testimg/short_bin16.ppm	16-bit Bin PPM with short image section
 testimg/simple.pbm
-testimg/slab.tif	Lab color image
-testimg/srgb.tif	Simple RGB image
-testimg/srgba.tif	RGB with one alpha
-testimg/srgba16.tif
-testimg/srgba32.tif
-testimg/srgbaa.tif	RGB with 2 alpha
 testimg/test.png	Standard test image as PNG
 testimg/test.raw	Standard test image as RAW
 testimg/test.tga	Standard test image as TGA
 testimg/test_gimp_pal   A simple GIMP palette file
-testimg/tiffwarn.tif	Generates a warning while being read
-testimg/trimgdesc.gif
-testimg/trmiddesc.gif
 testimg/winrgb2.bmp  1-bit bmp base
 testimg/winrgb24.bmp 24-bit bmp base
 testimg/winrgb24off.bmp 24-bit bmp with image data offset from header
@@ -400,10 +420,7 @@ testimg/winrgb4.bmp  4-bit bmp base
 testimg/winrgb4off.bmp  4-bit bmp with image data offset from header
 testimg/winrgb8.bmp  8-bit bmp base
 testimg/winrgb8off.bmp  8-bit bmp with image data offset from header
-testimg/zerotype.jpg	Image with a zero type entry in the EXIF data
-testimg/zerocomm.gif	Image with a zero-length comment extension
 tga.c           Reading and writing Targa files
-tiff.c
 trans2.c
 transform.perl	Shell interface to Imager::Transform
 typemap

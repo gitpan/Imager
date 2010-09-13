@@ -18,9 +18,9 @@ my $MM_ver = eval $ExtUtils::MakeMaker::VERSION;
 
 my %opts = 
   (
-   NAME => 'Imager::File::PNG',
-   VERSION_FROM => 'PNG.pm',
-   OBJECT => 'PNG.o impng.o',
+   NAME => 'Imager::File::JPEG',
+   VERSION_FROM => 'JPEG.pm',
+   OBJECT => 'JPEG.o imjpeg.o imexif.o',
   );
 
 my @inc;
@@ -30,7 +30,7 @@ if ($BUILDING_IMAGER) {
 }
 else {
   unshift @INC, "inc";
-  print "PNG: building independently\n";
+  print "JPEG: building independently\n";
   require Imager::ExtUtils;
   push @inc, Imager::ExtUtils->includes;
   $opts{TYPEMAPS} = [ Imager::ExtUtils->typemap ];
@@ -54,8 +54,8 @@ else {
 	homepage => "http://imager.perl.org/",
 	repository =>
 	{
-	 url => "http://imager.perl.org/svn/trunk/Imager-File-PNG",
-	 web => "http://imager.perl.org/svnweb/public/browse/trunk/Imager-File-PNG",
+	 url => "http://imager.perl.org/svn/trunk/Imager-File-JPEG",
+	 web => "http://imager.perl.org/svnweb/public/browse/trunk/Imager-File-JPEG",
 	 type => "svn",
 	},
        },
@@ -71,33 +71,13 @@ require Imager::Probe;
 
 my %probe =
   (
-   name => "PNG",
-   altname => "Generic",
-   pkg => [ qw/libpng14 libpng12 libpng10 libpng/ ],
-   inccheck => sub { -e File::Spec->catfile($_[0], "png.h") },
-   libbase => "png",
-   testcode => _png_test_code(),
-   testcodeheaders => [ "png.h", "stdio.h" ],
+   name => "JPEG",
+   inccheck => sub { -e File::Spec->catfile($_[0], "jpeglib.h") },
+   libbase => "jpeg",
+   testcode => _jpeg_test_code(),
+   testcodeheaders => [ "stdio.h", "stddef.h", "jpeglib.h" ],
    incpath => join($Config{path_sep}, @incpaths),
    libpath => join($Config{path_sep}, @libpaths),
-   alternatives =>
-   [
-    {
-     altname => "v1.4",
-     incsuffix => "libpng14",
-     libbase => "png14",
-    },
-    {
-     altname => "v1.2",
-     incsuffix => "libpng12",
-     libbase => "png12",
-    },
-    {
-     altname => "v1.0",
-     incsuffix => "libpng10",
-     libbase => "png10",
-    },
-   ],
   );
 
 my $probe_res = Imager::Probe->probe(\%probe);
@@ -109,7 +89,7 @@ if ($probe_res) {
   
   if ($MM_ver > 6.06) {
     $opts{AUTHOR} = 'Tony Cook <tony@imager.perl.org>';
-    $opts{ABSTRACT} = 'PNG Image file support';
+    $opts{ABSTRACT} = 'JPEG Image file support';
   }
   
   WriteMakefile(%opts);
@@ -120,14 +100,18 @@ else {
   }
   else {
     # fail in good way
-    die "OS unsupported: PNG libraries or headers not found\n";
+    die "OS unsupported: JPEG libraries or headers not found\n";
   }
 }
 
-sub _png_test_code {
+sub _jpeg_test_code {
   return <<'CODE';
+struct jpeg_decompress_struct cinfo;
+struct jpeg_error_mgr jerr;
 
-fprintf(stderr, "PNG: library version %ld, header version %ld\n", (long)png_access_version_number(),  (long)PNG_LIBPNG_VER);
+cinfo.err = jpeg_std_error(&jerr);
+jpeg_create_decompress(&cinfo);
+
 return 0;
 CODE
 }

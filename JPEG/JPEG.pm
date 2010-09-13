@@ -1,4 +1,4 @@
-package Imager::File::PNG;
+package Imager::File::JPEG;
 use strict;
 use Imager;
 use vars qw($VERSION @ISA);
@@ -8,22 +8,23 @@ BEGIN {
 
   eval {
     require XSLoader;
-    XSLoader::load('Imager::File::PNG', $VERSION);
+    XSLoader::load('Imager::File::JPEG', $VERSION);
     1;
   } or do {
     require DynaLoader;
     push @ISA, 'DynaLoader';
-    bootstrap Imager::File::PNG $VERSION;
+    bootstrap Imager::File::JPEG $VERSION;
   };
 }
 
 Imager->register_reader
   (
-   type=>'png',
+   type=>'jpeg',
    single => 
    sub { 
      my ($im, $io, %hsh) = @_;
-     $im->{IMG} = i_readpng_wiol($io);
+
+     ($im->{IMG},$im->{IPTCRAW}) = i_readjpeg_wiol( $io );
 
      unless ($im->{IMG}) {
        $im->_set_error(Imager->_error_as_msg);
@@ -35,18 +36,23 @@ Imager->register_reader
 
 Imager->register_writer
   (
-   type=>'png',
+   type=>'jpeg',
    single => 
    sub { 
      my ($im, $io, %hsh) = @_;
 
      $im->_set_opts(\%hsh, "i_", $im);
-     $im->_set_opts(\%hsh, "png_", $im);
+     $im->_set_opts(\%hsh, "jpeg_", $im);
+     $im->_set_opts(\%hsh, "exif_", $im);
 
-     unless (i_writepng_wiol($im->{IMG}, $io)) {
+     my $quality = $hsh{jpegquality};
+     defined $quality or $quality = 75;
+
+     if ( !i_writejpeg_wiol($im->{IMG}, $io, $quality)) {
        $im->_set_error(Imager->_error_as_msg);
        return;
      }
+
      return $im;
    },
   );
@@ -55,22 +61,22 @@ __END__
 
 =head1 NAME
 
-Imager::File::PNG - read and write PNG files
+Imager::File::JPEG - read and write JPEG files
 
 =head1 SYNOPSIS
 
   use Imager;
 
   my $img = Imager->new;
-  $img->read(file=>"foo.png")
+  $img->read(file=>"foo.jpg")
     or die $img->errstr;
 
-  $img->write(file => "foo.png")
+  $img->write(file => "foo.jpg")
     or die $img->errstr;
 
 =head1 DESCRIPTION
 
-Imager's PNG support is documented in L<Imager::Files>.
+Imager's JPEG support is documented in L<Imager::Files>.
 
 =head1 AUTHOR
 

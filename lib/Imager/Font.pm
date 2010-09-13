@@ -73,13 +73,6 @@ sub new {
 
   if ($hsh{'file'}) {
     $file = $hsh{'file'};
-    if ( $file !~ m/^\// ) {
-      $file = './'.$file;
-      if (! -e $file) {
-	$Imager::ERRSTR = "Font $file not found";
-	return();
-      }
-    }
 
     $type = $hsh{'type'};
     if (!defined($type) or !$drivers{$type} or !$drivers{$type}{enabled}) {
@@ -996,7 +989,7 @@ of the above.
 
 =head1 REVISION
 
-$Revision: 1724 $
+$Revision: 1811 $
 
 =head1 SEE ALSO
 

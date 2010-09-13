@@ -106,6 +106,11 @@ extern im_ext_funcs *imager_function_ext_table;
 
 #endif
 
+#define i_gsamp_bits(im, l, r, y, samps, chans, count, bits) \
+  (((im)->i_f_gsamp_bits) ? ((im)->i_f_gsamp_bits)((im), (l), (r), (y), (samps), (chans), (count), (bits)) : -1)
+#define i_psamp_bits(im, l, r, y, samps, chans, count, bits) \
+  (((im)->i_f_psamp_bits) ? ((im)->i_f_psamp_bits)((im), (l), (r), (y), (samps), (chans), (count), (bits)) : -1)
+
 #define i_new_fill_solid(c, combine) ((im_extt->f_i_new_fill_solid)((c), (combine)))
 #define i_new_fill_solidf(c, combine) ((im_extt->f_i_new_fill_solidf)((c), (combine)))
 #define i_new_fill_hatch(fg, bg, combine, hatch, cust_hatch, dx, dy) \
@@ -202,5 +207,16 @@ extern im_ext_funcs *imager_function_ext_table;
 
 #define i_img_alloc() ((im_extt->f_i_img_alloc)())
 #define i_img_init(img) ((im_extt->f_i_img_init)(img))
+
+#define i_img_is_monochrome(img, zero_is_white) ((im_extt->f_i_img_is_monochrome)((img), (zero_is_white)))
+
+#define i_gsamp_bg(im, l, r, y, samples, out_channels, bg) \
+  ((im_extt->f_i_gsamp_bg)((im), (l), (r), (y), (samples), (out_channels), (bg)))
+#define i_gsampf_bg(im, l, r, y, samples, out_channels, bg) \
+  ((im_extt->f_i_gsampf_bg)((im), (l), (r), (y), (samples), (out_channels), (bg)))
+#define i_get_file_background(im, bg) \
+  ((im_extt->f_i_get_file_background)((im), (bg)))
+#define i_get_file_backgroundf(im, bg) \
+  ((im_extt->f_i_get_file_backgroundf)((im), (bg)))
 
 #endif
