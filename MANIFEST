@@ -9,6 +9,19 @@ DynTest/DynTest.xs
 DynTest/Makefile.PL
 DynTest/linstretch.c
 DynTest/t/t00dyntest.t
+FT2/Makefile.PL
+FT2/FT2.pm
+FT2/FT2.xs
+FT2/freetyp2.c	Implements freetype2 font support
+FT2/fontfiles/dodge.ttf
+FT2/fontfiles/ExistenceTest.afm
+FT2/fontfiles/ExistenceTest.pfb
+FT2/fontfiles/ExistenceTest.ttf
+FT2/fontfiles/ImUgly.ttf
+FT2/fontfiles/MMOne.pfb		multiple master test font
+FT2/fontfiles/NameTest.ttf
+FT2/imft2.h
+FT2/typemap
 Flines/Flines.pm
 Flines/Flines.xs
 Flines/Makefile.PL
@@ -145,6 +158,14 @@ TIFF/testimg/srgba16.tif
 TIFF/testimg/srgba32.tif
 TIFF/testimg/srgbaa.tif	RGB with 2 alpha
 TIFF/testimg/tiffwarn.tif	Generates a warning while being read
+W32/fontfiles/ExistenceTest.ttf
+W32/imw32.h
+W32/lib/Imager/Font/Win32.pm
+W32/t/t10win32.t	Tests Win32 GDI font support
+W32/win32.c		Implements font support through Win32 GDI
+W32/Makefile.PL
+W32/W32.pm
+W32/W32.xs
 apidocs.perl    Build lib/Imager/APIRef.pm
 bigtest.perl	Library selection tester
 bmp.c           Reading and writing Windows BMP files
@@ -184,14 +205,12 @@ fontfiles/ExistenceTest.afm     please edit ExistenceTest.sfd in CVS
 fontfiles/ExistenceTest.pfb     to change these files, edited and
 fontfiles/ExistenceTest.ttf     generated using pfaedit
 fontfiles/ImUgly.ttf
-fontfiles/MMOne.pfb		multiple master test font
-fontfiles/NameTest.ttf          test glyph_names() - see t38ft2font.t
+fontfiles/NameTest.ttf          test glyph_names() - see FT2/t/t10ft2.t
 fontfiles/SpaceTest.afm
 fontfiles/SpaceTest.pfb		test bounding box with spaces in t30t1font.t
 fontfiles/dcr10.afm
 fontfiles/dcr10.pfb
 fontfiles/dodge.ttf
-freetyp2.c	Implements freetype2 font support
 gaussian.im
 hlines.c	Manage sets of horizontal line segments
 image.c
@@ -236,7 +255,6 @@ lib/Imager/Font/FreeType2.pm
 lib/Imager/Font/Image.pm
 lib/Imager/Font/Truetype.pm
 lib/Imager/Font/Type1.pm
-lib/Imager/Font/Win32.pm
 lib/Imager/Font/Wrap.pm
 lib/Imager/Fountain.pm
 lib/Imager/Handy.pod
@@ -319,11 +337,10 @@ t/t15color.t
 t/t16matrix.t           Tests Imager::Matrix2d
 t/t20fill.t             Tests fills
 t/t21draw.t             Basic drawing tests
+t/t22flood.t		Flood fill tests
 t/t30t1font.t
 t/t35ttfont.t
 t/t36oofont.t
-t/t37w32font.t		Tests Win32 GDI font support
-t/t38ft2font.t		Tests freetype2 support
 t/t40scale.t
 t/t50basicoo.t
 t/t55trans.t
@@ -378,6 +395,7 @@ testimg/bad_asc.ppm	ASCII PPM with invalid image data
 testimg/base.jpg	Base JPEG test image
 testimg/comp4.bmp       Compressed 4-bit/pixel BMP
 testimg/comp8.bmp       Compressed 8-bit/pixel BMP
+testimg/filltest.ppm	Test for flood fills
 testimg/gimpgrad        A GIMP gradient file
 testimg/imager.pbm	Test bi-level
 testimg/junk.ppm
@@ -424,4 +442,3 @@ tga.c           Reading and writing Targa files
 trans2.c
 transform.perl	Shell interface to Imager::Transform
 typemap
-win32.c		Implements font support through Win32 GDI

@@ -34,8 +34,10 @@ Truetype, Type1 and Windows FNT.
 =cut
 */
 
-#include "imager.h"
+#include "imext.h"
+#include "imft2.h"
 #include <stdio.h>
+#include <math.h>
 #include <ft2build.h>
 #include FT_FREETYPE_H
 #ifdef FT_MULTIPLE_MASTERS_H
@@ -49,6 +51,9 @@ static void ft2_push_message(int code);
 
 static int ft2_initialized = 0;
 static FT_Library library;
+
+static int i_min(int a, int b);
+static int i_max(int a, int b);
 
 /*
 =item i_ft2_init(void)
@@ -313,7 +318,7 @@ int i_ft2_sethinting(FT2_Fonthandle *handle, int hinting) {
 }
 
 /*
-=item i_ft2_bbox(FT2_Fonthandle *handle, double cheight, double cwidth, char *text, int len, int *bbox)
+=item i_ft2_bbox(FT2_Fonthandle *handle, double cheight, double cwidth, char *text, size_t len, int *bbox)
 
 Retrieves bounding box information for the font at the given 
 character width and height.  This ignores the transformation matrix.
@@ -324,7 +329,7 @@ Returns non-zero on success.
 */
 int
 i_ft2_bbox(FT2_Fonthandle *handle, double cheight, double cwidth, 
-           char const *text, int len, int *bbox, int utf8) {
+           char const *text, size_t len, int *bbox, int utf8) {
   FT_Error error;
   int width;
   int index;
@@ -469,7 +474,7 @@ static void expand_bounds(int bbox[4], int bbox2[4]) {
 }
 
 /*
-=item i_ft2_bbox_r(FT2_Fonthandle *handle, double cheight, double cwidth, char *text, int len, int vlayout, int utf8, int *bbox)
+=item i_ft2_bbox_r(FT2_Fonthandle *handle, double cheight, double cwidth, char *text, size_t len, int vlayout, int utf8, int *bbox)
 
 Retrieves bounding box information for the font at the given 
 character width and height.
@@ -490,7 +495,7 @@ Returns non-zero on success.
 */
 int
 i_ft2_bbox_r(FT2_Fonthandle *handle, double cheight, double cwidth, 
-           char const *text, int len, int vlayout, int utf8, int *bbox) {
+           char const *text, size_t len, int vlayout, int utf8, int *bbox) {
   FT_Error error;
   int width;
   int index;
@@ -619,7 +624,7 @@ static int
 make_bmp_map(FT_Bitmap *bitmap, unsigned char *map);
 
 /*
-=item i_ft2_text(FT2_Fonthandle *handle, i_img *im, int tx, int ty, i_color *cl, double cheight, double cwidth, char *text, int len, int align, int aa)
+=item i_ft2_text(FT2_Fonthandle *handle, i_img *im, int tx, int ty, i_color *cl, double cheight, double cwidth, char *text, size_t len, int align, int aa)
 
 Renders I<text> to (I<tx>, I<ty>) in I<im> using color I<cl> at the given 
 I<cheight> and I<cwidth>.
@@ -637,8 +642,8 @@ Returns non-zero on success.
 */
 int
 i_ft2_text(FT2_Fonthandle *handle, i_img *im, int tx, int ty, const i_color *cl,
-           double cheight, double cwidth, char const *text, int len, int align,
-           int aa, int vlayout, int utf8) {
+           double cheight, double cwidth, char const *text, size_t len,
+	   int align, int aa, int vlayout, int utf8) {
   FT_Error error;
   int index;
   FT_Glyph_Metrics *gm;
@@ -650,7 +655,7 @@ i_ft2_text(FT2_Fonthandle *handle, i_img *im, int tx, int ty, const i_color *cl,
   char last_mode = ft_pixel_mode_none; 
   int last_grays = -1;
   int loadFlags = FT_LOAD_DEFAULT;
-  i_render render;
+  i_render *render;
 
   mm_log((1, "i_ft2_text(handle %p, im %p, tx %d, ty %d, cl %p, cheight %f, cwidth %f, text %p, len %d, align %d, aa %d)\n",
 	  handle, im, tx, ty, cl, cheight, cwidth, text, align, aa));
@@ -670,7 +675,7 @@ i_ft2_text(FT2_Fonthandle *handle, i_img *im, int tx, int ty, const i_color *cl,
     return 0;
 
   if (aa)
-    i_render_init(&render, im, bbox[BBOX_POS_WIDTH] - bbox[BBOX_NEG_WIDTH]);
+    render = i_render_new(im, bbox[BBOX_POS_WIDTH] - bbox[BBOX_NEG_WIDTH]);
 
   if (!align) {
     /* this may need adjustment */
@@ -698,7 +703,7 @@ i_ft2_text(FT2_Fonthandle *handle, i_img *im, int tx, int ty, const i_color *cl,
       i_push_errorf(0, "loading glyph for character \\x%02x (glyph 0x%04X)", 
                     c, index);
       if (aa)
-        i_render_done(&render);
+        i_render_delete(render);
       return 0;
     }
     slot = handle->face->glyph;
@@ -710,7 +715,7 @@ i_ft2_text(FT2_Fonthandle *handle, i_img *im, int tx, int ty, const i_color *cl,
 	ft2_push_message(error);
 	i_push_errorf(0, "rendering glyph 0x%04X (character \\x%02X)");
       if (aa)
-        i_render_done(&render);
+        i_render_delete(render);
 	return 0;
       }
       if (slot->bitmap.pixel_mode == ft_pixel_mode_mono) {
@@ -749,7 +754,7 @@ i_ft2_text(FT2_Fonthandle *handle, i_img *im, int tx, int ty, const i_color *cl,
             for (x = 0; x < slot->bitmap.width; ++x) 
               bmp[x] = map[bmp[x]];
           }
-          i_render_color(&render, tx + slot->bitmap_left, ty-slot->bitmap_top+y,
+          i_render_color(render, tx + slot->bitmap_left, ty-slot->bitmap_top+y,
                          slot->bitmap.width, bmp, cl);
 	  bmp += slot->bitmap.pitch;
 	}
@@ -761,13 +766,13 @@ i_ft2_text(FT2_Fonthandle *handle, i_img *im, int tx, int ty, const i_color *cl,
   }
 
   if (aa)
-    i_render_done(&render);
+    i_render_delete(render);
 
   return 1;
 }
 
 /*
-=item i_ft2_cp(FT2_Fonthandle *handle, i_img *im, int tx, int ty, int channel, double cheight, double cwidth, char *text, int len, int align, int aa)
+=item i_ft2_cp(FT2_Fonthandle *handle, i_img *im, int tx, int ty, int channel, double cheight, double cwidth, char *text, size_t len, int align, int aa)
 
 Renders I<text> to (I<tx>, I<ty>) in I<im> to I<channel> at the given 
 I<cheight> and I<cwidth>.
@@ -786,7 +791,7 @@ Returns non-zero on success.
 
 int
 i_ft2_cp(FT2_Fonthandle *handle, i_img *im, int tx, int ty, int channel,
-         double cheight, double cwidth, char const *text, int len, int align,
+         double cheight, double cwidth, char const *text, size_t len, int align,
          int aa, int vlayout, int utf8) {
   int bbox[8];
   i_img *work;
@@ -804,7 +809,7 @@ i_ft2_cp(FT2_Fonthandle *handle, i_img *im, int tx, int ty, int channel,
   if (!i_ft2_bbox_r(handle, cheight, cwidth, text, len, vlayout, utf8, bbox))
     return 0;
 
-  work = i_img_empty_ch(NULL, bbox[2]-bbox[0]+1, bbox[3]-bbox[1]+1, 1);
+  work = i_img_8_new(bbox[2]-bbox[0]+1, bbox[3]-bbox[1]+1, 1);
   cl.channel[0] = 255;
   if (!i_ft2_text(handle, work, -bbox[0], -bbox[1], &cl, cheight, cwidth, 
                   text, len, 1, aa, vlayout, utf8))
@@ -830,7 +835,7 @@ i_ft2_cp(FT2_Fonthandle *handle, i_img *im, int tx, int ty, int channel,
 }
 
 /*
-=item i_ft2_has_chars(handle, char *text, int len, int utf8, char *out)
+=item i_ft2_has_chars(handle, char *text, size_t len, int utf8, char *out)
 
 Check if the given characters are defined by the font.
 
@@ -838,7 +843,7 @@ Returns the number of characters that were checked.
 
 =cut
 */
-int i_ft2_has_chars(FT2_Fonthandle *handle, char const *text, int len, 
+int i_ft2_has_chars(FT2_Fonthandle *handle, char const *text, size_t len, 
                     int utf8, char *out) {
   int count = 0;
   mm_log((1, "i_ft2_has_chars(handle %p, text %p, len %d, utf8 %d)\n", 
@@ -1127,6 +1132,16 @@ i_ft2_set_mm_coords(FT2_Fonthandle *handle, int coord_count, const long *coords)
 
   return 0;
 #endif
+}
+
+static int
+i_min(int a, int b) {
+  return a < b ? a : b;
+}
+
+static int
+i_max(int a, int b) {
+  return a > b ? a : b;
 }
 
 /*

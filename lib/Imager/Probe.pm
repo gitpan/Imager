@@ -212,7 +212,7 @@ sub _probe_fake {
     $lopts = $req->{libbase} ? "-l$req->{libbase}" : "";
   }
   if (defined $lopts) {
-    print "$req->{name}: Checking if the compiler can find them on it's own\n";
+    print "$req->{name}: Checking if the compiler can find them on its own\n";
     return
       {
        INC => "",
@@ -248,6 +248,7 @@ sub _probe_test {
 	 INC => $result->{INC},
 	 header => $req->{testcodeheaders},
 	 function => $req->{testcode},
+	 prologue => $req->{testcodeprologue},
 	);
   unless ($good) {
     print "$req->{name}: Test code failed: $@";
@@ -268,10 +269,12 @@ sub _lib_paths {
      (
       map { split ' ' }
       grep $_,
-      @Config{qw/loclibpath libpth libspath/}
+      @Config{qw/loclibpth libpth libspath/}
      ),
      $^O eq "MSWin32" ? $ENV{LIB} : "",
      $^O eq "cygwin" ? "/usr/lib/w32api" : "",
+     "/usr/lib",
+     "/usr/local/lib",
     );
 }
 
@@ -287,7 +290,7 @@ sub _inc_paths {
      (
       map { split ' ' }
       grep $_,
-      @Config{qw/locincpath incpath/}
+      @Config{qw/locincpth incpath/}
      ),
      "/usr/include",
      "/usr/local/include",
@@ -433,6 +436,11 @@ probe result directly.  Can also be an array ref of functions to call.
 
 C<testcode> - test C code that is run with Devel::CheckLib.  You also
 need to set C<testcodeheaders>.
+
+=item *
+
+C<testcodeprologue> - C code to insert between the headers and the
+main function.
 
 =item *
 

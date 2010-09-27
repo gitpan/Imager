@@ -2,7 +2,7 @@
 use strict;
 use Test::More tests => 244;
 use Imager ':all';
-use Imager::Test qw(is_color3);
+use Imager::Test qw(is_color3 is_image);
 use constant PI => 3.14159265358979;
 
 init_log("testout/t21draw.log",1);
@@ -294,6 +294,7 @@ my $white = '#FFFFFF';
 	      "check fill default color MM");
   }
 }
+
 
 malloc_state();
 
