@@ -39,7 +39,7 @@ else {
   $opts{TYPEMAPS} = [ Imager::ExtUtils->typemap ];
 
   # Imager required configure through use
-  my @Imager_req = ( Imager => "0.77" );
+  my @Imager_req = ( Imager => "0.78" );
   if ($MM_ver >= 6.46) {
     $opts{META_MERGE} =
       {
@@ -57,8 +57,8 @@ else {
 	homepage => "http://imager.perl.org/",
 	repository =>
 	{
-	 url => "http://imager.perl.org/svn/trunk/Imager-Font-W32",
-	 web => "http://imager.perl.org/svnweb/public/browse/trunk/Imager-Font-W32",
+	 url => "http://imager.perl.org/svn/trunk/Imager/W32",
+	 web => "http://imager.perl.org/svnweb/public/browse/trunk/Imager/W32",
 	 type => "svn",
 	},
        },
@@ -79,8 +79,8 @@ my %probe =
    libbase => "gdi32",
    testcode => _win32_test_code(),
    testcodeheaders => [ "stdio.h", "string.h", "windows.h" ],
-   incpath => join($Config{path_sep}, @incpaths),
-   libpath => join($Config{path_sep}, @libpaths),
+   incpath => \@incpaths,
+   libpath => \@libpaths,
   );
 
 my $probe_res = Imager::Probe->probe(\%probe);

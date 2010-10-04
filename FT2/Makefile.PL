@@ -39,7 +39,7 @@ else {
   $opts{TYPEMAPS} = [ Imager::ExtUtils->typemap ];
 
   # Imager required configure through use
-  my @Imager_req = ( Imager => "0.77" );
+  my @Imager_req = ( Imager => "0.78" );
   if ($MM_ver >= 6.46) {
     $opts{META_MERGE} =
       {
@@ -57,8 +57,8 @@ else {
 	homepage => "http://imager.perl.org/",
 	repository =>
 	{
-	 url => "http://imager.perl.org/svn/trunk/Imager-Font-FT2",
-	 web => "http://imager.perl.org/svnweb/public/browse/trunk/Imager-Font-FT2",
+	 url => "http://imager.perl.org/svn/trunk/Imager/FT2",
+	 web => "http://imager.perl.org/svnweb/public/browse/trunk/Imager/FT2",
 	 type => "svn",
 	},
        },
@@ -82,8 +82,8 @@ my %probe =
    testcode => _ft2_test_code(),
    testcodeheaders => [ "stdio.h", "string.h", "ft2build.h" ],
    testcodeprologue => _ft2_test_code_prologue(),
-   incpath => join($Config{path_sep}, @incpaths),
-   libpath => join($Config{path_sep}, @libpaths),
+   incpath => \@incpaths,
+   libpath => \@libpaths,
    alternatives =>
    [
     {
