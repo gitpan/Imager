@@ -46,7 +46,7 @@ else {
   $out = anaglyph_images($left, $right);
 }
 
-$out->write(file=>$out_name)
+$out->write(file=>$out_name, jpegquality => 100)
   or die "Cannot write $out_name: ", $out->errstr, "\n";
 
 sub usage {
@@ -139,6 +139,10 @@ Implementation based on the description at
 http://www.recordedlight.com/stereo/tutorials/ps/anaglyph/pstut04.htm
 though obviously the interactive component is missing.
 
+=head1 CAVEAT
+
+Using JPEG as the output format is not recommended.
+
 =head1 AUTHOR
 
 Tony Cook <tony@imager.perl.org>
@@ -149,6 +153,6 @@ Thanks to Dan Oppenheim, who provided the impetus for this sample.
 
 =head1 REVISION
 
-$Revision: 1724 $
+$Revision: 1902 $
 
 =cut

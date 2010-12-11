@@ -1,6 +1,6 @@
 #!perl -w
 use strict;
-use ExtUtils::MakeMaker qw(WriteMakefile WriteEmptyMakefile);
+use ExtUtils::MakeMaker;
 use Getopt::Long;
 use Config;
 
@@ -85,7 +85,7 @@ my $probe_res = Imager::Probe->probe(\%probe);
 if ($probe_res) {
   push @inc, $probe_res->{INC};
   $opts{LIBS} = $probe_res->{LIBS};
-  
+  $opts{DEFINE} = $probe_res->{DEFINE};
   $opts{INC} = "@inc";
   
   if ($MM_ver > 6.06) {
@@ -97,7 +97,7 @@ if ($probe_res) {
 }
 else {
   if ($BUILDING_IMAGER) {
-    WriteEmptyMakefile(%opts);
+    ExtUtils::MakeMaker::WriteEmptyMakefile(%opts);
   }
   else {
     # fail in good way

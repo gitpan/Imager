@@ -190,6 +190,9 @@ i_compose(i_img *out, i_img *src,
 	       int out_left, int out_top, int src_left, int src_top,
 	       int width, int height, int combine, double opacity);
 
+extern i_img *
+i_combine(i_img **src, const int *channels, int in_count);
+
 undef_int i_flipxy (i_img *im, int direction);
 extern i_img *i_rotate90(i_img *im, int degrees);
 extern i_img *i_rotate_exact(i_img *im, double amount);
@@ -214,7 +217,7 @@ int i_conv        (i_img *im,const double *coeff,int len);
 void i_unsharp_mask(i_img *im, double stddev, double scale);
 
 /* colour manipulation */
-extern i_img *i_convert(i_img *src, const float *coeff, int outchan, int inchan);
+extern i_img *i_convert(i_img *src, const double *coeff, int outchan, int inchan);
 extern void i_map(i_img *im, unsigned char (*maps)[256], unsigned int mask);
 
 float i_img_diff   (i_img *im1,i_img *im2);

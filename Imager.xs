@@ -1757,6 +1757,47 @@ i_compose_mask(out, src, mask, out_left, out_top, src_left, src_top, mask_left, 
 	int combine
 	double opacity
 
+Imager::ImgRaw
+i_combine(src_av, channels_av = NULL)
+	AV *src_av
+	AV *channels_av
+  PREINIT:
+	i_img **imgs = NULL;
+	STRLEN in_count;
+	int *channels = NULL;
+	int i;
+	SV **psv;
+	IV tmp;
+  CODE:
+	in_count = av_len(src_av) + 1;
+	if (in_count > 0) {
+	  imgs = mymalloc(sizeof(i_img*) * in_count);
+	  channels = mymalloc(sizeof(int) * in_count);
+	  for (i = 0; i < in_count; ++i) {
+	    psv = av_fetch(src_av, i, 0);
+	    if (!psv || !*psv || !sv_derived_from(*psv, "Imager::ImgRaw")) {
+	      myfree(imgs);
+	      myfree(channels);
+	      croak("imgs must contain only images");
+	    }
+	    tmp = SvIV((SV*)SvRV(*psv));
+	    imgs[i] = INT2PTR(i_img*, tmp);
+	    if (channels_av &&
+	        (psv = av_fetch(channels_av, i, 0)) != NULL &&
+		*psv) {
+	      channels[i] = SvIV(*psv);
+	    }
+	    else {
+	      channels[i] = 0;
+	    }
+	  }
+	}
+	RETVAL = i_combine(imgs, channels, in_count);
+	myfree(imgs);
+	myfree(channels);
+  OUTPUT:
+	RETVAL
+
 undef_int
 i_flipxy(im, direction)
     Imager::ImgRaw     im
@@ -1874,7 +1915,7 @@ i_convert(src, avmain)
     Imager::ImgRaw     src
     AV *avmain
 	PREINIT:
-    	  float *coeff;
+    	  double *coeff;
 	  int outchan;
 	  int inchan;
           SV **temp;
@@ -1894,7 +1935,7 @@ i_convert(src, avmain)
 		inchan = len;
 	    }
           }
-          coeff = mymalloc(sizeof(float) * outchan * inchan);
+          coeff = mymalloc(sizeof(double) * outchan * inchan);
 	  for (j = 0; j < outchan; ++j) {
 	    avsub = (AV*)SvRV(*av_fetch(avmain, j, 0));
 	    len = av_len(avsub)+1;

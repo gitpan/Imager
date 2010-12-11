@@ -1,5 +1,36 @@
 Imager release history.  Older releases can be found in Changes.old
 
+Imager 0.79 - unreleased
+===========
+
+ - add Imager::Test to the POD coverage tests and document the missing
+   functions.
+
+ - the convert() method now optimizes the case where all output
+   channels are either 0, sourced from a single input channel or 1.
+   This significantly speeds up presets like "addalpha", "green".
+   https://rt.cpan.org/Ticket/Display.html?id=51254
+
+ - add wiggle.pl sample, as suggested by Dan Oppenheim.
+
+ - add the combine() method to combine channels from multiple source
+   images into a new image
+   https://rt.cpan.org/Ticket/Display.html?id=11872
+
+Bug fixes:
+
+ - treat the co-efficients for convert() as doubles instead of floats.
+
+ - If a higher (earlier) priority font handler failed to load, that
+   would crash preventing loading of later font handlers.
+   https://rt.cpan.org/Ticket/Display.html?id=62855
+
+ - parse defines from the options returned by pkg-config --cflags
+   https://rt.cpan.org/Ticket/Display.html?id=63223
+
+ - a regen of the MANIFEST revealed that GIF and FT2 tests weren't
+   included in the tarball.  They are now included.
+
 Imager 0.78 - 4 Oct 2010
 ===========
 

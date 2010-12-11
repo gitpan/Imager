@@ -155,7 +155,7 @@ my %defaults;
 BEGIN {
   require Exporter;
   @ISA = qw(Exporter);
-  $VERSION = '0.78';
+  $VERSION = '0.79';
   eval {
     require XSLoader;
     XSLoader::load(Imager => $VERSION);
@@ -3466,6 +3466,46 @@ sub convert {
   return $new;
 }
 
+# combine channels from multiple input images, a class method
+sub combine {
+  my ($class, %opts) = @_;
+
+  my $src = delete $opts{src};
+  unless ($src) {
+    $class->_set_error("src parameter missing");
+    return;
+  }
+  my @imgs;
+  my $index = 0;
+  for my $img (@$src) {
+    unless (eval { $img->isa("Imager") }) {
+      $class->_set_error("src must contain image objects");
+      return;
+    }
+    unless ($img->{IMG}) {
+      $class->_set_error("empty input image");
+      return;
+    }
+    push @imgs, $img->{IMG};
+  }
+  my $result;
+  if (my $channels = delete $opts{channels}) {
+    $result = i_combine(\@imgs, $channels);
+  }
+  else {
+    $result = i_combine(\@imgs);
+  }
+  unless ($result) {
+    $class->_set_error($class->_error_as_msg);
+    return;
+  }
+
+  my $img = $class->new;
+  $img->{IMG} = $result;
+
+  return $img;
+}
+
 
 # general function to map an image through lookup tables
 
@@ -3738,7 +3778,10 @@ sub get_file_limits {
 
 sub newcolor { Imager::Color->new(@_); }
 sub newfont  { Imager::Font->new(@_); }
-sub NCF { Imager::Color::Float->new(@_) }
+sub NCF {
+  require Imager::Color::Float;
+  return Imager::Color::Float->new(@_);
+}
 
 *NC=*newcolour=*newcolor;
 *NF=*newfont;
@@ -4192,6 +4235,9 @@ circle() - L<Imager::Draw/circle> - draw a filled circle
 colorcount() - L<Imager::Draw/colorcount> - the number of colors in an
 image's palette (paletted images only)
 
+combine() - L<Imager::Transformations/combine> - combine channels from one or
+more images.
+
 combines() - L<Imager::Draw/combines> - return a list of the different
 combine type keywords
 
@@ -4396,6 +4442,8 @@ boxes, drawing - L<Imager::Draw/box>
 
 changes between image - L<Imager::Filters/"Image Difference">
 
+channels, combine into one image - L<Imager::Transformations/combine>
+
 color - L<Imager::Color>
 
 color names - L<Imager::Color>, L<Imager::Color::Table>
@@ -4533,6 +4581,9 @@ text, measuring - L<Imager::Font/bounding_box>, L<Imager::Font::BBox>
 
 tiles, color - L<Imager::Filters/mosaic>
 
+transparent images - L<Imager::ImageTypes>,
+L<Imager::Cookbook/"Transparent PNG">
+
 =for stopwords unsharp
 
 unsharp mask - L<Imager::Filters/unsharpmask>
@@ -4632,6 +4683,17 @@ Arnar M. Hrafnkelsson is the original author of Imager.
 
 Many others have contributed to Imager, please see the C<README> for a
 complete list.
+
+=head1 LICENSE
+
+Imager is licensed under the same terms as perl itself.
+
+=for stopwords
+makeblendedfont Fontforge
+
+A test font, FT2/fontfiles/MMOne.pfb, contains a Postscript operator
+definition copyrighted by Adobe.  See F<adobe.txt> in the source for
+license information.
 
 =head1 SEE ALSO
 
