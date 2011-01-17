@@ -130,6 +130,6 @@ Thanks to Dan Oppenheim, who provided the impetus for this sample.
 
 =head1 REVISION
 
-$Revision: 1724 $
+$Revision$
 
 =cut

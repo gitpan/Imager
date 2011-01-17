@@ -201,6 +201,6 @@ Tony Cook <tony@develop-help.com>
 
 =head1 REVISION
 
-$Revision: 819 $
+$Revision$
 
 =cut

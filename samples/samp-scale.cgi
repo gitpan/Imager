@@ -82,7 +82,7 @@ Tony Cook <tony@imager.perl.org>
 
 =head1 REVISION
 
-$Revision: 729 $
+$Revision$
 
 =cut
   

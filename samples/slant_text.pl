@@ -209,7 +209,7 @@ Tony Cook <tony@imager.perl.org>
 
 =head1 REVISION
 
-$Revision: 1724 $
+$Revision$
 
 =head1 SEE ALSO
 

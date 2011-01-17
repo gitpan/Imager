@@ -1149,7 +1149,7 @@ Example:
 
 =head1 REVISION
 
-$Revision: 1917 $
+$Revision$
 
 =head1 AUTHORS
 

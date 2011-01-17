@@ -60,7 +60,7 @@ the C<-data> parameter.
 
 =head1 REVISION
 
-$Revision: 1724 $
+$Revision$
 
 =head1 AUTHOR
 

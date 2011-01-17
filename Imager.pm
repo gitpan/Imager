@@ -155,7 +155,7 @@ my %defaults;
 BEGIN {
   require Exporter;
   @ISA = qw(Exporter);
-  $VERSION = '0.79';
+  $VERSION = '0.80';
   eval {
     require XSLoader;
     XSLoader::load(Imager => $VERSION);
@@ -4036,7 +4036,7 @@ Imager - Perl extension for Generating 24 bit Images
   my $format;
 
   # see Imager::Files for information on the read() method
-  my $im = Imager->new(file=>$file)
+  my $img = Imager->new(file=>$file)
     or die Imager->errstr();
 
   $file =~ s/\.[^.]*$//;

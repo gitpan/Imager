@@ -89,7 +89,7 @@ Imager, Imager::Font
 
 =head1 REVISION
 
-$Revision: 1724 $
+$Revision$
 
 =cut
 

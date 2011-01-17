@@ -967,6 +967,6 @@ Tony Cook <tony@imager.perl.org>, Arnar M. Hrafnkelsson
 
 =head1 REVISION
 
-$Revision: 1907 $
+$Revision$
 
 =cut

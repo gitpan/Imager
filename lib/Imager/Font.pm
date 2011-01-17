@@ -1057,7 +1057,7 @@ of the above.
 
 =head1 REVISION
 
-$Revision: 1908 $
+$Revision$
 
 =head1 SEE ALSO
 

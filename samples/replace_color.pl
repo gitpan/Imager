@@ -100,7 +100,7 @@ __END__
 
 =head1 REVISION
 
-$Revision: 816 $
+$Revision$
 
 =head1 AUTHOR
 

@@ -727,6 +727,6 @@ Imager, Imager::Filter::Flines, Imager::Filter::Mandelbrot
 
 =head1 REVISION
 
-$Revision: 1767 $
+$Revision$
 
 =cut

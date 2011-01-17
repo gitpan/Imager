@@ -1194,6 +1194,6 @@ L<Imager>(3), L<Imager::Cookbook>(3)
 
 =head1 REVISION
 
-$Revision: 1850 $
+$Revision$
 
 =cut

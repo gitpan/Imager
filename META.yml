@@ -1,6 +1,6 @@
 --- #YAML:1.0
 name:               Imager
-version:            0.79
+version:            0.80
 abstract:           Perl extension for Generating 24 bit Images
 author:
     - Tony Cook <tony@imager.perl.org>, Arnar M. Hrafnkelsson
@@ -18,9 +18,9 @@ resources:
         web:     http://rt.cpan.org/NoAuth/Bugs.html?Dist=Imager
     homepage:  http://imager.perl.org/
     repository:
-        type:  svn
-        url:   http://imager.perl.org/svn/trunk/Imager
-        web:   http://imager.perl.org/svnweb/public/browse/trunk/Imager
+        type:  git
+        url:   git://git.imager.perl.org/imager.git
+        web:   http://git.imager.perl.org/imager.git
 no_index:
     directory:
         - t
