@@ -61,14 +61,6 @@ use Imager::Font;
 
 		i_img_diff
 
-		i_init_fonts
-		i_t1_new
-		i_t1_destroy
-		i_t1_set_aa
-		i_t1_cp
-		i_t1_text
-		i_t1_bbox
-
 		i_tt_set_aa
 		i_tt_cp
 		i_tt_text
@@ -155,7 +147,7 @@ my %defaults;
 BEGIN {
   require Exporter;
   @ISA = qw(Exporter);
-  $VERSION = '0.80';
+  $VERSION = '0.81';
   eval {
     require XSLoader;
     XSLoader::load(Imager => $VERSION);
@@ -176,6 +168,7 @@ my %format_classes =
    jpeg => "Imager::File::JPEG",
    w32 => "Imager::Font::W32",
    ft2 => "Imager::Font::FT2",
+   t1 => "Imager::Font::T1",
   );
 
 tie %formats, "Imager::FORMATS", \%formats_low, \%format_classes;
@@ -474,13 +467,10 @@ sub init {
     $warn_obsolete = $parms{'warn_obsolete'};
   }
 
-#    if ($parms{T1LIB_CONFIG}) { $ENV{T1LIB_CONFIG}=$parms{T1LIB_CONFIG}; }
-#    if ( $ENV{T1LIB_CONFIG} and ( $fontstate eq 'missing conf' )) {
-#	i_init_fonts();
-#	$fontstate='ok';
-#    }
   if (exists $parms{'t1log'}) {
-    i_init_fonts($parms{'t1log'});
+    if ($formats{t1}) {
+      Imager::Font::T1::i_init_t1($parms{'t1log'});
+    }
   }
 }
 
@@ -913,11 +903,16 @@ sub masked {
   $result->{IMG} = i_img_masked_new($self->{IMG}, $mask, $opts{left}, 
                                     $opts{top}, $opts{right} - $opts{left},
                                     $opts{bottom} - $opts{top});
+  unless ($result->{IMG}) {
+    $self->_set_error(Imager->_error_as_msg);
+    return;
+  }
+
   # keep references to the mask and base images so they don't
   # disappear on us
   $result->{DEPENDS} = [ $self->{IMG}, $mask ];
 
-  $result;
+  return $result;
 }
 
 # convert an RGB image into a paletted image
@@ -3913,6 +3908,24 @@ sub Inline {
 # threads shouldn't try to close raw Imager objects
 sub Imager::ImgRaw::CLONE_SKIP { 1 }
 
+sub preload {
+  # this serves two purposes:
+  # - a class method to load the file support modules included with Image
+  #   (or were included, once the library dependent modules are split out)
+  # - something for Module::ScanDeps to analyze
+  # https://rt.cpan.org/Ticket/Display.html?id=6566
+  local $@;
+  eval { require Imager::File::GIF };
+  eval { require Imager::File::JPEG };
+  eval { require Imager::File::PNG };
+  eval { require Imager::File::SGI };
+  eval { require Imager::File::TIFF };
+  eval { require Imager::File::ICO };
+  eval { require Imager::Font::W32 };
+  eval { require Imager::Font::FT2 };
+  eval { require Imager::Font::T1 };
+}
+
 # backward compatibility for %formats
 package Imager::FORMATS;
 use strict;
@@ -4354,6 +4367,8 @@ paste() - L<Imager::Transformations/paste> - draw an image onto an image
 polygon() - L<Imager::Draw/polygon>
 
 polyline() - L<Imager::Draw/polyline>
+
+preload() - L<Imager::Files/preload>
 
 read() - L<Imager::Files> - read a single image from an image file
 

@@ -1,6 +1,8 @@
 package Imager::Matrix2d;
 use strict;
 use vars qw($VERSION);
+use Scalar::Util qw(reftype looks_like_number);
+use Carp qw(croak);
 
 $VERSION = "1.009";
 
@@ -17,6 +19,9 @@ $VERSION = "1.009";
   $m4 = Imager::Matrix2d->shear(x=>$sx, y=>$sy);
   $m5 = Imager::Matrix2d->reflect(axis=>$axis);
   $m6 = Imager::Matrix2d->scale(x=>$xratio, y=>$yratio);
+  $m8 = Imager::Matric2d->matrix($v11, $v12, $v13,
+                                 $v21, $v22, $v23,
+                                 $v31, $v32, $v33);
   $m6 = $m1 * $m2;
   $m7 = $m1 + $m2;
   use Imager::Matrix2d qw(:handy);
@@ -235,6 +240,24 @@ sub scale {
   }
 }
 
+=item matrix($v11, $v12, $v13, $v21, $v22, $v23, $v31, $v32, $v33)
+
+Create a matrix with custom co-efficients.
+
+=cut
+
+sub matrix {
+  my ($class, @self) = @_;
+
+  if (@self == 9) {
+    return bless \@self, $class;
+  }
+  else {
+    $Imager::ERRSTR = "9 co-efficients required";
+    return;
+  }
+}
+
 =item _mult()
 
 Implements the overloaded '*' operator.  Internal use.
@@ -243,28 +266,41 @@ Currently both the left and right-hand sides of the operator must be
 an Imager::Matrix2d.
 
 =cut
+
 sub _mult {
   my ($left, $right, $order) = @_;
 
-  if (ref($right) && UNIVERSAL::isa($right, __PACKAGE__)) {
-    if ($order) {
-      ($left, $right) = ($right, $left);
-    }
-    my @result;
-    for my $i (0..2) {
-      for my $j (0..2) {
-        my $accum = 0;
-        for my $k (0..2) {
-          $accum += $left->[3*$i + $k] * $right->[3*$k + $j];
-        }
-        $result[3*$i+$j] = $accum;
+  if (ref($right)) {
+    if (reftype($right) eq "ARRAY") {
+      @$right == 9
+	or croak "9 elements required in array ref";
+      if ($order) {
+	($left, $right) = ($right, $left);
       }
+      my @result;
+      for my $i (0..2) {
+	for my $j (0..2) {
+	  my $accum = 0;
+	  for my $k (0..2) {
+	    $accum += $left->[3*$i + $k] * $right->[3*$k + $j];
+	  }
+	  $result[3*$i+$j] = $accum;
+	}
+      }
+      return bless \@result, __PACKAGE__;
     }
+    else {
+      croak "multiply by array ref or number";
+    }
+  }
+  elsif (defined $right && looks_like_number($right)) {
+    my @result = map $_ * $right, @$left;
+
     return bless \@result, __PACKAGE__;
   }
   else {
-    # presumably N * matrix or matrix * N
-    return undef; # for now
+    # something we don't handle
+    croak "multiply by array ref or number";
   }
 }
 

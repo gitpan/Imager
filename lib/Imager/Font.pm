@@ -4,7 +4,7 @@ use Imager::Color;
 use strict;
 use vars qw($VERSION);
 
-$VERSION = "1.034";
+$VERSION = "1.035";
 
 # the aim here is that we can:
 #  - add file based types in one place: here
@@ -21,11 +21,10 @@ my %drivers =
 	checktype => 1,
        },
    t1=>{
-        class=>'Imager::Font::Type1',
-        module=>'Imager/Font/Type1.pm',
+        class=>'Imager::Font::T1',
+        module=>'Imager/Font/T1.pm',
         files=>'.*\.pfb$',
 	description => 'T1Lib',
-	checktype => 1,
        },
    ft2=>{
          class=>'Imager::Font::FT2',
@@ -78,7 +77,7 @@ sub new {
         undef $type;
         my $re = $drivers{$drv}{files} or next;
         if ($file =~ /$re/i) {
-	  if (eval { require $drivers{$drv}{module}; 1 }) {
+	  if (eval { require $drivers{$drv}{module}; 1 } and !( $drivers{$drv}{checktype} && !$Imager::formats{$drv} )) {
 	    $type = $drv;
 	    last;
 	  }
