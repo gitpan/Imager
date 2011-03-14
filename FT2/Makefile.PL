@@ -13,6 +13,7 @@ GetOptions("incpath=s", \@incpaths,
            "verbose|v" => \$verbose);
 
 our $BUILDING_IMAGER;
+our %IMAGER_LIBS;
 
 my $MM_ver = eval $ExtUtils::MakeMaker::VERSION;
 
@@ -37,7 +38,7 @@ else {
   $opts{TYPEMAPS} = [ Imager::ExtUtils->typemap ];
 
   # Imager required configure through use
-  my @Imager_req = ( Imager => "0.78" );
+  my @Imager_req = ( Imager => "0.82" );
   if ($MM_ver >= 6.46) {
     $opts{META_MERGE} =
       {
@@ -95,10 +96,14 @@ my %probe =
 
 my $probe_res = Imager::Probe->probe(\%probe);
 if ($probe_res) {
+  $IMAGER_LIBS{FT2} = 1;
+
   push @inc, $probe_res->{INC};
   $opts{LIBS} = $probe_res->{LIBS};
   $opts{DEFINE} = $probe_res->{DEFINE};
   $opts{INC} = "@inc";
+  $opts{LDDLFLAGS} = $probe_res->{LDDLFLAGS}
+    if $probe_res->{LDDLFLAGS};
 
   if ($MM_ver > 6.06) {
     $opts{AUTHOR} = 'Tony Cook <tony@imager.perl.org>';
@@ -108,6 +113,8 @@ if ($probe_res) {
   WriteMakefile(%opts);
 }
 else {
+  $IMAGER_LIBS{FT2} = 0;
+
   if ($BUILDING_IMAGER) {
     ExtUtils::MakeMaker::WriteEmptyMakefile(%opts);
   }

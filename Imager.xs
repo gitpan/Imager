@@ -645,7 +645,7 @@ ip_handle_quant_opts(pTHX_ i_quantize *quant, HV *hv)
   sv = hv_fetch(hv, "make_colors", 11, 0);
   if (sv && *sv && (str = SvPV(*sv, len))) {
     quant->make_colors = 
-      lookup_name(make_color_names, sizeof(make_color_names)/sizeof(*make_color_names), str, mc_addi);
+      lookup_name(make_color_names, sizeof(make_color_names)/sizeof(*make_color_names), str, mc_median_cut);
   }
   sv = hv_fetch(hv, "colors", 6, 0);
   if (sv && *sv && SvROK(*sv) && SvTYPE(SvRV(*sv)) == SVt_PVAV) {
@@ -1292,10 +1292,6 @@ i_list_formats()
 		      EXTEND(SP, 1);
 		      PUSHs(sv_2mortal(newSVpv(item,0)));
 	       }
-
-undef_int
-i_has_format(frmt)
-              char*    frmt
 
 Imager::ImgRaw
 i_img_new()

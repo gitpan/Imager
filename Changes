@@ -1,5 +1,38 @@
 Imager release history.  Older releases can be found in Changes.old
 
+Imager 0.82 - 14 Mar 2011
+===========
+
+Bug fixes:
+
+ - eliminate calls to i_has_format() from the test suite, since it's
+   no longer a useful way to check for file format support.  Eliminate
+   i_has_format() from the functions exposed via XS.
+   https://rt.cpan.org/Ticket/Display.html?id=65863
+
+ - eliminate calls to note(), which isn't in the (very old) version of
+   Test::More we have as a pre-requisite.  note() is modern enough
+   that I don't feel a need to require a Test::More upgrade for it.
+   https://rt.cpan.org/Ticket/Display.html?id=65864
+
+ - skip the threads tests on Test::More 2.00_*
+   https://rt.cpan.org/Ticket/Display.html?id=65812
+
+ - add an (unshipped) test to check Imager's internal POD links
+   https://rt.cpan.org/Ticket/Display.html?id=65749
+
+ - improve the library detection summary
+   https://rt.cpan.org/Ticket/Display.html?id=9675
+
+ - increase the version of Imager::Font::Type1 so that upgrades don't
+   downgrade the version in this file.
+   https://rt.cpan.org/Ticket/Display.html?id=66250
+
+ - if we see an -rpath (or -R) option in $Config{lddlflags} supply
+   that option for the directories that would normally go in
+   LD_RUN_PATH.  Typically an explicit -rpath overrides LD_RUN_PATH.
+   https://rt.cpan.org/Ticket/Display.html?id=65955
+
 Imager 0.81 - 14 Feb 2011
 ===========
 
