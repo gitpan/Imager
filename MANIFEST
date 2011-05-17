@@ -308,6 +308,7 @@ t/t57infix.t
 t/t58trans2.t
 t/t59assem.t
 t/t61filters.t
+t/t62compose.t
 t/t63combine.t			Test combine() method
 t/t64copyflip.t			Test copy, flip, rotate, matrix_transform
 t/t65crop.t
@@ -337,6 +338,7 @@ T1/fontfiles/SpaceTest.pfb
 T1/imt1.c
 T1/imt1.h
 T1/Makefile.PL
+T1/README
 T1/t/t10type1.t
 T1/t/t20oo.t
 T1/T1.pm

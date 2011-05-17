@@ -164,6 +164,7 @@ float i_gpix_pch(i_img *im,int x,int y,int ch);
 
 void i_box         (i_img *im,int x1,int y1,int x2,int y2,const i_color *val);
 void i_box_filled  (i_img *im,int x1,int y1,int x2,int y2,const i_color *val);
+int i_box_filledf  (i_img *im,int x1,int y1,int x2,int y2,const i_fcolor *val);
 void i_box_cfill(i_img *im, int x1, int y1, int x2, int y2, i_fill_t *fill);
 void i_line        (i_img *im,int x1,int y1,int x2,int y2,const i_color *val, int endp);
 void i_line_aa     (i_img *im,int x1,int y1,int x2,int y2,const i_color *val, int endp);
@@ -222,6 +223,7 @@ extern void i_map(i_img *im, unsigned char (*maps)[256], unsigned int mask);
 
 float i_img_diff   (i_img *im1,i_img *im2);
 double i_img_diffd(i_img *im1,i_img *im2);
+int i_img_samef(i_img *im1,i_img *im2, double epsilon, const char *what);
 
 /* font routines */
 

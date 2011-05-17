@@ -20,6 +20,7 @@ extern "C" {
 #include "regmach.h"
 #include "imextdef.h"
 #include "imextpltypes.h"
+#include <float.h>
 
 #if i_int_hlines_testing()
 #include "imageri.h"
@@ -954,6 +955,8 @@ static im_pl_ext_funcs im_perl_funcs =
 #define i_img_get_width(im) ((im)->xsize)
 #define i_img_get_height(im) ((im)->ysize)
 
+#define i_img_epsilonf() (DBL_EPSILON * 4)
+
 MODULE = Imager		PACKAGE = Imager::Color	PREFIX = ICL_
 
 Imager::Color
@@ -1449,6 +1452,15 @@ i_box_filled(im,x1,y1,x2,y2,val)
 	       int     x2
 	       int     y2
 	   Imager::Color    val
+
+int
+i_box_filledf(im,x1,y1,x2,y2,val)
+    Imager::ImgRaw     im
+	       int     x1
+	       int     y1
+	       int     x2
+	       int     y2
+	   Imager::Color::Float    val
 
 void
 i_box_cfill(im,x1,y1,x2,y2,fill)
@@ -2001,6 +2013,16 @@ double
 i_img_diffd(im1,im2)
     Imager::ImgRaw     im1
     Imager::ImgRaw     im2
+
+int
+i_img_samef(im1, im2, epsilon = i_img_epsilonf(), what=NULL)
+    Imager::ImgRaw    im1
+    Imager::ImgRaw    im2
+    double epsilon
+    const char *what
+
+double
+i_img_epsilonf()
 
 bool
 _is_color_object(sv)
