@@ -1,5 +1,44 @@
 Imager release history.  Older releases can be found in Changes.old
 
+Imager 0.84 - 20 Jun 2011
+===========
+
+ - Imager no longer inherits from Exporter (unless you're running an
+   old, old perl.
+
+ - Imager can now write progressive JPEGs (it could always read them).
+   https://rt.cpan.org/Ticket/Display.html?id=68691
+
+Bug fixes:
+
+ - re-work, document and test Imager's logging facility.
+   https://rt.cpan.org/Ticket/Display.html?id=65227
+
+ - fix META.yml testing and the generated META.yml
+   https://rt.cpan.org/Ticket/Display.html?id=65235
+
+ - test and add error reporting to to_*() family methods
+
+ - add to_rgb_double() method.
+   https://rt.cpan.org/Ticket/Display.html?id=65101
+
+ - Imager no longer exports anything by default
+   https://rt.cpan.org/Ticket/Display.html?id=65228
+
+ - convert colors to grayscale if the supplied (or generated) palette
+   contains only grays when performing error diffusion color
+   translation.
+   https://rt.cpan.org/Ticket/Display.html?id=68508
+
+ - writing a paletted image to GIF wouldn't always use the colors
+   supplied (or generated, eg. via make_colors => "mono"), which was
+   confusing at best.
+   https://rt.cpan.org/Ticket/Display.html?id=67912
+
+ - replace (imager|tony)@imager.perl.org in the doc, since I don't
+   plan to continue receiving mail at that address.
+   https://rt.cpan.org/Ticket/Display.html?id=68591
+
 Imager 0.83 - 21 May 2011
 ===========
 

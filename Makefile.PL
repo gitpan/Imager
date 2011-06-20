@@ -163,7 +163,7 @@ my @objs = qw(Imager.o draw.o polygon.o image.o io.o iolayer.o
               log.o gaussian.o conv.o pnm.o raw.o feat.o font.o combine.o
               filters.o dynaload.o stackmach.o datatypes.o
               regmach.o trans2.o quant.o error.o convert.o
-              map.o tags.o palimg.o maskimg.o img16.o rotate.o
+              map.o tags.o palimg.o maskimg.o img8.o img16.o rotate.o
               bmp.o tga.o color.o fills.o imgdouble.o limits.o hlines.o
               imext.o scale.o rubthru.o render.o paste.o compose.o flip.o);
 
@@ -192,7 +192,7 @@ if ($coverage) {
 # eval to prevent warnings about versions with _ in them
 my $MM_ver = eval $ExtUtils::MakeMaker::VERSION;
 if ($MM_ver > 6.06) {
-  $opts{AUTHOR} = 'Tony Cook <tony@imager.perl.org>, Arnar M. Hrafnkelsson';
+  $opts{AUTHOR} = 'Tony Cook <tonyc@cpan.org>, Arnar M. Hrafnkelsson';
   $opts{ABSTRACT} = 'Perl extension for Generating 24 bit Images';
 }
 
@@ -220,17 +220,8 @@ if ($MM_ver >= 6.46) {
      resources =>
      {
       homepage => "http://imager.perl.org/",
-      repository =>
-      {
-       url => "git://git.imager.perl.org/imager.git",
-       web => "http://git.imager.perl.org/imager.git",
-       type => "git",
-      },
-      bugtracker =>
-      {
-       web => "http://rt.cpan.org/NoAuth/Bugs.html?Dist=Imager",
-       mailto => 'bug-Imager@rt.cpan.org',
-      },
+      repository => "git://git.imager.perl.org/imager.git",
+      bugtracker => "http://rt.cpan.org/NoAuth/Bugs.html?Dist=Imager",
      },
     };
 }

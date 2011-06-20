@@ -862,10 +862,11 @@ validate_i_ppal(i_img *im, i_palidx const *indexes, int count) {
 #define ICLF_new_internal(r, g, b, a) i_fcolor_new((r), (g), (b), (a))
 #define ICLF_DESTROY(cl) i_fcolor_destroy(cl)
 
-
-/* the m_init_log() function was called init_log(), renamed to reduce
-    potential naming conflicts */
-#define init_log m_init_log
+#ifdef IMAGER_LOG
+#define i_log_enabled() 1
+#else
+#define i_log_enabled() 0
+#endif
 
 #if i_int_hlines_testing()
 
@@ -1325,20 +1326,24 @@ i_sametype_chans(im, x, y, channels)
                int y
                int channels
 
-void
+int
 i_init_log(name_sv,level)
 	      SV*    name_sv
 	       int     level
 	PREINIT:
 	  const char *name = SvOK(name_sv) ? SvPV_nolen(name_sv) : NULL;
 	CODE:
-	  i_init_log(name, level);
+	  RETVAL = i_init_log(name, level);
+	OUTPUT:
+	  RETVAL
 
 void
 i_log_entry(string,level)
 	      char*    string
 	       int     level
 
+int
+i_log_enabled()
 
 void
 i_img_exorcise(im)
@@ -3523,6 +3528,10 @@ i_img_double_new(x, y, ch)
         int x
         int y
         int ch
+
+Imager::ImgRaw
+i_img_to_drgb(im)
+       Imager::ImgRaw im
 
 undef_int
 i_tags_addn(im, name, code, idata)

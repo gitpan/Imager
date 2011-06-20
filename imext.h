@@ -17,8 +17,10 @@ extern im_ext_funcs *imager_function_ext_table;
     imager_function_ext_table = INT2PTR(im_ext_funcs *, SvIV(get_sv(PERL_FUNCTION_TABLE_NAME, 1))); \
     if (!imager_function_ext_table) \
       croak("Imager API function table not found!"); \
-    if (imager_function_ext_table->version != IMAGER_API_VERSION) \
-      croak("Imager API version incorrect"); \
+    if (imager_function_ext_table->version != IMAGER_API_VERSION) {  \
+      croak("Imager API version incorrect loaded %d vs expected %d", \
+	    imager_function_ext_table->version, IMAGER_API_VERSION); \
+    } \
     if (imager_function_ext_table->level < IMAGER_MIN_API_LEVEL) \
       croak("API level %d below minimum of %d", imager_function_ext_table->level, IMAGER_MIN_API_LEVEL); \
   } while (0)
@@ -192,7 +194,7 @@ extern im_ext_funcs *imager_function_ext_table;
 
 #define i_set_image_file_limits(max_width, max_height, max_bytes) \
   ((im_extt->f_i_set_image_file_limits)((max_width), (max_height), (max_bytes)))
-#define i_get_image_file_limits(max_width, max_height, max_bytes) \
+#define i_get_image_file_limits(pmax_width, pmax_height, pmax_bytes) \
   ((im_extt->f_i_get_image_file_limits)((pmax_width), (pmax_height), (pmax_bytes)))
 #define i_int_check_image_file_limits(width, height, channels, sample_size) \
   ((im_extt->f_i_int_check_image_file_limits)((width), (height), (channels), (sample_size)))

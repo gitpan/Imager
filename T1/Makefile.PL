@@ -54,12 +54,8 @@ else {
        resources =>
        {
 	homepage => "http://imager.perl.org/",
-	repository =>
-	{
-	 url => "git://git.imager.perl.org/imager-type1.git",
-	 web => "http://git.imager.perl.org/imager-type1.git/",
-	 type => "git",
-	},
+	repository => "git://git.imager.perl.org/imager.git",
+	bugtracker => "http://rt.cpan.org/NoAuth/Bugs.html?Dist=Imager",
        },
       };
     $opts{PREREQ_PM} =
@@ -93,7 +89,7 @@ if ($probe_res) {
   $opts{INC} = "@inc";
 
   if ($MM_ver > 6.06) {
-    $opts{AUTHOR} = 'Tony Cook <tony@imager.perl.org>';
+    $opts{AUTHOR} = 'Tony Cook <tonyc@cpan.org>';
     $opts{ABSTRACT} = 'T1Lib font driver for Imager';
   }
   

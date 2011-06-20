@@ -5,7 +5,7 @@ use vars qw($VERSION @ISA);
 @ISA = qw(Imager::Font);
 
 BEGIN {
-  $VERSION = "0.79";
+  $VERSION = "0.80";
 
   eval {
     require XSLoader;
@@ -218,7 +218,7 @@ supported font files, so I've renamed it.
 
 =head1 AUTHOR
 
-Tony Cook <tony@imager.perl.org>
+Tony Cook <tonyc@cpan.org>
 
 =head1 SEE ALSO
 

@@ -54,12 +54,8 @@ else {
        resources =>
        {
 	homepage => "http://imager.perl.org/",
-	repository =>
-	{
-	 url => "http://imager.perl.org/svn/trunk/Imager/FT2",
-	 web => "http://imager.perl.org/svnweb/public/browse/trunk/Imager/FT2",
-	 type => "svn",
-	},
+	repository => "git://git.imager.perl.org/imager.git",
+	bugtracker => "http://rt.cpan.org/NoAuth/Bugs.html?Dist=Imager",
        },
       };
     $opts{PREREQ_PM} =
@@ -106,7 +102,7 @@ if ($probe_res) {
     if $probe_res->{LDDLFLAGS};
 
   if ($MM_ver > 6.06) {
-    $opts{AUTHOR} = 'Tony Cook <tony@imager.perl.org>';
+    $opts{AUTHOR} = 'Tony Cook <tonyc@cpan.org>';
     $opts{ABSTRACT} = 'FreeType 2 font driver for Imager';
   }
   

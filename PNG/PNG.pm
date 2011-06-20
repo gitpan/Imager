@@ -4,7 +4,7 @@ use Imager;
 use vars qw($VERSION @ISA);
 
 BEGIN {
-  $VERSION = "0.78";
+  $VERSION = "0.79";
 
   eval {
     require XSLoader;
@@ -74,7 +74,7 @@ Imager's PNG support is documented in L<Imager::Files>.
 
 =head1 AUTHOR
 
-Tony Cook <tony@imager.perl.org>
+Tony Cook <tonyc@cpan.org>
 
 =head1 SEE ALSO
 

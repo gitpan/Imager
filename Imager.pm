@@ -94,14 +94,6 @@ use Imager::Font;
 );
 
 @EXPORT=qw(
-	   init_log
-	   i_list_formats
-	   i_has_format
-	   malloc_state
-	   i_color_new
-
-	   i_img_empty
-	   i_img_empty_ch
 	  );
 
 %EXPORT_TAGS=
@@ -145,8 +137,11 @@ my %defaults;
 
 BEGIN {
   require Exporter;
-  @ISA = qw(Exporter);
-  $VERSION = '0.83';
+  my $ex_version = eval $Exporter::VERSION;
+  if ($ex_version < 5.57) {
+    @ISA = qw(Exporter);
+  }
+  $VERSION = '0.84';
   eval {
     require XSLoader;
     XSLoader::load(Imager => $VERSION);
@@ -451,15 +446,14 @@ sub import {
 }
 
 sub init_log {
-  i_init_log($_[0],$_[1]);
-  i_log_entry("Imager $VERSION starting\n", 1);
+  Imager->open_log(log => $_[0], level => $_[1]);
 }
 
 
 sub init {
   my %parms=(loglevel=>1,@_);
   if ($parms{'log'}) {
-    init_log($parms{'log'},$parms{'loglevel'});
+    Imager->open_log(log => $parms{log}, level => $parms{loglevel});
   }
 
   if (exists $parms{'warn_obsolete'}) {
@@ -470,6 +464,42 @@ sub init {
     if ($formats{t1}) {
       Imager::Font::T1::i_init_t1($parms{'t1log'});
     }
+  }
+}
+
+{
+  my $is_logging = 0;
+
+  sub open_log {
+    my $class = shift;
+    my (%opts) = ( loglevel => 1, @_ );
+
+    $is_logging = i_init_log($opts{log}, $opts{loglevel});
+    unless ($is_logging) {
+      Imager->_set_error(Imager->_error_as_msg());
+      return;
+    }
+
+    Imager->log("Imager $VERSION starting\n", 1);
+
+    return $is_logging;
+  }
+
+  sub close_log {
+    i_init_log(undef, -1);
+    $is_logging = 0;
+  }
+
+  sub log {
+    my ($class, $message, $level) = @_;
+
+    defined $level or $level = 1;
+
+    i_log_entry($message, $level);
+  }
+
+  sub is_logging {
+    return $is_logging;
   }
 }
 
@@ -931,24 +961,21 @@ sub to_paletted {
     return;
   }
 
+  $self->_valid_image
+    or return;
+
   my $result = Imager->new;
-  $result->{IMG} = i_img_to_pal($self->{IMG}, $opts);
-
-  #print "Type ", i_img_type($result->{IMG}), "\n";
-
-  if ($result->{IMG}) {
-    return $result;
-  }
-  else {
-    $self->{ERRSTR} = $self->_error_as_msg;
+  unless ($result->{IMG} = i_img_to_pal($self->{IMG}, $opts)) {
+    $self->_set_error(Imager->_error_as_msg);
     return;
   }
+
+  return $result;
 }
 
-# convert a paletted (or any image) to an 8-bit/channel RGB images
+# convert a paletted (or any image) to an 8-bit/channel RGB image
 sub to_rgb8 {
   my $self = shift;
-  my $result;
 
   unless (defined wantarray) {
     my @caller = caller;
@@ -956,30 +983,57 @@ sub to_rgb8 {
     return;
   }
 
-  if ($self->{IMG}) {
-    $result = Imager->new;
-    $result->{IMG} = i_img_to_rgb($self->{IMG})
-      or undef $result;
+  $self->_valid_image
+    or return;
+
+  my $result = Imager->new;
+  unless ($result->{IMG} = i_img_to_rgb($self->{IMG})) {
+    $self->_set_error(Imager->_error_as_msg());
+    return;
   }
 
   return $result;
 }
 
-# convert a paletted (or any image) to an 8-bit/channel RGB images
+# convert a paletted (or any image) to a 16-bit/channel RGB image
 sub to_rgb16 {
   my $self = shift;
-  my $result;
 
   unless (defined wantarray) {
     my @caller = caller;
-    warn "to_rgb16() called in void context - to_rgb8() returns the converted image at $caller[1] line $caller[2]\n";
+    warn "to_rgb16() called in void context - to_rgb16() returns the converted image at $caller[1] line $caller[2]\n";
     return;
   }
 
-  if ($self->{IMG}) {
-    $result = Imager->new;
-    $result->{IMG} = i_img_to_rgb16($self->{IMG})
-      or undef $result;
+  $self->_valid_image
+    or return;
+
+  my $result = Imager->new;
+  unless ($result->{IMG} = i_img_to_rgb16($self->{IMG})) {
+    $self->_set_error(Imager->_error_as_msg());
+    return;
+  }
+
+  return $result;
+}
+
+# convert a paletted (or any image) to an double/channel RGB image
+sub to_rgb_double {
+  my $self = shift;
+
+  unless (defined wantarray) {
+    my @caller = caller;
+    warn "to_rgb16() called in void context - to_rgb_double() returns the converted image at $caller[1] line $caller[2]\n";
+    return;
+  }
+
+  $self->_valid_image
+    or return;
+
+  my $result = Imager->new;
+  unless ($result->{IMG} = i_img_to_drgb($self->{IMG})) {
+    $self->_set_error(Imager->_error_as_msg());
+    return;
   }
 
   return $result;
@@ -4253,6 +4307,9 @@ box() - L<Imager::Draw/box()> - draw a filled or outline box.
 
 circle() - L<Imager::Draw/circle()> - draw a filled circle
 
+close_log() - L<Imager::ImageTypes/close_log()> - close the Imager
+debugging log.
+
 colorcount() - L<Imager::ImageTypes/colorcount()> - the number of
 colors in an image's palette (paletted images only)
 
@@ -4336,9 +4393,15 @@ is_bilevel() - L<Imager::ImageTypes/is_bilevel()> - returns whether
 image write functions should write the image in their bilevel (blank
 and white, no gray levels) format
 
+is_logging() L<Imager::ImageTypes/is_logging()> - test if the debug
+log is active.
+
 line() - L<Imager::Draw/line()> - draw an interval
 
 load_plugin() - L<Imager::Filters/load_plugin()>
+
+log() - L<Imager::ImageTypes/log()> - send a message to the debugging
+log.
 
 map() - L<Imager::Transformations/"Color Mappings"> - remap color
 channel values
@@ -4364,6 +4427,8 @@ newfont() - L<Imager::Handy/newfont()>
 NF() - L<Imager::Handy/NF()>
 
 open() - L<Imager::Files> - an alias for read()
+
+open_log() - L<Imager::ImageTypes/open_log()> - open the debug log.
 
 =for stopwords IPTC
 
@@ -4430,6 +4495,9 @@ to_paletted() -  L<Imager::ImageTypes/to_paletted()>
 to_rgb16() - L<Imager::ImageTypes/to_rgb16()>
 
 to_rgb8() - L<Imager::ImageTypes/to_rgb8()>
+
+to_rgb_double() - L<Imager::ImageTypes/to_rgb_double()> - convert to
+double per sample image.
 
 transform() - L<Imager::Engines/"transform()">
 
@@ -4701,7 +4769,7 @@ it will be delayed until I get a chance to write them.
 
 =head1 AUTHOR
 
-Tony Cook <tony@imager.perl.org> is the current maintainer for Imager.
+Tony Cook <tonyc@cpan.org> is the current maintainer for Imager.
 
 Arnar M. Hrafnkelsson is the original author of Imager.
 
