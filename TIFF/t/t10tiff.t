@@ -1,6 +1,6 @@
 #!perl -w
 use strict;
-use Test::More tests => 217;
+use Test::More tests => 235;
 use Imager qw(:all);
 use Imager::Test qw(is_image is_image_similar test_image test_image_16 test_image_double test_image_raw);
 
@@ -733,3 +733,75 @@ SKIP:
 }
 
 
+{ # check file limits are checked
+  my $limit_file = "testout/t106.tiff";
+  ok(Imager->set_file_limits(reset=>1, width=>149), "set width limit 149");
+  my $im = Imager->new;
+  ok(!$im->read(file=>$limit_file),
+     "should fail read due to size limits");
+  print "# ",$im->errstr,"\n";
+  like($im->errstr, qr/image width/, "check message");
+  
+  ok(Imager->set_file_limits(reset=>1, height=>149), "set height limit 149");
+  ok(!$im->read(file=>$limit_file),
+     "should fail read due to size limits");
+  print "# ",$im->errstr,"\n";
+  like($im->errstr, qr/image height/, "check message");
+  
+  ok(Imager->set_file_limits(reset=>1, width=>150), "set width limit 150");
+  ok($im->read(file=>$limit_file),
+     "should succeed - just inside width limit");
+  ok(Imager->set_file_limits(reset=>1, height=>150), "set height limit 150");
+  ok($im->read(file=>$limit_file),
+     "should succeed - just inside height limit");
+  
+  # 150 x 150 x 3 channel image uses 67500 bytes
+  ok(Imager->set_file_limits(reset=>1, bytes=>67499),
+     "set bytes limit 67499");
+  ok(!$im->read(file=>$limit_file),
+     "should fail - too many bytes");
+  print "# ",$im->errstr,"\n";
+  like($im->errstr, qr/storage size/, "check error message");
+  ok(Imager->set_file_limits(reset=>1, bytes=>67500),
+     "set bytes limit 67500");
+  ok($im->read(file=>$limit_file),
+     "should succeed - just inside bytes limit");
+  Imager->set_file_limits(reset=>1);
+}
+
+{
+  # this image has an IFD loop, which sends some TIFF readers into a
+  # loop, including Corel PhotoPaint and the GIMP's tiff reader.
+  my $ifdloop_hex = <<HEX;
+49 49 2A 00 0A 00 00 00 FE 00 0A 00 00 01 03 00
+01 00 00 00 01 00 00 00 01 01 03 00 01 00 00 00
+01 00 00 00 02 01 03 00 03 00 00 00 88 00 00 00
+03 01 03 00 01 00 00 00 05 80 00 00 06 01 03 00
+01 00 00 00 02 00 00 00 11 01 04 00 01 00 00 00
+08 00 00 00 12 01 03 00 01 00 00 00 01 00 00 00
+15 01 03 00 01 00 00 00 03 00 00 00 17 01 04 00
+01 00 00 00 02 00 00 00 1C 01 03 00 01 00 00 00
+01 00 00 00 90 00 00 00 08 00 08 00 08 00 FE 00
+0A 00 00 01 03 00 01 00 00 00 01 00 00 00 01 01
+03 00 01 00 00 00 01 00 00 00 02 01 03 00 03 00
+00 00 0E 01 00 00 03 01 03 00 01 00 00 00 05 80
+00 00 06 01 03 00 01 00 00 00 02 00 00 00 11 01
+04 00 01 00 00 00 8E 00 00 00 12 01 03 00 01 00
+00 00 01 00 00 00 15 01 03 00 01 00 00 00 03 00
+00 00 17 01 04 00 01 00 00 00 02 00 00 00 1C 01
+03 00 01 00 00 00 01 00 00 00 0A 00 00 00 08 00
+08 00 08 00
+HEX
+  $ifdloop_hex =~ tr/0-9A-F//cd;
+  my $ifdloop = pack("H*", $ifdloop_hex);
+
+  my $im = Imager->new;
+  ok($im->read(data => $ifdloop, type => "tiff", page => 1),
+     "read what should be valid");
+  ok(!$im->read(data => $ifdloop, type => "tiff", page => 2),
+     "third page is after looping back to the start, if this fails, upgrade tifflib")
+    or skip("tifflib is broken", 1);
+  print "# ", $im->errstr, "\n";
+  my @im = Imager->read_multi(type => "tiff", data => $ifdloop);
+  is(@im, 2, "should be only 2 images");
+}

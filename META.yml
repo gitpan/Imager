@@ -1,6 +1,6 @@
 --- #YAML:1.0
 name:               Imager
-version:            0.84_01
+version:            0.84_02
 abstract:           Perl extension for Generating 24 bit Images
 author:
     - Tony Cook <tonyc@cpan.org>, Arnar M. Hrafnkelsson
@@ -26,6 +26,7 @@ no_index:
         - JPEG
         - W32
         - FT2
+        - T1
 generated_by:       ExtUtils::MakeMaker version 6.55_02
 meta-spec:
     url:      http://module-build.sourceforge.net/META-spec-v1.4.html
