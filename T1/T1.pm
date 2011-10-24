@@ -35,7 +35,7 @@ sub t1_set_aa_level {
 
 sub new {
   my $class = shift;
-  my %hsh=(color=>Imager::Color->new(255,0,0,0),
+  my %hsh=(color=>Imager::Color->new(255,0,0,255),
 	   size=>15,
 	   @_);
 
@@ -74,7 +74,7 @@ sub new {
 
   my $id = i_t1_new($hsh{file},$hsh{afm});
   unless ($id >= 0) { # the low-level code may miss some error handling
-    $Imager::ERRSTR = "Could not load font ($id)";
+    Imager->_set_error(Imager->_error_as_msg);
     return;
   }
   return bless {

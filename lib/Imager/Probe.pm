@@ -2,6 +2,7 @@ package Imager::Probe;
 use strict;
 use File::Spec;
 use Config;
+use Cwd ();
 
 my @alt_transfer = qw/altname incsuffix libbase/;
 
@@ -130,6 +131,38 @@ sub _probe_pkg {
   return;
 }
 
+sub _is_msvc {
+  return $Config{cc} eq "cl";
+}
+
+sub _lib_basename {
+  my ($base) = @_;
+
+  if (_is_msvc()) {
+    return $base;
+  }
+  else {
+    return "lib$base";
+  }
+}
+
+sub _lib_option {
+  my ($base) = @_;
+
+  if (_is_msvc()) {
+    return $base . $Config{_a};
+  }
+  else {
+    return "-l$base";
+  }
+}
+
+sub _quotearg {
+  my ($opt) = @_;
+
+  return $opt =~ /\s/ ? qq("$opt") : $opt;
+}
+
 sub _probe_check {
   my ($req) = @_;
 
@@ -139,9 +172,10 @@ sub _probe_check {
     # synthesize a libcheck
     my $lext=$Config{'so'};   # Get extensions of libraries
     my $aext=$Config{'_a'};
+    my $basename = _lib_basename($libbase);
     $libcheck = sub {
-      -e File::Spec->catfile($_[0], "lib$libbase$aext")
-	|| -e File::Spec->catfile($_[0], "lib$libbase.$lext")
+      -e File::Spec->catfile($_[0], "$basename$aext")
+	|| -e File::Spec->catfile($_[0], "$basename.$lext")
       };
   }
 
@@ -187,7 +221,7 @@ sub _probe_check {
     push @libs, $req->{libopts};
   }
   elsif ($libbase) {
-    push @libs, "-l$libbase";
+    push @libs, _lib_option($libbase);
   }
   else {
     die "$req->{altname}: inccheck but no libbase or libopts";
@@ -195,8 +229,8 @@ sub _probe_check {
 
   return
     {
-     INC => "-I$found_incpath",
-     LIBS => "@libs",
+     INC => _quotearg("-I$found_incpath"),
+     LIBS => join(" ", map _quotearg($_), @libs),
      DEFINE => "",
     };
 }
@@ -290,7 +324,26 @@ sub _lib_paths {
      $^O eq "cygwin" ? "/usr/lib/w32api" : "",
      "/usr/lib",
      "/usr/local/lib",
+     _gcc_lib_paths(),
     );
+}
+
+sub _gcc_lib_paths {
+  $Config{gccversion}
+    or return;
+
+  my ($base_version) = $Config{gccversion} =~ /^([0-9]+)/
+    or return;
+
+  $base_version >= 4
+    or return;
+
+  my ($lib_line) = grep /^libraries:/, `$Config{cc} -print-search-dirs`
+    or return;
+  $lib_line =~ s/^libraries: =//;
+  chomp $lib_line;
+
+  return grep !/gcc/ && -d, split /:/, $lib_line;
 }
 
 sub _inc_paths {
@@ -332,6 +385,11 @@ sub _paths {
 
     push @out, grep -d $_, split /\Q$Config{path_sep}/, $path;
   }
+
+  @out = map Cwd::realpath($_), @out;
+
+  my %seen;
+  @out = grep !$seen{$_}++, @out;
 
   return @out;
 }

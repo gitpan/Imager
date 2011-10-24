@@ -1,5 +1,77 @@
 Imager release history.  Older releases can be found in Changes.old
 
+Imager 0.85_02 - 24 Oct 2011
+==============
+
+Bug fixes:
+
+ - eliminate unused i_gif_opts type (clean-up)
+   https://rt.cpan.org/Ticket/Display.html?id=69245
+
+ - fix combine=0 fill color anti-aliasing on the double/sample path
+   https://rt.cpan.org/Ticket/Display.html?id=71309
+
+ - make default text color non-transparent
+   https://rt.cpan.org/Ticket/Display.html?id=71469
+
+ - apply the last of the Debian unforwarded spelling fixes
+   https://rt.cpan.org/Ticket/Display.html?id=70656
+
+ - the log() method used its message parameter as a C level format
+   string.
+   https://rt.cpan.org/Ticket/Display.html?id=71653
+
+ - provide our own STRLEN typemap entry for older perls.
+   https://rt.cpan.org/Ticket/Display.html?id=71641
+
+ - add extra ppport.h configuration to support older perls.
+
+ - depend on Scalar::Util, since we use it and older perls don't have
+   it.
+
+ - add overloaded eq to Imager::Matrix2d, since older perls don't seem
+   to synthesize it from overloaded "".
+
+  - use T1_StrError() for error messages on modern libt1
+    https://rt.cpan.org/Ticket/Display.html?id=69879
+
+ - actually load the font rather than just adding it to the catalog on
+   creation.
+
+ - Imager::Font->new now produces better error messages for the T1
+   engine.
+
+ - the font has_chars() method now returns perl's true and false
+   values in list context rather than integers, which should be more
+   efficient.
+   https://rt.cpan.org/Ticket/Display.html?id=69158
+
+ - the btm data structure used by the flood_fill code is now
+   initialized more efficiently.
+   https://rt.cpan.org/Ticket/Display.html?id=68994
+
+ - updated the Thanks list in README
+   https://rt.cpan.org/Ticket/Display.html?id=71607
+
+ - check there's at least one coefficient for the convolution filter
+   https://rt.cpan.org/Ticket/Display.html?id=68993
+
+ - make the APIRef synopsis ordering consistent, older versions of
+   perl could order it differently.
+   https://rt.cpan.org/Ticket/Display.html?id=71675
+
+ - we rely on Config.pm's d_vsnprintf as to whether we use
+   vsnprintf/snprintf, which is defined in the Win32 Config.pm even
+   though it only has _ prefixed versions of these.  Define our own
+   prefixed names on Win32.
+   https://rt.cpan.org/Ticket/Display.html?id=71642
+
+ - fix library detection with MSVC
+
+ - search a few more library directories, so EU::MM doesn't discard
+   them.  Hopefully fixes:
+   https://rt.cpan.org/Ticket/Display.html?id=71643
+
 Imager 0.85_01 - 10 Oct 2011
 ==============
 
