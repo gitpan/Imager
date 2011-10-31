@@ -1,6 +1,6 @@
 --- #YAML:1.0
 name:               Imager
-version:            0.85_02
+version:            0.86
 abstract:           Perl extension for Generating 24 bit Images
 author:
     - Tony Cook <tonyc@cpan.org>, Arnar M. Hrafnkelsson
