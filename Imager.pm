@@ -148,7 +148,7 @@ BEGIN {
   if ($ex_version < 5.57) {
     @ISA = qw(Exporter);
   }
-  $VERSION = '0.86';
+  $VERSION = '0.87';
   eval {
     require XSLoader;
     XSLoader::load(Imager => $VERSION);
@@ -987,6 +987,25 @@ sub to_paletted {
   return $result;
 }
 
+sub make_palette {
+  my ($class, $quant, @images) = @_;
+
+  unless (@images) {
+    Imager->_set_error("make_palette: supply at least one image");
+    return;
+  }
+  my $index = 1;
+  for my $img (@images) {
+    unless ($img->{IMG}) {
+      Imager->_set_error("make_palette: image $index is empty");
+      return;
+    }
+    ++$index;
+  }
+
+  return i_img_make_palette($quant, map $_->{IMG}, @images);
+}
+
 # convert a paletted (or any image) to an 8-bit/channel RGB image
 sub to_rgb8 {
   my $self = shift;
@@ -1414,8 +1433,15 @@ sub read {
     $type = i_test_format_probe($IO, -1);
   }
 
+  if ($input{file} && !$type) {
+    # guess the type 
+    $type = $FORMATGUESS->($input{file});
+  }
+
   unless ($type) {
-    $self->_set_error('type parameter missing and not possible to guess from extension'); 
+    my $msg = "type parameter missing and it couldn't be determined from the file contents";
+    $input{file} and $msg .= " or file name";
+    $self->_set_error($msg);
     return undef;
   }
 
@@ -1958,7 +1984,9 @@ sub read_multi {
   }
 
   unless ($type) {
-    $ERRSTR = "No type parameter supplied and it couldn't be guessed";
+    my $msg = "type parameter missing and it couldn't be determined from the file contents";
+    $opts{file} and $msg .= " or file name";
+    Imager->_set_error($msg);
     return;
   }
 
@@ -3890,21 +3918,39 @@ sub _set_error {
 
 # Default guess for the type of an image from extension
 
+my @simple_types = qw(png tga gif raw ico cur xpm mng jng ilbm pcx psd eps);
+
+my %ext_types =
+  (
+   ( map { $_ => $_ } @simple_types ),
+   tiff => "tiff",
+   tif => "tiff",
+   pbm => "pnm",
+   pgm => "pnm",
+   ppm => "pnm",
+   pnm => "pnm", # technically wrong, but historically it works in Imager
+   jpeg => "jpeg",
+   jpg => "jpeg",
+   bmp => "bmp",
+   dib => "bmp",
+   rgb => "sgi",
+   bw => "sgi",
+   sgi => "sgi",
+   fit => "fits",
+   fits => "fits",
+   rle => "utah",
+  );
+
 sub def_guess_type {
   my $name=lc(shift);
-  my $ext;
-  $ext=($name =~ m/\.([^\.]+)$/)[0];
-  return 'tiff' if ($ext =~ m/^tiff?$/);
-  return 'jpeg' if ($ext =~ m/^jpe?g$/);
-  return 'pnm'  if ($ext =~ m/^p[pgb]m$/);
-  return 'png'  if ($ext eq "png");
-  return 'bmp'  if ($ext eq "bmp" || $ext eq "dib");
-  return 'tga'  if ($ext eq "tga");
-  return 'sgi'  if ($ext eq "rgb" || $ext eq "bw" || $ext eq "sgi" || $ext eq "rgba");
-  return 'gif'  if ($ext eq "gif");
-  return 'raw'  if ($ext eq "raw");
-  return lc $ext; # best guess
-  return ();
+
+  my ($ext) = $name =~ /\.([^.]+)$/
+    or return;
+
+  my $type = $ext_types{$ext}
+    or return;
+
+  return $type;
 }
 
 sub combines {
@@ -3995,7 +4041,7 @@ sub Imager::ImgRaw::CLONE_SKIP { 1 }
 
 sub preload {
   # this serves two purposes:
-  # - a class method to load the file support modules included with Image
+  # - a class method to load the file support modules included with Imager
   #   (or were included, once the library dependent modules are split out)
   # - something for Module::ScanDeps to analyze
   # https://rt.cpan.org/Ticket/Display.html?id=6566
@@ -4430,6 +4476,9 @@ load_plugin() - L<Imager::Filters/load_plugin()>
 
 log() - L<Imager::ImageTypes/log()> - send a message to the debugging
 log.
+
+make_palette() - L<Imager::ImageTypes/make_palette()> - produce a
+color palette from one or more input images.
 
 map() - L<Imager::Transformations/"Color Mappings"> - remap color
 channel values

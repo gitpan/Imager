@@ -115,6 +115,7 @@ ICO/t/t72cursing.t
 ICO/t/t73curmult.t
 ICO/testimg/combo.ico
 ICO/testimg/pal13232.ico
+ICO/testimg/pal256.ico
 ICO/testimg/pal43232.cur
 ICO/testimg/pal43232.ico
 ICO/testimg/pal43232.ppm
@@ -289,6 +290,7 @@ t/t020masked.t
 t/t021sixteen.t
 t/t022double.t			Test double/sample images
 t/t023palette.t			Test paletted images
+t/t03test.t			Test Imager::Test
 t/t05error.t
 t/t07iolayer.t
 t/t1000files.t			Format independent file tests

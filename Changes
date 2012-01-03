@@ -1,5 +1,46 @@
 Imager release history.  Older releases can be found in Changes.old
 
+Imager 0.87 - 03/01/12
+===========
+
+ - document the return value of the filter() method.
+   https://rt.cpan.org/Ticket/Display.html?id=72369
+
+ - document i_gsamp_bits() and i_psamp_bits().
+   https://rt.cpan.org/Ticket/Display.html?id=68815
+
+ - properly increment the Imager::Matrix2d $VERSION.
+
+ - actually include the Imager::Test tests in the dist
+
+ - correctly read and write 256x256 pixel ICO files
+   https://rt.cpan.org/Ticket/Display.html?id=69599
+
+ - make the error message from read() or read_multi() when they can't
+   identify the file type match reality.
+   https://rt.cpan.org/Ticket/Display.html?id=72475
+
+ - read() now uses $FORMATGUESS if it can't determine the file type
+   based on the file header, to match read_multi().
+
+ - re-work and add tests for def_guess_type().  def_guess_type() no
+   longer returns any random file extension as the file type.
+
+ - add gray4, gray16 and gray as presets for make_colors.
+   https://rt.cpan.org/Ticket/Display.html?id=67911
+
+ - add make_palette() method that produces a palette from one or more
+   images.
+
+ - fix the Imager dependency for the separately distributed font
+   drivers.
+   https://rt.cpan.org/Ticket/Display.html?id=72643
+
+ - fix i_render_color() to properly draw in "normal" mode - ie. when
+   writing to a 1 or 3 channel image the second or fourth channel of
+   the source color was being ignored, it is now significant.
+   https://rt.cpan.org/Ticket/Display.html?id=71564
+
 Imager 0.86 - 31 Oct 2011
 ===========
 
