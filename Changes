@@ -1,6 +1,62 @@
 Imager release history.  Older releases can be found in Changes.old
 
-Imager 0.87 - 03/01/12
+Imager 0.88 - 22 Feb 2012
+===========
+
+ - describe how to build libgif etc on OS X in such a way as to be
+   compatible with a fat binary perl (such as the system perl), in
+   README.
+   https://rt.cpan.org/Ticket/Display.html?id=73371
+
+ - update the change notes for 0.77_01 to indicate that libungif
+   support was removed.
+
+ - add some other imaging modules to SEE ALSO
+   https://rt.cpan.org/Ticket/Display.html?id=73906
+
+ - note that the generator of the apparently non-DFSG-free postscript
+   in MMOne.pfb is a Debian package.
+
+ - setsamples() is now a true complement to getsamples() - it can
+   write 8-bit or floating point samples from a scalar or array
+   reference.  This adds i_psamp() and i_psampf() to the C level API.
+
+ - the XS interfaces to i_gsamp(), i_gsampf() and i_gsamp_bits() have
+   changed to make better use of the typemap, but these aren't part of
+   the perl level API anyway.  There were no changes to the C level
+   interfaces to these functions.
+
+ - getpixel() and setpixel() now accept a mix of scalar and array
+   references for the x and y parameters, and unequal array lengths is
+   no longer an error.
+   https://rt.cpan.org/Ticket/Display.html?id=73697
+
+Bug fixes:
+
+ - correctly calculate the size of a rotated image
+   https://rt.cpan.org/Ticket/Display.html?id=69261
+
+ - fix incorrect rounding of color values for matrix_transform() and
+   rotate().
+   https://rt.cpan.org/Ticket/Display.html?id=69261
+
+ - Win32 text output is now done in normal combine mode, the alpha
+   component of the color is now significant.
+   https://rt.cpan.org/Ticket/Display.html?id=70014
+
+ - remove long unused gif case from read()
+   https://rt.cpan.org/Ticket/Display.html?id=69244 (partial)
+
+ - the getsamples() target parameter was being treated as a hashref
+   when it's meant to be an array reference.
+   https://rt.cpan.org/Ticket/Display.html?id=74882
+
+ - getpixel() and setpixel() now returns an empty list when invalid
+   parameters are supplied.
+   Invalid values for type now result in an error for getpixel().
+   https://rt.cpan.org/Ticket/Display.html?id=73697
+
+Imager 0.87 - 03 Jan 2012
 ===========
 
  - document the return value of the filter() method.
@@ -525,6 +581,8 @@ Imager 0.77_01 - 13 Sep 2010
  - moved GIF, TIFF, JPEG file handling code into sub-modules in
    preparation for separate distribution.
    https://rt.cpan.org/Ticket/Display.html?id=49616 (partial)
+
+   Note: this removed support for libungif from Imager.
 
  - optimize filled box drawing (color, not fill)
 

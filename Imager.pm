@@ -148,7 +148,7 @@ BEGIN {
   if ($ex_version < 5.57) {
     @ISA = qw(Exporter);
   }
-  $VERSION = '0.87';
+  $VERSION = '0.88';
   eval {
     require XSLoader;
     XSLoader::load(Imager => $VERSION);
@@ -629,11 +629,13 @@ sub _combine {
 }
 
 sub _valid_image {
-  my ($self) = @_;
+  my ($self, $method) = @_;
 
   $self->{IMG} and return 1;
 
-  $self->_set_error('empty input image');
+  my $msg = 'empty input image';
+  $msg = "$method: $msg" if $method;
+  $self->_set_error($msg);
 
   return;
 }
@@ -1477,41 +1479,6 @@ sub read {
       return undef;
     }
     $self->{DEBUG} && print "loading a bmp file\n";
-  }
-
-  if ( $type eq 'gif' ) {
-    if ($input{colors} && !ref($input{colors})) {
-      # must be a reference to a scalar that accepts the colour map
-      $self->{ERRSTR} = "option 'colors' must be a scalar reference";
-      return undef;
-    }
-    if ($input{'gif_consolidate'}) {
-      if ($input{colors}) {
-	my $colors;
-	($self->{IMG}, $colors) =i_readgif_wiol( $IO );
-	if ($colors) {
-	  ${ $input{colors} } = [ map { NC(@$_) } @$colors ];
-	}
-      }
-      else {
-	$self->{IMG} =i_readgif_wiol( $IO );
-      }
-    }
-    else {
-      my $page = $input{'page'};
-      defined $page or $page = 0;
-      $self->{IMG} = i_readgif_single_wiol( $IO, $page );
-      if ($self->{IMG} && $input{colors}) {
-	${ $input{colors} } =
-	  [ i_getcolors($self->{IMG}, 0, i_colorcount($self->{IMG})) ];
-      }
-    }
-
-    if ( !defined($self->{IMG}) ) {
-      $self->{ERRSTR}=$self->_error_as_msg();
-      return undef;
-    }
-    $self->{DEBUG} && print "loading a gif file\n";
   }
 
   if ( $type eq 'tga' ) {
@@ -3152,6 +3119,9 @@ sub flood_fill {
 sub setpixel {
   my ($self, %opts) = @_;
 
+  $self->_valid_image("setpixel")
+    or return;
+
   my $color = $opts{color};
   unless (defined $color) {
     $color = $self->{fg};
@@ -3159,36 +3129,53 @@ sub setpixel {
   }
 
   unless (ref $color && UNIVERSAL::isa($color, "Imager::Color")) {
-    $color = _color($color)
-      or return undef;
+    unless ($color = _color($color, 'setpixel')) {
+      $self->_set_error("setpixel: " . Imager->errstr);
+      return;
+    }
   }
 
   unless (exists $opts{'x'} && exists $opts{'y'}) {
-    $self->{ERRSTR} = 'missing x and y parameters';
-    return undef;
+    $self->_set_error('setpixel: missing x or y parameter');
+    return;
   }
 
   my $x = $opts{'x'};
   my $y = $opts{'y'};
-  if (ref $x && ref $y) {
-    unless (@$x == @$y) {
-      $self->{ERRSTR} = 'length of x and y mismatch';
+  if (ref $x || ref $y) {
+    $x = ref $x ? $x : [ $x ];
+    $y = ref $y ? $y : [ $y ];
+    unless (@$x) {
+      $self->_set_error("setpixel: x is a reference to an empty array");
       return;
     }
+    unless (@$y) {
+      $self->_set_error("setpixel: y is a reference to an empty array");
+      return;
+    }
+
+    # make both the same length, replicating the last element
+    if (@$x < @$y) {
+      $x = [ @$x, ($x->[-1]) x (@$y - @$x) ];
+    }
+    elsif (@$y < @$x) {
+      $y = [ @$y, ($y->[-1]) x (@$x - @$y) ];
+    }
+
     my $set = 0;
     if ($color->isa('Imager::Color')) {
-      for my $i (0..$#{$opts{'x'}}) {
+      for my $i (0..$#$x) {
         i_ppix($self->{IMG}, $x->[$i], $y->[$i], $color)
 	  or ++$set;
       }
     }
     else {
-      for my $i (0..$#{$opts{'x'}}) {
+      for my $i (0..$#$x) {
         i_ppixf($self->{IMG}, $x->[$i], $y->[$i], $color)
 	  or ++$set;
       }
     }
-    $set or return;
+
     return $set;
   }
   else {
@@ -3202,7 +3189,7 @@ sub setpixel {
     }
   }
 
-  $self;
+  return $self;
 }
 
 sub getpixel {
@@ -3210,41 +3197,66 @@ sub getpixel {
 
   my %opts = ( "type"=>'8bit', @_);
 
+  $self->_valid_image("getpixel")
+    or return;
+
   unless (exists $opts{'x'} && exists $opts{'y'}) {
-    $self->{ERRSTR} = 'missing x and y parameters';
-    return undef;
+    $self->_set_error('getpixel: missing x or y parameter');
+    return;
   }
 
   my $x = $opts{'x'};
   my $y = $opts{'y'};
-  if (ref $x && ref $y) {
-    unless (@$x == @$y) {
-      $self->{ERRSTR} = 'length of x and y mismatch';
-      return undef;
+  my $type = $opts{'type'};
+  if (ref $x || ref $y) {
+    $x = ref $x ? $x : [ $x ];
+    $y = ref $y ? $y : [ $y ];
+    unless (@$x) {
+      $self->_set_error("getpixel: x is a reference to an empty array");
+      return;
     }
+    unless (@$y) {
+      $self->_set_error("getpixel: y is a reference to an empty array");
+      return;
+    }
+
+    # make both the same length, replicating the last element
+    if (@$x < @$y) {
+      $x = [ @$x, ($x->[-1]) x (@$y - @$x) ];
+    }
+    elsif (@$y < @$x) {
+      $y = [ @$y, ($y->[-1]) x (@$x - @$y) ];
+    }
+
     my @result;
-    if ($opts{"type"} eq '8bit') {
-      for my $i (0..$#{$opts{'x'}}) {
+    if ($type eq '8bit') {
+      for my $i (0..$#$x) {
         push(@result, i_get_pixel($self->{IMG}, $x->[$i], $y->[$i]));
       }
     }
-    else {
-      for my $i (0..$#{$opts{'x'}}) {
+    elsif ($type eq 'float' || $type eq 'double') {
+      for my $i (0..$#$x) {
         push(@result, i_gpixf($self->{IMG}, $x->[$i], $y->[$i]));
       }
+    }
+    else {
+      $self->_set_error("getpixel: type must be '8bit' or 'float'");
+      return;
     }
     return wantarray ? @result : \@result;
   }
   else {
-    if ($opts{"type"} eq '8bit') {
+    if ($type eq '8bit') {
       return i_get_pixel($self->{IMG}, $x, $y);
     }
-    else {
+    elsif ($type eq 'float' || $type eq 'double') {
       return i_gpixf($self->{IMG}, $x, $y);
     }
+    else {
+      $self->_set_error("getpixel: type must be '8bit' or 'float'");
+      return;
+    }
   }
-
-  $self;
 }
 
 sub getscanline {
@@ -3354,24 +3366,20 @@ sub getsamples {
     return;
   }
   
-  unless ($opts{channels}) {
-    $opts{channels} = [ 0 .. $self->getchannels()-1 ];
-  }
-
   if ($opts{target}) {
     my $target = $opts{target};
     my $offset = $opts{offset};
     if ($opts{type} eq '8bit') {
       my @samples = i_gsamp($self->{IMG}, $opts{x}, $opts{x}+$opts{width},
-			    $opts{y}, @{$opts{channels}})
+			    $opts{y}, $opts{channels})
 	or return;
-      @{$target}{$offset .. $offset + @samples - 1} = @samples;
+      @{$target}[$offset .. $offset + @samples - 1] = @samples;
       return scalar(@samples);
     }
     elsif ($opts{type} eq 'float') {
       my @samples = i_gsampf($self->{IMG}, $opts{x}, $opts{x}+$opts{width},
-			     $opts{y}, @{$opts{channels}});
-      @{$target}{$offset .. $offset + @samples - 1} = @samples;
+			     $opts{y}, $opts{channels});
+      @{$target}[$offset .. $offset + @samples - 1] = @samples;
       return scalar(@samples);
     }
     elsif ($opts{type} =~ /^(\d+)bit$/) {
@@ -3380,7 +3388,7 @@ sub getsamples {
       my @data;
       my $count = i_gsamp_bits($self->{IMG}, $opts{x}, $opts{x}+$opts{width}, 
 			       $opts{y}, $bits, $target, 
-			       $offset, @{$opts{channels}});
+			       $offset, $opts{channels});
       unless (defined $count) {
 	$self->_set_error(Imager->_error_as_msg);
 	return;
@@ -3396,18 +3404,18 @@ sub getsamples {
   else {
     if ($opts{type} eq '8bit') {
       return i_gsamp($self->{IMG}, $opts{x}, $opts{x}+$opts{width},
-		     $opts{y}, @{$opts{channels}});
+		     $opts{y}, $opts{channels});
     }
     elsif ($opts{type} eq 'float') {
       return i_gsampf($self->{IMG}, $opts{x}, $opts{x}+$opts{width},
-		      $opts{y}, @{$opts{channels}});
+		      $opts{y}, $opts{channels});
     }
     elsif ($opts{type} =~ /^(\d+)bit$/) {
       my $bits = $1;
 
       my @data;
       i_gsamp_bits($self->{IMG}, $opts{x}, $opts{x}+$opts{width}, 
-		   $opts{y}, $bits, \@data, 0, @{$opts{channels}})
+		   $opts{y}, $bits, \@data, 0, $opts{channels})
 	or return;
       return @data;
     }
@@ -3427,28 +3435,44 @@ sub setsamples {
     return;
   }
 
-  unless(defined $opts{data} && ref $opts{data}) {
-    $self->_set_error('setsamples: data parameter missing or invalid');
+  my $data = $opts{data};
+  unless(defined $data) {
+    $self->_set_error('setsamples: data parameter missing');
     return;
   }
 
-  unless ($opts{channels}) {
-    $opts{channels} = [ 0 .. $self->getchannels()-1 ];
-  }
+  my $type = $opts{type};
+  defined $type or $type = '8bit';
 
-  unless ($opts{type} && $opts{type} =~ /^(\d+)bit$/) {
-    $self->_set_error('setsamples: type parameter missing or invalid');
+  my $width = defined $opts{width} ? $opts{width}
+    : $self->getwidth() - $opts{x};
+
+  my $count;
+  if ($type eq '8bit') {
+    $count = i_psamp($self->{IMG}, $opts{x}, $opts{y}, $opts{channels},
+		     $data, $opts{offset}, $width);
+  }
+  elsif ($type eq 'float') {
+    $count = i_psampf($self->{IMG}, $opts{x}, $opts{y}, $opts{channels},
+		      $data, $opts{offset}, $width);
+  }
+  elsif ($type =~ /^([0-9]+)bit$/) {
+    my $bits = $1;
+
+    unless (ref $data) {
+      $self->_set_error("setsamples: data must be an array ref for type not 8bit or float");
+      return;
+    }
+
+    $count = i_psamp_bits($self->{IMG}, $opts{x}, $opts{y}, $bits,
+			  $opts{channels}, $data, $opts{offset}, 
+			  $width);
+  }
+  else {
+    $self->_set_error('setsamples: type parameter invalid');
     return;
   }
-  my $bits = $1;
 
-  unless (defined $opts{width}) {
-    $opts{width} = $self->getwidth() - $opts{x};
-  }
-
-  my $count = i_psamp_bits($self->{IMG}, $opts{x}, $opts{y}, $bits,
-			   $opts{channels}, $opts{data}, $opts{offset}, 
-			   $opts{width});
   unless (defined $count) {
     $self->_set_error(Imager->_error_as_msg);
     return;
@@ -4876,9 +4900,10 @@ Imager is licensed under the same terms as perl itself.
 =for stopwords
 makeblendedfont Fontforge
 
-A test font, FT2/fontfiles/MMOne.pfb, contains a Postscript operator
-definition copyrighted by Adobe.  See F<adobe.txt> in the source for
-license information.
+A test font, generated by the Debian packaged Fontforge,
+F<FT2/fontfiles/MMOne.pfb>, contains a Postscript operator definition
+copyrighted by Adobe.  See F<adobe.txt> in the source for license
+information.
 
 =head1 SEE ALSO
 
@@ -4894,6 +4919,10 @@ L<Affix::Infix2Postfix>(3), L<Parse::RecDescent>(3)
 
 Other perl imaging modules include:
 
-L<GD>(3), L<Image::Magick>(3), L<Graphics::Magick>(3).
+L<GD>(3), L<Image::Magick>(3), L<Graphics::Magick>(3),
+L<Prima::Image>, L<IPA>.
+
+If you're trying to use Imager for array processing, you should
+probably using L<PDL>.
 
 =cut

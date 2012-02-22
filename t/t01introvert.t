@@ -3,11 +3,11 @@
 # to make sure we get expected values
 
 use strict;
-use Test::More tests => 233;
+use Test::More tests => 431;
 
 BEGIN { use_ok(Imager => qw(:handy :all)) }
 
-use Imager::Test qw(image_bounds_checks is_color3 is_color4 is_fcolor4 color_cmp mask_tests);
+use Imager::Test qw(image_bounds_checks is_color3 is_color4 is_fcolor4 color_cmp mask_tests is_fcolor3);
 
 -d "testout" or mkdir "testout";
 
@@ -73,11 +73,11 @@ ok(!grep($_ != $red_idx, @pals[0..49]), "check for red");
 ok(!grep($_ != $blue_idx, @pals[50..99]), "check for blue");
 is(Imager::i_gpal($im_pal, 0, 100, 0), "\0" x 50 . "\2" x 50, 
    "gpal in scalar context");
-my @samp = Imager::i_gsamp($im_pal, 0, 100, 0, 0, 1, 2);
+my @samp = Imager::i_gsamp($im_pal, 0, 100, 0, [ 0, 1, 2 ]);
 is(@samp, 300, "gsamp count in list context");
 my @samp_exp = ((255, 0, 0) x 50, (0, 0, 255) x 50);
 is_deeply(\@samp, \@samp_exp, "gsamp list deep compare");
-my $samp = Imager::i_gsamp($im_pal, 0, 100, 0, 0, 1, 2);
+my $samp = Imager::i_gsamp($im_pal, 0, 100, 0, [ 0, 1, 2 ]);
 is(length($samp), 300, "gsamp scalar length");
 is($samp, "\xFF\0\0" x 50 . "\0\0\xFF" x 50, "gsamp scalar bytes");
 
@@ -125,7 +125,7 @@ is(Imager::i_img_type($im_pal), 0, "pal img shouldn't be paletted now");
   is_color3($colors[1], 0, 255, 0, "still green");
   is_color3($colors[2], 0, 0, 255, "still blue");
   is_color3($colors[3], 0, 0, 0, "still black");
-  is(Imager::i_gsamp($im_pal2, 0, 100, 0, 0, 1, 2),
+  is(Imager::i_gsamp($im_pal2, 0, 100, 0, [ 0, 1, 2 ]),
      "\0\xFF\0\0\0\0"."\xFF\0\0" x 48 . "\0\0\xFF" x 50,
      "colors are still correct");
 }
@@ -403,19 +403,222 @@ cmp_ok(Imager->errstr, '=~', qr/channels must be between 1 and 4/,
 	    [ map $_->rgba, Imager::i_glinf($im, 2, 9, 4) ],
 	    "check colors were written");
 
-  is_deeply([ Imager::i_gsamp($im, 0, 10, 0, (0, 3)) ],
+  is_deeply([ Imager::i_gsamp($im, 0, 10, 0, [ 0, 3 ]) ],
 	    [ (0, 0) x 5, (255, 255), (0, 0) x 4 ],
 	    "i_gsamp list context");
   is("0000" x 5 . "FFFF" . "0000" x 4,
-     uc unpack("H*", Imager::i_gsamp($im, 0, 10, 0, (0, 3))),
+     uc unpack("H*", Imager::i_gsamp($im, 0, 10, 0, [ 0, 3 ])),
      "i_gsamp scalar context");
-  is_deeply([ Imager::i_gsampf($im, 2, 9, 4, 0, 2, 3) ],
+  is_deeply([ Imager::i_gsampf($im, 2, 9, 4, [ 0, 2, 3 ]) ],
 	    [ (1.0, 0, 1.0) x 3, (0, 1.0, 1.0) x 2, (0, 0, 0),
 	      (1.0, 1.0, 1.0) ], "i_gsampf - list context");
-  is_deeply([ unpack("d*", Imager::i_gsampf($im, 2, 9, 4, 0, 2, 3)) ],
+  is_deeply([ unpack("d*", Imager::i_gsampf($im, 2, 9, 4, [ 0, 2, 3 ])) ],
 	    [ (1.0, 0, 1.0) x 3, (0, 1.0, 1.0) x 2, (0, 0, 0),
               (1.0, 1.0, 1.0) ], "i_gsampf - scalar context");
   print "# end low-level scan-line function tests\n";
+}
+
+my $psamp_outside_error = "Image position outside of image";
+{ # psamp
+  print "# psamp\n";
+  my $imraw = Imager::ImgRaw::new(10, 20, 3);
+  {
+    is(Imager::i_psamp($imraw, 0, 2, undef, [ 255, 128, 64 ]), 3,
+       "i_psamp def channels, 3 samples");
+    is_color3(Imager::i_get_pixel($imraw, 0, 2), 255, 128, 64,
+	      "check color written");
+    Imager::i_img_setmask($imraw, 5);
+    is(Imager::i_psamp($imraw, 1, 3, undef, [ 64, 128, 192 ]), 3,
+       "i_psamp def channels, 3 samples, masked");
+    is_color3(Imager::i_get_pixel($imraw, 1, 3), 64, 0, 192,
+	      "check color written");
+    is(Imager::i_psamp($imraw, 1, 7, [ 0, 1, 2 ], [ 64, 128, 192 ]), 3,
+       "i_psamp channels listed, 3 samples, masked");
+    is_color3(Imager::i_get_pixel($imraw, 1, 7), 64, 0, 192,
+	      "check color written");
+    Imager::i_img_setmask($imraw, ~0);
+    is(Imager::i_psamp($imraw, 2, 4, [ 0, 1 ], [ 255, 128, 64, 32 ]), 4,
+       "i_psamp channels [0, 1], 4 samples");
+    is_color3(Imager::i_get_pixel($imraw, 2, 4), 255, 128, 0,
+	      "check first color written");
+    is_color3(Imager::i_get_pixel($imraw, 3, 4), 64, 32, 0,
+	      "check second color written");
+    is(Imager::i_psamp($imraw, 0, 5, [ 0, 1, 2 ], [ (128, 63, 32) x 10 ]), 30,
+       "write a full row");
+    is_deeply([ Imager::i_gsamp($imraw, 0, 10, 5, [ 0, 1, 2 ]) ],
+	      [ (128, 63, 32) x 10 ],
+	      "check full row");
+    is(Imager::i_psamp($imraw, 8, 8, [ 0, 1, 2 ],
+		       [ 255, 128, 32, 64, 32, 16, 32, 16, 8 ]),
+       6, "i_psamp channels [0, 1, 2], 9 samples, but room for 6");
+    is(Imager::i_psamp($imraw, 4, 6, undef, [ 0 .. 18 ], 1), 18,
+       "psamp with offset");
+    is_deeply([ Imager::i_gsamp($imraw, 0, 10, 6, undef) ],
+	      [ (0) x 12, 1 .. 18 ],
+	      "check result");
+    is(Imager::i_psamp($imraw, 4, 11, undef, [ 0 .. 18 ], 1, 3), 9,
+       "psamp with offset and width");
+    is_deeply([ Imager::i_gsamp($imraw, 0, 10, 11, undef) ],
+	      [ (0) x 12, 1 .. 9, (0) x 9 ],
+	      "check result");
+  }
+  { # errors we catch
+    is(Imager::i_psamp($imraw, 6, 8, [ 0, 1, 3 ], [ 255, 128, 32 ]),
+       undef, "i_psamp channels [0, 1, 3], 3 samples (invalid channel number)");
+    is(_get_error(), "No channel 3 in this image",
+       "check error message");
+    is(Imager::i_psamp($imraw, 6, 8, [ 0, 1, -1 ], [ 255, 128, 32 ]),
+       undef, "i_psamp channels [0, 1, -1], 3 samples (invalid channel number)");
+    is(_get_error(), "No channel -1 in this image",
+       "check error message");
+    is(Imager::i_psamp($imraw, 0, -1, undef, [ 0, 0, 0 ]), undef,
+       "negative y");
+    is(_get_error(), $psamp_outside_error,
+       "check error message");
+    is(Imager::i_psamp($imraw, 0, 20, undef, [ 0, 0, 0 ]), undef,
+       "y overflow");
+    is(_get_error(), $psamp_outside_error,
+       "check error message");
+    is(Imager::i_psamp($imraw, -1, 0, undef, [ 0, 0, 0 ]), undef,
+       "negative x");
+    is(_get_error(), $psamp_outside_error,
+       "check error message");
+    is(Imager::i_psamp($imraw, 10, 0, undef, [ 0, 0, 0 ]), undef,
+       "x overflow");
+    is(_get_error(), $psamp_outside_error,
+       "check error message");
+  }
+  { # test the im_sample_list typemap
+    ok(!eval { Imager::i_psamp($imraw, 9, 9, [ 0 ], undef); 1 },
+       "pass undef as the sample list");
+    like($@, qr/data must be a scalar or an arrayref/,
+	 "check message");
+    ok(!eval { Imager::i_psamp($imraw, 9, 9, [ 0 ], { a => 1 }); 1 },
+       "hashref as the sample list");
+    like($@, qr/data must be a scalar or an arrayref/,
+	 "check message");
+    ok(!eval { Imager::i_psamp($imraw, 9, 9, [ 0 ], []); 1 },
+       "empty sample list");
+    like($@, qr/i_psamp: no samples provided in data/,
+	 "check message");
+    ok(!eval { Imager::i_psamp($imraw, 9, 9, [ 0 ], ""); 1 },
+       "empty scalar sample list");
+    like($@, qr/i_psamp: no samples provided in data/,
+	 "check message");
+
+    # not the typemap
+    is(Imager::i_psamp($imraw, 0, 8, undef, [ (0) x 3 ], -1), undef,
+       "negative offset");
+    is(_get_error(), "offset must be non-negative",
+       "check message");
+
+    is(Imager::i_psamp($imraw, 0, 8, undef, [ (0) x 3 ], 4), undef,
+       "too high offset");
+    is(_get_error(), "offset greater than number of samples supplied",
+       "check message");
+  }
+  print "# end psamp tests\n";
+}
+
+{ # psampf
+  print "# psampf\n";
+  my $imraw = Imager::ImgRaw::new(10, 20, 3);
+  {
+    is(Imager::i_psampf($imraw, 0, 2, undef, [ 1, 0.5, 0.25 ]), 3,
+       "i_psampf def channels, 3 samples");
+    is_color3(Imager::i_get_pixel($imraw, 0, 2), 255, 127, 63,
+	      "check color written");
+    Imager::i_img_setmask($imraw, 5);
+    is(Imager::i_psampf($imraw, 1, 3, undef, [ 0.25, 0.5, 0.75 ]), 3,
+       "i_psampf def channels, 3 samples, masked");
+    is_color3(Imager::i_get_pixel($imraw, 1, 3), 63, 0, 191,
+	      "check color written");
+    is(Imager::i_psampf($imraw, 1, 7, [ 0, 1, 2 ], [ 0.25, 0.5, 0.75 ]), 3,
+       "i_psampf channels listed, 3 samples, masked");
+    is_color3(Imager::i_get_pixel($imraw, 1, 7), 63, 0, 191,
+	      "check color written");
+    Imager::i_img_setmask($imraw, ~0);
+    is(Imager::i_psampf($imraw, 2, 4, [ 0, 1 ], [ 1, 0.5, 0.25, 0.125 ]), 4,
+       "i_psampf channels [0, 1], 4 samples");
+    is_color3(Imager::i_get_pixel($imraw, 2, 4), 255, 127, 0,
+	      "check first color written");
+    is_color3(Imager::i_get_pixel($imraw, 3, 4), 63, 31, 0,
+	      "check second color written");
+    is(Imager::i_psampf($imraw, 0, 5, [ 0, 1, 2 ], [ (0.5, 0.25, 0.125) x 10 ]), 30,
+       "write a full row");
+    is_deeply([ Imager::i_gsamp($imraw, 0, 10, 5, [ 0, 1, 2 ]) ],
+	      [ (127, 63, 31) x 10 ],
+	      "check full row");
+    is(Imager::i_psampf($imraw, 8, 8, [ 0, 1, 2 ],
+			[ 1.0, 0.5, 0.125, 0.25, 0.125, 0.0625, 0.125, 0, 1 ]),
+       6, "i_psampf channels [0, 1, 2], 9 samples, but room for 6");
+    is(Imager::i_psampf($imraw, 4, 6, undef, [ map $_/254.9, 0 .. 18 ], 1), 18,
+       "psampf with offset");
+    is_deeply([ Imager::i_gsamp($imraw, 0, 10, 6, undef) ],
+	      [ (0) x 12, 1 .. 18 ],
+	      "check result");
+    is(Imager::i_psampf($imraw, 4, 11, undef, [ map $_/254.9, 0 .. 18 ], 1, 3), 9,
+       "psampf with offset and width");
+    is_deeply([ Imager::i_gsamp($imraw, 0, 10, 11, undef) ],
+	      [ (0) x 12, 1 .. 9, (0) x 9 ],
+	      "check result");
+  }
+  { # errors we catch
+    is(Imager::i_psampf($imraw, 6, 8, [ 0, 1, 3 ], [ 1, 0.5, 0.125 ]),
+       undef, "i_psampf channels [0, 1, 3], 3 samples (invalid channel number)");
+    is(_get_error(), "No channel 3 in this image",
+       "check error message");
+    is(Imager::i_psampf($imraw, 6, 8, [ 0, 1, -1 ], [ 1, 0.5, 0.125 ]),
+       undef, "i_psampf channels [0, 1, -1], 3 samples (invalid channel number)");
+    is(_get_error(), "No channel -1 in this image",
+       "check error message");
+    is(Imager::i_psampf($imraw, 0, -1, undef, [ 0, 0, 0 ]), undef,
+       "negative y");
+    is(_get_error(), $psamp_outside_error,
+       "check error message");
+    is(Imager::i_psampf($imraw, 0, 20, undef, [ 0, 0, 0 ]), undef,
+       "y overflow");
+    is(_get_error(), $psamp_outside_error,
+       "check error message");
+    is(Imager::i_psampf($imraw, -1, 0, undef, [ 0, 0, 0 ]), undef,
+       "negative x");
+    is(_get_error(), $psamp_outside_error,
+       "check error message");
+    is(Imager::i_psampf($imraw, 10, 0, undef, [ 0, 0, 0 ]), undef,
+       "x overflow");
+    is(_get_error(), $psamp_outside_error,
+       "check error message");
+  }
+  { # test the im_fsample_list typemap
+    ok(!eval { Imager::i_psampf($imraw, 9, 9, [ 0 ], undef); 1 },
+       "pass undef as the sample list");
+    like($@, qr/data must be a scalar or an arrayref/,
+	 "check message");
+    ok(!eval { Imager::i_psampf($imraw, 9, 9, [ 0 ], { a => 1 }); 1 },
+       "hashref as the sample list");
+    like($@, qr/data must be a scalar or an arrayref/,
+	 "check message");
+    ok(!eval { Imager::i_psampf($imraw, 9, 9, [ 0 ], []); 1 },
+       "empty sample list");
+    like($@, qr/i_psampf: no samples provided in data/,
+	 "check message");
+    ok(!eval { Imager::i_psampf($imraw, 9, 9, [ 0 ], ""); 1 },
+       "empty scalar sample list");
+    like($@, qr/i_psampf: no samples provided in data/,
+	 "check message");
+
+    # not the typemap
+    is(Imager::i_psampf($imraw, 0, 8, undef, [ (0) x 3 ], -1), undef,
+       "negative offset");
+    is(_get_error(), "offset must be non-negative",
+       "check message");
+
+    is(Imager::i_psampf($imraw, 0, 8, undef, [ (0) x 3 ], 4), undef,
+       "too high offset");
+    is(_get_error(), "offset greater than number of samples supplied",
+       "check message");
+  }
+  print "# end psampf tests\n";
 }
 
 {
@@ -511,6 +714,37 @@ cmp_ok(Imager->errstr, '=~', qr/channels must be between 1 and 4/,
   print "# end OO level scanline function tests\n";
 }
 
+{ # RT 74882
+  # for the non-gsamp_bits case with a target parameter it was
+  # treating the target parameter as a hashref
+  {
+    my $im = Imager->new(xsize => 10, ysize => 10);
+    my $c1 = NC(0, 63, 255);
+    my $c2 = NC(255, 128, 255);
+    is($im->setscanline(y => 1, pixels => [ ( $c1, $c2 ) x 5 ]),
+       10, "set some test data")
+      or diag "setscanline: ", $im->errstr;
+    my @target;
+    is($im->getsamples(y => 1, x => 1, target => \@target, width => 3),
+       9, "getsamples to target");
+    is_deeply(\@target, [ 255, 128, 255, 0, 63, 255, 255, 128, 255 ],
+	      "check result");
+  }
+  {
+    my $im = Imager->new(xsize => 10, ysize => 10, bits => "double");
+    my $c1 = NCF(0, 0.25, 1.0);
+    my $c2 = NCF(1.0, 0.5, 1.0);
+    is($im->setscanline(y => 1, pixels => [ ( $c1, $c2 ) x 5 ]),
+       10, "set some test data")
+      or diag "setscanline: ", $im->errstr;
+    my @target;
+    is($im->getsamples(y => 1, x => 1, target => \@target, width => 3, type => "float"),
+       9, "getsamples to target");
+    is_deeply(\@target, [ 1.0, 0.5, 1.0, 0, 0.25, 1.0, 1.0, 0.5, 1.0 ],
+	      "check result");
+  }
+}
+
 { # to avoid confusion, i_glin/i_glinf modified to return 0 in unused
   # channels at the perl level
   my $im = Imager->new(xsize => 4, ysize => 4, channels => 2);
@@ -551,6 +785,280 @@ cmp_ok(Imager->errstr, '=~', qr/channels must be between 1 and 4/,
   image_bounds_checks($im);
 }
 
+{ # setsamples() interface to psamp()
+  my $im = Imager->new(xsize => 10, ysize => 10);
+  is($im->setsamples(y => 1, x => 2, data => [ 1 .. 6 ]), 6,
+     "simple put (array), default channels");
+  is_deeply([ $im->getsamples(y => 1, x => 0) ],
+	    [ (0) x 6, 1 .. 6, (0) x 18 ], "check they were stored");
+  is($im->setsamples(y => 3, x => 3, data => pack("C*", 2 .. 10 )), 9,
+     "simple put (scalar), default channels")
+    or diag $im->errstr;
+  is_deeply([ $im->getsamples(y => 3, x => 0) ],
+	    [ (0) x 9, 2 .. 10, (0) x 12 ], "check they were stored");
+  is($im->setsamples(y => 4, x => 4, data => [ map $_ / 254.5, 1 .. 6 ], type => 'float'),
+     6, "simple put (float array), default channels");
+  is_deeply([ $im->getsamples(y => 4, x => 0) ],
+	    [ (0) x 12, 1 .. 6, (0) x 12 ], "check they were stored");
+
+  is($im->setsamples(y => 5, x => 3, data => pack("d*", map $_ / 254.5, 1 .. 6), type => 'float'),
+     6, "simple put (float scalar), default channels");
+  is_deeply([ $im->getsamples(y => 5, x => 0) ],
+	    [ (0) x 9, 1 .. 6, (0) x 15 ], "check they were stored");
+
+  is($im->setsamples(y => 7, x => 3, data => [ 0 .. 18 ], offset => 1), 18,
+     "setsamples offset");
+  is_deeply([ $im->getsamples(y => 7) ],
+	    [ (0) x 9, 1 .. 18, (0) x 3 ],
+	    "check result");
+
+  is($im->setsamples(y => 8, x => 3, data => [ map $_ / 254.9, 0 .. 18 ],
+		     offset => 1, type => 'float'),
+     18, "setsamples offset (float)");
+  is_deeply([ $im->getsamples(y => 8) ],
+	    [ (0) x 9, 1 .. 18, (0) x 3 ],
+	    "check result");
+
+  is_deeply([ $im->setsamples(y => 6, x => 10, data => [ (0) x 3 ]) ],
+	    [], "check out of range result (8bit)");
+  is($im->errstr, $psamp_outside_error, "check error message");
+
+  is_deeply([ $im->setsamples(y => 6, x => 10, data => [ (0) x 3 ], type => "float") ],
+	    [], "check out of range result (float)");
+  is($im->errstr, $psamp_outside_error, "check error message");
+
+  is_deeply([ $im->setsamples(y => 6, x => 2, channels => [0, 1, 3 ],
+			      data => [ (0) x 3 ]) ],
+	    [], "check bad channels (8bit)");
+  is($im->errstr, "No channel 3 in this image",
+     "check error message");
+  
+  is_deeply([ $im->setsamples(y => 6, x => 2, channels => [0, 1, 3 ], 
+			      data => [ (0) x 3 ], type => "float") ],
+	    [], "check bad channels (float)");
+  is($im->errstr, "No channel 3 in this image",
+     "check error message");
+
+  is($im->setsamples(y => 5, data => [ (0) x 3 ], type => "bad"),
+     undef, "setsamples with bad type");
+  is($im->errstr, "setsamples: type parameter invalid",
+     "check error message");
+  is($im->setsamples(y => 5),
+     undef, "setsamples with no data");
+  is($im->errstr, "setsamples: data parameter missing",
+     "check error message");
+
+  my $imempty = Imager->new;
+  is($imempty->setsamples(y => 0, data => [ (0) x 3 ]), undef,
+     "setsamples to empty image");
+  is($imempty->errstr, "setsamples: empty input image",
+     "check error message");
+}
+
+{ # getpixel parameters
+  my $im = Imager->new(xsize => 10, ysize => 10);
+  $im->box(filled => 1, xmax => 4, color => NC(255, 0, 0));
+  $im->box(filled => 1, xmin => 5, ymax => 4, color => NC(0, 255, 255));
+  $im->box(filled => 1, xmin => 5, ymin => 5, color => NC(255, 0, 255));
+  { # error handling
+    my $empty = Imager->new;
+    ok(!$empty->getpixel(x => 0, y => 0), "getpixel empty image");
+    is($empty->errstr, "getpixel: empty input image", "check message");
+
+    ok(!$im->getpixel(y => 0), "missing x");
+    is($im->errstr, "getpixel: missing x or y parameter", "check message");
+
+    $im->_set_error("something different");
+    ok(!$im->getpixel(x => 0), "missing y");
+    is($im->errstr, "getpixel: missing x or y parameter", "check message");
+
+    ok(!$im->getpixel(x => [], y => 0), "empty x array ref");
+    is($im->errstr, "getpixel: x is a reference to an empty array",
+       "check message");
+
+    ok(!$im->getpixel(x => 0, y => []), "empty y array ref");
+    is($im->errstr, "getpixel: y is a reference to an empty array",
+       "check message");
+
+    ok(!$im->getpixel(x => 0, y => 0, type => "bad"), "bad type (scalar path)");
+    is($im->errstr, "getpixel: type must be '8bit' or 'float'",
+      "check message");
+
+    $im->_set_error("something different");
+    ok(!$im->getpixel(x => [ 0 ], y => [ 0 ], type => "bad"),
+       "bad type (array path)");
+    is($im->errstr, "getpixel: type must be '8bit' or 'float'",
+      "check message");
+  }
+
+  # simple calls
+  is_color3($im->getpixel(x => 1, y => 0), 255, 0, 0,
+	    "getpixel(1, 0)");
+  is_color3($im->getpixel(x => 8, y => 1), 0, 255, 255,
+	    "getpixel(8, 1)");
+  is_color3($im->getpixel(x => 8, y => 7), 255, 0, 255,
+	    "getpixel(8, 7)");
+
+  {
+    # simple arrayrefs
+    my @colors = $im->getpixel(x => [ 0, 8, 7 ], y => [ 0, 7, 3 ]);
+    is(@colors, 3, "getpixel 2 3 element array refs");
+    is_color3($colors[0], 255, 0, 0, "check first color");
+    is_color3($colors[1], 255, 0, 255, "check second color");
+    is_color3($colors[2], 0, 255, 255, "check third color");
+  }
+  
+  # array and scalar
+  {
+    my @colors = $im->getpixel(x => 5, y => [ 4, 5, 9 ]);
+    is(@colors, 3, "getpixel x scalar, y arrayref of 3");
+    is_color3($colors[0], 0, 255, 255, "check first color");
+    is_color3($colors[1], 255, 0, 255, "check second color");
+    is_color3($colors[2], 255, 0, 255, "check third color");
+  }
+
+  {
+    my @colors = $im->getpixel(x => [ 0, 4, 5 ], y => 2);
+    is(@colors, 3, "getpixel y scalar, x arrayref of 3");
+    is_color3($colors[0], 255, 0, 0, "check first color");
+    is_color3($colors[1], 255, 0, 0, "check second color");
+    is_color3($colors[2], 0, 255, 255, "check third color");
+  }
+
+  { # float
+    is_fcolor3($im->getpixel(x => 1, y => 0, type => 'float'),
+	       1.0, 0, 0, "getpixel(1,0) float");
+    is_fcolor3($im->getpixel(x => 8, y => 1, type => 'float'),
+	       0, 1.0, 1.0, "getpixel(8,1) float");
+    is_fcolor3($im->getpixel(x => 8, y => 7, type => 'float'),
+	       1.0, 0, 1.0, "getpixel(8,7) float");
+
+    my @colors = $im->getpixel(x => [ 0, 8, 7 ], y => [ 0, 7, 3 ], type => 'float');
+    is(@colors, 3, "getpixel 2 3 element array refs (float)");
+    is_fcolor3($colors[0], 1, 0, 0, "check first color");
+    is_fcolor3($colors[1], 1, 0, 1, "check second color");
+    is_fcolor3($colors[2], 0, 1, 1, "check third color");
+  }
+
+  { # out of bounds
+    my @colors = $im->getpixel(x => [ 0, -1, 5, 10 ], y => 0);
+    is(@colors, 4, "should be 4 entries")
+      or diag $im->errstr;
+    is_color3($colors[0], 255, 0, 0, "first red");
+    is($colors[1], undef, "second undef");
+    is_color3($colors[2], 0, 255, 255, "third cyan");
+    is($colors[3], undef, "fourth undef");
+  }
+
+  { # out of bounds
+    my @colors = $im->getpixel(x => [ 0, -1, 5, 10 ], y => 0, type => "float");
+    is(@colors, 4, "should be 4 entries")
+      or diag $im->errstr;
+    is_fcolor3($colors[0], 1.0, 0, 0, "first red");
+    is($colors[1], undef, "second undef");
+    is_fcolor3($colors[2], 0, 1.0, 1.0, "third cyan");
+    is($colors[3], undef, "fourth undef");
+  }
+}
+
+{ # setpixel
+  my $im = Imager->new(xsize => 10, ysize => 10);
+  { # errors
+    my $empty = Imager->new;
+    ok(!$empty->setpixel(x => 0, y => 0, color => $red),
+       "setpixel on empty image");
+    is($empty->errstr, "setpixel: empty input image", "check message");
+
+    ok(!$im->setpixel(y => 0, color => $red), "missing x");
+    is($im->errstr, "setpixel: missing x or y parameter", "check message");
+
+    $im->_set_error("something different");
+    ok(!$im->setpixel(x => 0, color => $red), "missing y");
+    is($im->errstr, "setpixel: missing x or y parameter", "check message");
+
+    ok(!$im->setpixel(x => [], y => 0, color => $red), "empty x array ref");
+    is($im->errstr, "setpixel: x is a reference to an empty array",
+       "check message");
+
+    ok(!$im->setpixel(x => 0, y => [], color => $red), "empty y array ref");
+    is($im->errstr, "setpixel: y is a reference to an empty array",
+       "check message");
+
+    ok(!$im->setpixel(x => 0, y => 0, color => "not really a color"),
+       "color not a color");
+    is($im->errstr, "setpixel: No color named not really a color found",
+       "check message");
+  }
+
+  # simple set
+  is($im->setpixel(x => 0, y => 0, color => $red), $im,
+     "simple setpixel")
+    or diag "simple set float: ", $im->errstr;
+  is_color3($im->getpixel(x => 0, y => 0), 255, 0, 0, "check stored pixel");
+
+  is($im->setpixel(x => 1, y => 2, color => $f_red), $im,
+     "simple setpixel (float)")
+    or diag "simple set float: ", $im->errstr;
+  is_color3($im->getpixel(x => 1, y => 2), 255, 0, 0, "check stored pixel");
+
+  is($im->setpixel(x => -1, y => 0, color => $red), undef,
+     "simple setpixel outside of image");
+  is($im->setpixel(x => 0, y => -1, color => $f_red), undef,
+     "simple setpixel (float) outside of image");
+
+  # simple arrayrefs
+  is($im->setpixel( x => [ 0, 8, 7 ], y => [ 0, 7, 3 ], color => $blue),
+     3, "setpixel with 3 element array refs");
+  my @colors = $im->getpixel(x => [ 8, 7, 0 ], y => [ 7, 3, 0 ]);
+  is_color3($colors[0], 0, 0, 255, "check first color");
+  is_color3($colors[1], 0, 0, 255, "check second color");
+  is_color3($colors[2], 0, 0, 255, "check third color");
+
+  # array and scalar
+  {
+    is($im->setpixel(x => 5, y => [ 4, 5, 9 ], color => $green), 3,
+       "setpixel with x scalar, y arrayref of 3");
+    my @colors = $im->getpixel(x => [ 5, 5, 5 ], y => [ 4, 5, 9 ]);
+    is_color3($colors[0], 0, 255, 0, "check first color");
+    is_color3($colors[1], 0, 255, 0, "check second color");
+    is_color3($colors[2], 0, 255, 0, "check third color");
+  }
+
+  {
+    is($im->setpixel(x => [ 0, 4, 5 ], y => 2, color => $blue), 3,
+       "setpixel with y scalar, x arrayref of 3");
+    my @colors = $im->getpixel(x => [ 0, 4, 5 ], y => [ 2, 2, 2 ]);
+    is_color3($colors[0], 0, 0, 255, "check first color");
+    is_color3($colors[1], 0, 0, 255, "check second color");
+    is_color3($colors[2], 0, 0, 255, "check third color");
+  }
+
+  {
+    is($im->setpixel(x => [ 0, -1, 10, 5, 0 ], y => [ 0, 1, 2, 3, 1 ], color => $blue), 3,
+       "set array with two bad locations")
+      or diag "set array bad locations: ", $im->errstr;
+    my @colors = $im->getpixel(x => [ 0, 5, 0 ], y => [ 0, 3, 1 ]);
+    is_color3($colors[0], 0, 0, 255, "check first color");
+    is_color3($colors[1], 0, 0, 255, "check second color");
+    is_color3($colors[2], 0, 0, 255, "check third color");
+  }
+  {
+    is($im->setpixel(x => [ 0, -1, 10, 5, 0 ], y => [ 0, 1, 2, 3, 1 ], color => $f_green), 3,
+       "set array with two bad locations (float)")
+      or diag "set array bad locations (float): ", $im->errstr;
+    my @colors = $im->getpixel(x => [ 0, 5, 0 ], y => [ 0, 3, 1 ]);
+    is_color3($colors[0], 0, 255, 0, "check first color");
+    is_color3($colors[1], 0, 255, 0, "check second color");
+    is_color3($colors[2], 0, 255, 0, "check third color");
+  }
+  { # default color
+    is($im->setpixel(x => 0, y => 9), $im, "setpixel() default color")
+      or diag "setpixel default color: ", $im->errstr;
+    is_color3($im->getpixel(x => 0, y => 9), 255, 255, 255,
+	      "check color set");
+  }
+}
+
 Imager->close_log();
 
 unless ($ENV{IMAGER_KEEP_FILES}) {
@@ -584,4 +1092,9 @@ sub dump_colors {
   for my $col (@_) {
     print "# ", map(sprintf("%02X", $_), ($col->rgba)[0..2]),"\n";
   }
+}
+
+sub _get_error {
+  my @errors = Imager::i_errors();
+  return join(": ", map $_->[0], @errors);
 }
