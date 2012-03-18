@@ -148,16 +148,9 @@ BEGIN {
   if ($ex_version < 5.57) {
     @ISA = qw(Exporter);
   }
-  $VERSION = '0.88';
-  eval {
-    require XSLoader;
-    XSLoader::load(Imager => $VERSION);
-    1;
-  } or do {
-    require DynaLoader;
-    push @ISA, 'DynaLoader';
-    bootstrap Imager $VERSION;
-  }
+  $VERSION = '0.89';
+  require XSLoader;
+  XSLoader::load(Imager => $VERSION);
 }
 
 my %formats_low;
@@ -4463,7 +4456,7 @@ getcolorusage() - L<Imager::ImageTypes/getcolorusage()>
 
 getcolorusagehash() - L<Imager::ImageTypes/getcolorusagehash()>
 
-get_file_limits() - L<Imager::Files/"Limiting the sizes of images you read">
+get_file_limits() - L<Imager::Files/get_file_limits()>
 
 getheight() - L<Imager::ImageTypes/getheight()> - height of the image in
 pixels
@@ -4504,7 +4497,7 @@ log.
 make_palette() - L<Imager::ImageTypes/make_palette()> - produce a
 color palette from one or more input images.
 
-map() - L<Imager::Transformations/"Color Mappings"> - remap color
+map() - L<Imager::Transformations/map()> - remap color
 channel values
 
 masked() -  L<Imager::ImageTypes/masked()> - make a masked image
@@ -4527,7 +4520,7 @@ newfont() - L<Imager::Handy/newfont()>
 
 NF() - L<Imager::Handy/NF()>
 
-open() - L<Imager::Files> - an alias for read()
+open() - L<Imager::Files/read()> - an alias for read()
 
 open_log() - L<Imager::ImageTypes/open_log()> - open the debug log.
 
@@ -4575,7 +4568,7 @@ scaleY() - L<Imager::Transformations/scaleY()>
 setcolors() - L<Imager::ImageTypes/setcolors()> - set palette colors
 in a paletted image
 
-set_file_limits() - L<Imager::Files/"Limiting the sizes of images you read">
+set_file_limits() - L<Imager::Files/set_file_limits()>
 
 setmask() - L<Imager::ImageTypes/setmask()>
 

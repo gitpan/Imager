@@ -1,5 +1,30 @@
 Imager release history.  Older releases can be found in Changes.old
 
+Imager 0.89 - 18 Mar 2012
+===========
+
+Bug fixes:
+
+ - getpixel(..., type => "float") and the API i_gpixf() have been
+   broken on paletted images since they were implemented.
+   https://rt.cpan.org/Ticket/Display.html?id=75258
+
+Other changes:
+
+ - links in the METHOD INDEX now point at the method documentation
+   rather than the heading you can find them under.
+   https://rt.cpan.org/Ticket/Display.html?id=71495
+
+ - Imager (and the bundled dynamic modules) no longer fallback to
+   using DynaLoader if loading via XSLoader fails.
+   For the bundled modules this could hide useful error messages.
+   https://rt.cpan.org/Ticket/Display.html?id=75560
+
+ - IM_DEBUG_MALLOC mymalloc() no longer sn?printfs() a string to a
+   buffer in the array of allocations, but just stores the filename
+   pointer and line number.
+   https://rt.cpan.org/Ticket/Display.html?id=70388
+
 Imager 0.88 - 22 Feb 2012
 ===========
 
