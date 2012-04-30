@@ -38,7 +38,7 @@ else {
   $opts{TYPEMAPS} = [ Imager::ExtUtils->typemap ];
 
   # Imager required configure through use
-  my @Imager_req = ( Imager => "0.86" );
+  my @Imager_req = ( Imager => "0.90" );
   if ($MM_ver >= 6.46) {
     $opts{META_MERGE} =
       {
@@ -68,11 +68,35 @@ else {
 
 require Imager::Probe;
 
+my @alts =
+  (
+   {
+    altname => "v1.5",
+    incsuffix => "libpng15",
+    libbase => "png15",
+   },
+   {
+    altname => "v1.4",
+    incsuffix => "libpng14",
+    libbase => "png14",
+   },
+   {
+    altname => "v1.2",
+    incsuffix => "libpng12",
+    libbase => "png12",
+   },
+   {
+    altname => "v1.0",
+    incsuffix => "libpng10",
+    libbase => "png10",
+   },
+  );
+
 my %probe =
   (
    name => "PNG",
    altname => "Generic",
-   pkg => [ qw/libpng14 libpng12 libpng10 libpng/ ],
+   pkg => [ qw/libpng15 libpng14 libpng12 libpng10 libpng/ ],
    inccheck => sub { -e File::Spec->catfile($_[0], "png.h") },
    libbase => "png",
    testcode => _png_test_code(),
@@ -81,21 +105,18 @@ my %probe =
    libpath => \@libpaths,
    alternatives =>
    [
+    @alts,
     {
-     altname => "v1.4",
-     incsuffix => "libpng14",
-     libbase => "png14",
+     altname => "base (+libz)",
+     libbase => [ "png", "z" ],
     },
-    {
-     altname => "v1.2",
-     incsuffix => "libpng12",
-     libbase => "png12",
-    },
-    {
-     altname => "v1.0",
-     incsuffix => "libpng10",
-     libbase => "png10",
-    },
+    ( # a static libpng may require libz too
+     map +{
+	   %$_,
+	   altname => "$_->{altname} (+libz)",
+	   libbase => [ $_->{libbase}, "z" ],
+	  }, @alts
+    ),
    ],
   );
 

@@ -1,5 +1,88 @@
 Imager release history.  Older releases can be found in Changes.old
 
+Imager 0.90 - unreleased
+===========
+
+Bug fixes:
+
+ - Imager::Test::is_imaged() attempted to process an "epsilon"
+   parameter but the prototype didn't allow for the extra parameter.
+   Corrected the prototype.
+
+ - when downconverting samples (eg. from floating point to 8 bit)
+   Imager now rounds the sample value rather than attempting to
+   allocate input values over output values equally.  The old
+   behaviour had the probably surprising effect of converting a
+   floating point 2.1/255.0 into an 8-bit 3 rather than the expected
+   2.
+   This may result in slightly different 8 or 16-bit output images.
+
+ - BI_BITFIELD BMP images were handled incorrectly, both in
+   incorrectly calculating the space required for the masks and in
+   processing the image data itself.
+   https://rt.cpan.org/Ticket/Display.html?id=76736
+
+ - some odd width BMP BI_RLE4 images use run lengths that run one off
+   the edge of the image.  Imager now allows this, discarding the
+   extra column.
+
+ - odd length RLE4 runs in BMP images were decoded incorrectly.
+
+ - pkg-config could sometimes return a library that was in a directory
+   EU::MM / $Config{libpth} doesn't know about, but the compiler did.
+   If no -L is included in the pkg-config library information check if
+   EU::MM can find the library, and if not, search our configured
+   directories and insert that into the library flags.
+   https://rt.cpan.org/Ticket/Display.html?id=75869
+
+ - Imager::Probe can now probe for libraries with dependent libraries,
+   common for static linking, eg. libpng requires libz.
+   https://rt.cpan.org/Ticket/Display.html?id=74043
+
+ - libpng 1.5 specific probes were looking for libpng 1.4 filenames.
+
+ - added alternative probe configurations that try to link libz, to
+   handle a statically linked libpng.
+   https://rt.cpan.org/Ticket/Display.html?id=74043
+
+ - if a probe includes testcode, Imager::Probe now checks that code as
+   part of the process of checking each configuration rather than as a
+   post test of the found configuration.  This allows alternate
+   configurations to be checked if a matching but non-working
+   configuration is found.
+   https://rt.cpan.org/Ticket/Display.html?id=74043
+
+Other changes:
+
+ - when reading or writing images via callbacks, the default callbacks
+   now push an error message indicating that a required callback was
+   called but not supplied.
+   https://rt.cpan.org/Ticket/Display.html?id=76782
+
+ - clarify which callbacks are required for reading and writing TIFF
+   images.
+
+ - improve logging for creation of callback I/O layers.
+
+ - a little more documentation for Imager::Probe.
+
+ - the i_get_file_background() and i_get_file_backgroundf() APIs now
+   return int to indicate whether the i_background tag was found.
+
+ - PNG rework
+   - improve error reporting
+   - add png_interlace, png_bits tags
+   - read paletted images as paletted images, including transparency
+   - read 1 bit greyscale images as a type suitable for other file
+     handlers to write as bilevel
+   - read 16 bit/sample PNG as 16-bit/sample Imager images
+   - write "bilevel" paletted images as 1 bit grayscale images
+   - write paletted images as paletted images
+   - write 16-bit (or higher)/sample images as 16-bit/sample PNG
+     images
+   - improved metadata support
+   https://rt.cpan.org/Ticket/Display.html?id=29268
+
 Imager 0.89 - 18 Mar 2012
 ===========
 
