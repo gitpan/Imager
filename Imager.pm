@@ -148,7 +148,7 @@ BEGIN {
   if ($ex_version < 5.57) {
     @ISA = qw(Exporter);
   }
-  $VERSION = '0.90';
+  $VERSION = '0.91';
   require XSLoader;
   XSLoader::load(Imager => $VERSION);
 }
@@ -913,8 +913,8 @@ sub img_set {
     $self->{IMG} = i_img_16_new($hsh{xsize}, $hsh{ysize}, $hsh{channels});
   }
   else {
-    $self->{IMG}=Imager::ImgRaw::new($hsh{'xsize'}, $hsh{'ysize'},
-                                     $hsh{'channels'});
+    $self->{IMG}= i_img_8_new($hsh{'xsize'}, $hsh{'ysize'},
+			      $hsh{'channels'});
   }
 
   unless ($self->{IMG}) {
@@ -1605,10 +1605,11 @@ sub _load_file {
       return 1;
     }
     else {
-      my $work = $@ || "Unknown error loading $file";
+      my $work = $@ || "Unknown error";
       chomp $work;
       $work =~ s/\n?Compilation failed in require at .*Imager\.pm line .*\z//m;
       $work =~ s/\n/\\n/g;
+      $work =~ s/\s*\.?\z/ loading $file/;
       $file_load_errors{$file} = $work;
       $$error = $work;
       return 0;
@@ -2631,7 +2632,7 @@ sub rotate {
     }
   }
   elsif (defined $opts{radians} || defined $opts{degrees}) {
-    my $amount = $opts{radians} || $opts{degrees} * 3.1415926535 / 180;
+    my $amount = $opts{radians} || $opts{degrees} * 3.14159265358979 / 180;
 
     my $back = $opts{back};
     my $result = Imager->new;
@@ -3899,6 +3900,41 @@ sub get_file_limits {
   i_get_image_file_limits();
 }
 
+my @check_args = qw(width height channels sample_size);
+
+sub check_file_limits {
+  my $class = shift;
+
+  my %opts =
+    (
+     channels => 3,
+     sample_size => 1,
+     @_,
+    );
+
+  if ($opts{sample_size} && $opts{sample_size} eq 'float') {
+    $opts{sample_size} = length(pack("d", 0));
+  }
+
+  for my $name (@check_args) {
+    unless (defined $opts{$name}) {
+      $class->_set_error("check_file_limits: $name must be defined");
+      return;
+    }
+    unless ($opts{$name} == int($opts{$name})) {
+      $class->_set_error("check_file_limits: $name must be a positive integer");
+      return;
+    }
+  }
+
+  my $result = i_int_check_image_file_limits(@opts{@check_args});
+  unless ($result) {
+    $class->_set_error($class->_error_as_msg());
+  }
+
+  return $result;
+}
+
 # Shortcuts that can be exported
 
 sub newcolor { Imager::Color->new(@_); }
@@ -4328,6 +4364,10 @@ L<Imager::Inline> - using Imager's C API from Inline::C
 
 L<Imager::ExtUtils> - tools to get access to Imager's C API.
 
+=item *
+
+L<Imager::Security> - brief security notes.
+
 =back
 
 =head2 Basic Overview
@@ -4396,6 +4436,8 @@ bits() - L<Imager::ImageTypes/bits()> - number of bits per sample for the
 image
 
 box() - L<Imager::Draw/box()> - draw a filled or outline box.
+
+check_file_limits() - L<Imager::Files/check_file_limits()>
 
 circle() - L<Imager::Draw/circle()> - draw a filled circle
 
@@ -4746,6 +4788,8 @@ RGB (SGI) files - L<Imager::Files/"SGI (RGB, BW)">
 saving an image - L<Imager::Files>
 
 scaling - L<Imager::Transformations/scale()>
+
+security - L<Imager::Security>
 
 SGI files - L<Imager::Files/"SGI (RGB, BW)">
 

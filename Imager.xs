@@ -835,6 +835,9 @@ static im_pl_ext_funcs im_perl_funcs =
 #define PERL_PL_SET_GLOBAL_CALLBACKS \
   sv_setiv(get_sv(PERL_PL_FUNCTION_TABLE_NAME, 1), PTR2IV(&im_perl_funcs));
 
+#define IIM_new i_img_8_new
+#define IIM_DESTROY i_img_destroy
+
 #ifdef IMEXIF_ENABLE
 #define i_exif_enabled() 1
 #else
@@ -1055,6 +1058,14 @@ i_get_image_file_limits()
           PUSHs(sv_2mortal(newSViv(height)));
           PUSHs(sv_2mortal(newSVuv(bytes)));
         }
+
+bool
+i_int_check_image_file_limits(width, height, channels, sample_size)
+	i_img_dim width
+	i_img_dim height
+	int channels
+	size_t sample_size
+  PROTOTYPE: DISABLE
 
 MODULE = Imager		PACKAGE = Imager::IO	PREFIX = io_
 
@@ -3669,6 +3680,12 @@ i_glinf(im, l, r, y)
           }
           myfree(vals);
         }
+
+Imager::ImgRaw
+i_img_8_new(x, y, ch)
+        i_img_dim x
+        i_img_dim y
+        int ch
 
 Imager::ImgRaw
 i_img_16_new(x, y, ch)
