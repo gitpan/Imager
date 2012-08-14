@@ -24,11 +24,6 @@ use Imager::Font;
 		i_color_set
 		i_color_info
 
-		i_img_empty
-		i_img_empty_ch
-		i_img_exorcise
-		i_img_destroy
-
 		i_img_info
 
 		i_img_setmask
@@ -148,7 +143,7 @@ BEGIN {
   if ($ex_version < 5.57) {
     @ISA = qw(Exporter);
   }
-  $VERSION = '0.91';
+  $VERSION = '0.92';
   require XSLoader;
   XSLoader::load(Imager => $VERSION);
 }

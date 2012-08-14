@@ -91,6 +91,8 @@ i_colortable_copy(int **colour_table, int *colours, ColorMapObject *colourmap) {
   }
 }
 
+#ifdef GIF_LIB_VERSION
+
 static const
 char gif_version_str[] = GIF_LIB_VERSION;
 
@@ -106,6 +108,15 @@ i_giflib_version(void) {
 
   return strtod(p, NULL);
 }
+
+#else
+
+double
+i_giflib_version(void) {
+  return GIFLIB_MAJOR + GIFLIB_MINOR * 0.1;
+}
+
+#endif
 
 /*
 =item i_readgif_low(GifFileType *GifFile, int **colour_table, int *colours)
@@ -912,14 +923,13 @@ Returns NULL if the page isn't found.
 
 i_img *
 i_readgif_single_wiol(io_glue *ig, int page) {
-  i_clear_error();
+  GifFileType *GifFile;
 
+  i_clear_error();
   if (page < 0) {
     i_push_error(0, "page must be non-negative");
     return NULL;
   }
-
-  GifFileType *GifFile;
 
   if ((GifFile = DGifOpen((void *)ig, io_glue_read_cb )) == NULL) {
     gif_push_error();
