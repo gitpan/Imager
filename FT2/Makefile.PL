@@ -89,6 +89,7 @@ my %probe =
      incsuffix => "freetype",
     },
    ],
+   verbose => $verbose,
   );
 
 my $probe_res = Imager::Probe->probe(\%probe);
@@ -153,6 +154,9 @@ sub is_exe {
   my @exe_suffix = $Config{_exe};
   if ($^O eq 'MSWin32') {
     push @exe_suffix, qw/.bat .cmd/;
+  }
+  elsif ($^O eq 'cygwin') {
+    push @exe_suffix, "";
   }
 
   for my $dir (File::Spec->path) {

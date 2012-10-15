@@ -7,7 +7,6 @@ Changes.old			Old changes
 color.c				Color translation and handling
 combine.im			Channel combine
 compose.im
-context.c
 conv.im
 convert.im
 CountColor/CountColor.pm	sample XS access to API
@@ -81,6 +80,7 @@ GIF/t/t10gif.t
 GIF/t/t20new.t
 GIF/t/t30fixed.t
 GIF/t/t40limit.t
+GIF/t/t50header.t
 GIF/testimg/badindex.gif	GIF with a bad color index
 GIF/testimg/bandw.gif
 GIF/testimg/expected.gif
@@ -200,7 +200,6 @@ lib/Imager/regmach.pod
 lib/Imager/Regops.pm
 lib/Imager/Security.pod
 lib/Imager/Test.pm
-lib/Imager/Threads.pod
 lib/Imager/Transform.pm
 lib/Imager/Transformations.pod
 lib/Imager/Tutorial.pod
@@ -217,9 +216,6 @@ MANIFEST
 MANIFEST.SKIP
 map.c
 maskimg.c
-mutexnull.c
-mutexpthr.c
-mutexwin.c
 palimg.c
 paste.im
 plug.h
@@ -354,7 +350,6 @@ t/t80texttools.t		Test text wrapping
 t/t81hlines.t			Test hlines.c
 t/t82inline.t			Test Inline::C integration
 t/t83extutil.t			Test Imager::ExtUtils
-t/t84inlinectx.t
 t/t90cc.t
 t/t91pod.t			Test POD with Test::Pod
 t/t92samples.t

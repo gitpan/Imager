@@ -143,7 +143,7 @@ BEGIN {
   if ($ex_version < 5.57) {
     @ISA = qw(Exporter);
   }
-  $VERSION = '0.92_01';
+  $VERSION = '0.93';
   require XSLoader;
   XSLoader::load(Imager => $VERSION);
 }
@@ -3417,16 +3417,33 @@ sub getsamples {
 
 sub setsamples {
   my $self = shift;
-  my %opts = ( x => 0, offset => 0, @_ );
 
   unless ($self->{IMG}) {
     $self->_set_error('setsamples: empty input image');
     return;
   }
 
-  my $data = $opts{data};
-  unless(defined $data) {
+  my %opts = ( x => 0, offset => 0 );
+  my $data_index;
+  # avoid duplicating the data parameter, it may be a large scalar
+  my $i = 0;
+  while ($i < @_ -1) {
+    if ($_[$i] eq 'data') {
+      $data_index = $i+1;
+    }
+    else {
+      $opts{$_[$i]} = $_[$i+1];
+    }
+
+    $i += 2;
+  }
+
+  unless(defined $data_index) {
     $self->_set_error('setsamples: data parameter missing');
+    return;
+  }
+  unless (defined $_[$data_index]) {
+    $self->_set_error('setsamples: data parameter not defined');
     return;
   }
 
@@ -3439,22 +3456,22 @@ sub setsamples {
   my $count;
   if ($type eq '8bit') {
     $count = i_psamp($self->{IMG}, $opts{x}, $opts{y}, $opts{channels},
-		     $data, $opts{offset}, $width);
+		     $_[$data_index], $opts{offset}, $width);
   }
   elsif ($type eq 'float') {
     $count = i_psampf($self->{IMG}, $opts{x}, $opts{y}, $opts{channels},
-		      $data, $opts{offset}, $width);
+		      $_[$data_index], $opts{offset}, $width);
   }
   elsif ($type =~ /^([0-9]+)bit$/) {
     my $bits = $1;
 
-    unless (ref $data) {
+    unless (ref $_[$data_index]) {
       $self->_set_error("setsamples: data must be an array ref for type not 8bit or float");
       return;
     }
 
     $count = i_psamp_bits($self->{IMG}, $opts{x}, $opts{y}, $bits,
-			  $opts{channels}, $data, $opts{offset}, 
+			  $opts{channels}, $_[$data_index], $opts{offset}, 
 			  $width);
   }
   else {
@@ -3581,6 +3598,7 @@ sub convert {
   $new->{IMG} = i_convert($self->{IMG}, $matrix);
   unless ($new->{IMG}) {
     # most likely a bad matrix
+    i_push_error(0, "convert");
     $self->{ERRSTR} = _error_as_msg();
     return undef;
   }
@@ -4363,10 +4381,6 @@ L<Imager::ExtUtils> - tools to get access to Imager's C API.
 
 L<Imager::Security> - brief security notes.
 
-=item *
-
-L<Imager::Threads> - brief information on working with threads.
-
 =back
 
 =head2 Basic Overview
@@ -4754,7 +4768,7 @@ matrix - L<Imager::Matrix2d>,
 L<Imager::Engines/"Matrix Transformations">,
 L<Imager::Font/transform()>
 
-metadata, image - L<Imager::ImageTypes/"Tags">
+metadata, image - L<Imager::ImageTypes/"Tags">, L<Image::ExifTool>
 
 mosaic - L<Imager::Filters/mosaic>
 
@@ -4808,8 +4822,6 @@ text, wrapping text in an area - L<Imager::Font::Wrap>
 
 text, measuring - L<Imager::Font/bounding_box()>, L<Imager::Font::BBox>
 
-threads - L<Imager::Threads>
-
 tiles, color - L<Imager::Filters/mosaic>
 
 transparent images - L<Imager::ImageTypes>,
@@ -4822,6 +4834,15 @@ unsharp mask - L<Imager::Filters/unsharpmask>
 watermark - L<Imager::Filters/watermark>
 
 writing an image to a file - L<Imager::Files>
+
+=head1 THREADS
+
+Imager doesn't support perl threads.
+
+Imager has limited code to prevent double frees if you create images,
+colors etc, and then create a thread, but has no code to prevent two
+threads entering Imager's error handling code, and none is likely to
+be added.
 
 =head1 SUPPORT
 
@@ -4950,6 +4971,8 @@ Other perl imaging modules include:
 
 L<GD>(3), L<Image::Magick>(3), L<Graphics::Magick>(3),
 L<Prima::Image>, L<IPA>.
+
+For manipulating image metadata see L<Image::ExifTool>.
 
 If you're trying to use Imager for array processing, you should
 probably using L<PDL>.

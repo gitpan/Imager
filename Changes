@@ -1,20 +1,56 @@
 Imager release history.  Older releases can be found in Changes.old
 
-Imager 0.92_01 - 18 Aug 2012
-==============
+Imager 0.93 - 15 Oct 2012
+===========
 
-Development release, let's see what broke.
+Bug fixes:
 
-This release is not Imager API binary compatible with older releases,
-if you have a module that uses Imager's API it will need to be
-reinstalled.
+ - previously a transparency enabled GIF write (the default) would
+   always use a GIF89a header even if none of the images were
+   transparent.
 
- - improved thread safety
-   - the internal error stack and log file handle are now in a per-thread
-     context object
-   - JPEG now captures IPTC information in a thread-safe way
-   - avoid globals where possible for warning capture in libtiff
-   - avoid re-entering libtiff or giflib since they aren't thread safe
+ - previously the probe step for freetype-config would fail on cygwin
+
+ - catch an invalid matrix parameter to convert() instead of crashing
+   https://rt.cpan.org/Ticket/Display.html?id=79922
+
+ - remove the 16-bit/sample limitation from the documentation for
+   setsamples(), it hasn't applied for many releases.
+   https://rt.cpan.org/Ticket/Display.html?id=79989
+
+ - don't copy setsamples() data parameter, it may be a large scalar
+   https://rt.cpan.org/Ticket/Display.html?id=79990
+
+ - clean up .dSYM directories generated performing probes on OS X
+   Mountain Lion.
+
+ - pass the --verbose command-line option through to Imager::Probe in
+   sub-module's Makefile.PLs
+   https://rt.cpan.org/Ticket/Display.html?id=75878
+
+Enhancements:
+
+ - support for giflib 5.0. (5.0.1 and later)
+   https://rt.cpan.org/Ticket/Display.html?id=79029
+   The giflib API Imager uses doesn't have a mechanism to set the
+   header version in 5.0.0.
+
+ - update the GIF library probe code to check for the new giflib 5.0.1
+   EGifSetGifVersion() function, and to check for the giflib 4.2.0
+   uninitialized gif89 bug.
+   https://rt.cpan.org/Ticket/Display.html?id=79679
+   http://sourceforge.net/tracker/?func=detail&aid=3574283&group_id=102202&atid=631304
+
+ - avoid static variables when capturing IPTC data from JPEG files
+
+ - match Imager::Font;:T1's error message translations to those from
+   later versions of T1Lib.
+
+ - for libtiff versions that support extended warning handlers (3.8.0
+   or later), use them to avoid some global variables.
+
+ - note Image::ExifTool for better metadata support.
+   https://rt.cpan.org/Ticket/Display.html?id=79251
 
 Imager 0.92 - 14 Aug 2012
 ===========
