@@ -223,6 +223,14 @@ hatch
 
 fountain (similar to gradients in paint software)
 
+=item *
+
+image - fill with an image, possibly transformed
+
+=item *
+
+opacity - a lower opacity version of some other fill
+
 =back
 
 =head1 Common options
@@ -236,17 +244,21 @@ See L<Imager::Draw/"Combine Types">.
 
 =back
 
-In general colors can be specified as Imager::Color or
-Imager::Color::Float objects.  The fill object will typically store
+In general colors can be specified as L<Imager::Color> or
+L<Imager::Color::Float> objects.  The fill object will typically store
 both types and convert from one to the other.  If a fill takes 2 color
 objects they should have the same type.
 
 =head2 Solid fills
 
-  my $fill = Imager::Fill->new(solid=>$color, $combine =>$combine)
+  my $fill = Imager::Fill->new(solid=>$color, combine =>$combine)
 
 Creates a solid fill, the only required parameter is C<solid> which
 should be the color to fill with.
+
+A translucent red fill:
+
+  my $red = Imager::Fill->new(solid => "FF000080", combine => "normal");
 
 =head2 Hatched fills
 
@@ -341,6 +353,10 @@ C<dx>, C<dy> - An offset into the hatch cell.  Both default to zero.
 
 =back
 
+A blue and white 4-pixel check patten:
+
+  my $fill = Imager::Fill->new(hatch => "check2x2", fg => "blue");
+
 You can call Imager::Fill->hatches for a list of hatch names.
 
 =head2 Fountain fills
@@ -355,10 +371,21 @@ same fill as the C<fountain> filter, but is restricted to the shape
 you are drawing, and the fountain parameter supplies the fill type,
 and is required.
 
+A radial fill from white to transparent centered on (50, 50) with a 50
+pixel radius:
+
+  use Imager::Fountain;
+  my $segs = Imager::Fountain->simple(colors => [ "FFFFFF", "FFFFFF00" ],
+                                      positions => [ 0, 1 ]);
+  my $fill = Imager::Fill->new(fountain => "radial", segments => $segs,
+                               xa => 50, ya => 50, xb => 0, yb => 50,
+                               combine => "normal");
+
+
 =head2 Image Fills
 
   my $fill = Imager::Fill->new(image=>$src, xoff=>$xoff, yoff=>$yoff,
-                               matrix=>$matrix, $combine);
+                               matrix=>$matrix, combine => $combine);
 
 Fills the given image with a tiled version of the given image.  The
 first non-zero value of C<xoff> or C<yoff> will provide an offset
@@ -370,6 +397,23 @@ Linear interpolation is used to determine the fill pixel.  You can use
 the L<Imager::Matrix2d> class to create transformation matrices.
 
 The matrix parameter will significantly slow down the fill.
+
+  # some image to act as a texture
+  my $txim = Imager->new(...);
+
+  # simple tiling
+  my $fill = Imager::Fill->new(image => $txim);
+
+  # tile with a vertical offset
+  my $fill = Imager::Fill->new(image => $txim, yoff => 10);
+
+  # tile with a horizontal offset
+  my $fill = Imager::Fill->new(image => $txim, xoff => 10);
+
+  # rotated
+  use Imager::Matrix2d;
+  my $fill = Imager::Fill->new(image => $txim,
+                matrix => Imager::Matrix2d->rotate(degrees => 20));
 
 =head2 Opacity modification fill
 
@@ -400,6 +444,9 @@ opacity - multiplier for the source fill opacity.  Default: 0.5.
 =back
 
 The source fills combine mode is used.
+
+  my $hatch = Imager::Fill->new(hatch => "check4x4", combine => "normal");
+  my $fill = Imager::Fill->new(type => "opacity", other => $hatch);
 
 =head1 OTHER METHODS
 

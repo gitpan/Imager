@@ -1,3 +1,4 @@
+#define IMAGER_NO_CONTEXT
 #include "imager.h"
 #include "imageri.h"
 
@@ -856,7 +857,7 @@ fill_image(i_fill_t *fill, i_img_dim x, i_img_dim y, i_img_dim width,
       }
       else if (f->yoff) {
         ry += ix * f->yoff;
-        iy = ry / f->src->xsize;
+        iy = ry / f->src->ysize;
       }
       rx -= ix * f->src->xsize;
       ry -= iy * f->src->ysize;
