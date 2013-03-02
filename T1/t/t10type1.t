@@ -8,7 +8,7 @@ use Cwd qw(getcwd abs_path);
 
 #$Imager::DEBUG=1;
 
-plan tests => 108;
+plan tests => 110;
 
 ok($Imager::formats{t1}, "must have t1");
 
@@ -46,14 +46,14 @@ SKIP:
     skip("without the font I can't do a thing", 90);
   }
 
-  my $bgcolor=Imager::Color->new(255,0,0,0);
+  my $bgcolor=Imager::Color->new(255,0,0,255);
   my $overlay=Imager::ImgRaw::new(200,70,3);
   
-  ok($fnum->cp($overlay,5,50,1,50.0,'XMCLH',5,1), "i_t1_cp");
+  ok($fnum->cp($overlay,5,50,1,50.0,'XMCLH',1), "i_t1_cp");
 
   i_line($overlay,0,50,100,50,$bgcolor,1);
 
-  my @bbox=$fnum->bbox(50.0,'XMCLH',5);
+  my @bbox=$fnum->bbox(50.0,'XMCLH');
   is(@bbox, 8, "i_t1_bbox");
   print "# bbox: ($bbox[0], $bbox[1]) - ($bbox[2], $bbox[3])\n";
 
@@ -63,10 +63,10 @@ SKIP:
   i_writeppm_wiol($overlay,$IO);
   close(FH);
 
-  $bgcolor=Imager::Color::set($bgcolor,200,200,200,0);
+  $bgcolor=Imager::Color::set($bgcolor,200,200,200,255);
   my $backgr=Imager::ImgRaw::new(280,300,3);
 
-  ok($fnum->text($backgr,10,100,$bgcolor,150.0,'test',4,1,2), "i_t1_text");
+  ok($fnum->text($backgr,10,100,$bgcolor,150.0,'test',1,2), "i_t1_text");
 
   # "UTF8" tests
   # for perl < 5.6 we can hand-encode text
@@ -77,9 +77,9 @@ SKIP:
   my $text = pack("C*", 0x41, 0xC2, 0xA1, 0xE2, 0x80, 0x90, 0x41);
   my $alttext = "A\xA1A";
   
-  my @utf8box = $fnum->bbox(50.0, $text, length($text), 1);
+  my @utf8box = $fnum->bbox(50.0, $text, 1);
   is(@utf8box, 8, "utf8 bbox element count");
-  my @base = $fnum->bbox(50.0, $alttext, length($alttext), 0);
+  my @base = $fnum->bbox(50.0, $alttext, 0);
   is(@base, 8, "alt bbox element count");
   my $maxdiff = $fontname_pfb eq $deffont ? 0 : $base[2] / 3;
   print "# (@utf8box vs @base)\n";
@@ -87,10 +87,18 @@ SKIP:
       "compare box sizes $utf8box[2] vs $base[2] (maxerror $maxdiff)");
 
   # hand-encoded UTF8 drawing
-  ok($fnum->text($backgr, 10, 140, $bgcolor, 32, $text, length($text), 1,1), "draw hand-encoded UTF8");
+  ok($fnum->text($backgr, 10, 140, $bgcolor, 32, $text, 1,1), "draw hand-encoded UTF8");
 
-  ok($fnum->cp($backgr, 80, 140, 1, 32, $text, length($text), 1, 1), 
+  ok($fnum->cp($backgr, 80, 140, 1, 32, $text, 1, 1), 
       "cp hand-encoded UTF8");
+
+  { # invalid utf8
+    my $text = pack("C", 0xC0);
+    ok(!$fnum->text($backgr, 10, 140, $bgcolor, 32, $text, 1, 1),
+       "attempt to draw invalid utf8");
+    is(Imager->_error_as_msg, "invalid UTF8 character",
+       "check message");
+  }
 
   # ok, try native perl UTF8 if available
  SKIP:
@@ -101,16 +109,17 @@ SKIP:
     # versions
     eval q{$text = "A\xA1\x{2010}A"}; # A, a with ogonek, HYPHEN, A in our test font
     #$text = "A".chr(0xA1).chr(0x2010)."A"; # this one works too
-    ok($fnum->text($backgr, 10, 180, $bgcolor, 32, $text, length($text), 1),
+    Imager->log("draw UTF8\n");
+    ok($fnum->text($backgr, 10, 180, $bgcolor, 32, $text, 1),
         "draw UTF8");
-    ok($fnum->cp($backgr, 80, 180, 1, 32, $text, length($text), 1),
+    ok($fnum->cp($backgr, 80, 180, 1, 32, $text, 1),
         "cp UTF8");
-    @utf8box = $fnum->bbox(50.0, $text, length($text), 0);
+    @utf8box = $fnum->bbox(50.0, $text, 0);
     is(@utf8box, 8, "native utf8 bbox element count");
     ok(abs($utf8box[2] - $base[2]) <= $maxdiff, 
       "compare box sizes native $utf8box[2] vs $base[2] (maxerror $maxdiff)");
     eval q{$text = "A\xA1\xA2\x01\x1F\x{0100}A"};
-    ok($fnum->text($backgr, 10, 220, $bgcolor, 32, $text, 0, 1, 0, "uso"),
+    ok($fnum->text($backgr, 10, 220, $bgcolor, 32, $text, 0, 1, "uso"),
        "more complex output");
   }
 
@@ -397,4 +406,6 @@ SKIP:
   }
 }
 
+
 #malloc_state();
+

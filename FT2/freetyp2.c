@@ -17,7 +17,7 @@ freetyp2.c - font support via the FreeType library version 2.
   i_img *im = ...;
   i_color cl;
   if (!i_ft2_text(font, im, tx, ty, cl, cheight, cwidth, text, length, align,
-                  aa)) { error }
+                  aa, vlayout, utf8)) { error }
   if (!i_ft2_cp(font, im, tx, ty, channel, cheight, cwidth, text, length,
                 align, aa)) { error }
   i_ft2_destroy(font);
@@ -239,8 +239,8 @@ i_ft2_new(const char *name, int index) {
   score = 0;
   for (i = 0; i < face->num_charmaps; ++i) {
     FT_Encoding enc_entry = face->charmaps[i]->encoding;
-    mm_log((2, "i_ft2_new, encoding %lX platform %u encoding %u\n",
-            enc_entry, face->charmaps[i]->platform_id,
+    mm_log((2, "i_ft2_new, encoding %X platform %u encoding %u\n",
+            (unsigned)enc_entry, face->charmaps[i]->platform_id,
             face->charmaps[i]->encoding_id));
     for (j = 0; j < sizeof(enc_scores) / sizeof(*enc_scores); ++j) {
       if (enc_scores[j].encoding == enc_entry && enc_scores[j].score > score) {
@@ -251,7 +251,7 @@ i_ft2_new(const char *name, int index) {
     }
   }
   FT_Select_Charmap(face, encoding);
-  mm_log((2, "i_ft2_new, selected encoding %lX\n", encoding));
+  mm_log((2, "i_ft2_new, selected encoding %X\n", (unsigned)encoding));
 
   result = mymalloc(sizeof(FT2_Fonthandle));
   result->face = face;
@@ -424,8 +424,10 @@ i_ft2_bbox(FT2_Fonthandle *handle, double cheight, double cwidth,
   int loadFlags = FT_LOAD_DEFAULT;
   int rightb = 0;
 
-  mm_log((1, "i_ft2_bbox(handle %p, cheight %f, cwidth %f, text %p, len %d, bbox %p)\n",
-	  handle, cheight, cwidth, text, len, bbox));
+  i_clear_error();
+
+  mm_log((1, "i_ft2_bbox(handle %p, cheight %f, cwidth %f, text %p, len %u, bbox %p)\n",
+	  handle, cheight, cwidth, text, (unsigned)len, bbox));
 
   error = FT_Set_Char_Size(handle->face, cwidth*64, cheight*64, 
                            handle->xdpi, handle->ydpi);
@@ -457,7 +459,7 @@ i_ft2_bbox(FT2_Fonthandle *handle, double cheight, double cwidth,
     error = FT_Load_Glyph(handle->face, index, loadFlags);
     if (error) {
       ft2_push_message(error);
-      i_push_errorf(0, "loading glyph for character \\x%02x (glyph 0x%04X)", 
+      i_push_errorf(0, "loading glyph for character \\x%02lx (glyph 0x%04X)", 
                     c, index);
       return 0;
     }
@@ -499,7 +501,11 @@ i_ft2_bbox(FT2_Fonthandle *handle, double cheight, double cwidth,
   bbox[BBOX_ASCENT] = ascent;
   bbox[BBOX_ADVANCE_WIDTH] = width;
   bbox[BBOX_RIGHT_BEARING] = rightb;
-  mm_log((1, " bbox=> negw=%d glob_desc=%d pos_wid=%d glob_asc=%d desc=%d asc=%d adv_width=%d rightb=%d\n", bbox[0], bbox[1], bbox[2], bbox[3], bbox[4], bbox[5], bbox[6], bbox[7]));
+  mm_log((1, " bbox=> negw=%" i_DF " glob_desc=%" i_DF " pos_wid=%" i_DF
+	  " glob_asc=%" i_DF " desc=%" i_DF " asc=%" i_DF " adv_width=%" i_DF
+	  " rightb=%" i_DF "\n",
+	  bbox[0], bbox[1], bbox[2], bbox[3], bbox[4], bbox[5], bbox[6],
+	  bbox[7]));
 
   return BBOX_RIGHT_BEARING + 1;
 }
@@ -587,7 +593,7 @@ i_ft2_bbox_r(FT2_Fonthandle *handle, double cheight, double cwidth,
   int glyph_ascent, glyph_descent;
   FT_Glyph_Metrics *gm;
   i_img_dim work[4];
-  i_img_dim bounds[4];
+  i_img_dim bounds[4] = { 0 };
   double x = 0, y = 0;
   int i;
   FT_GlyphSlot slot;
@@ -625,7 +631,7 @@ i_ft2_bbox_r(FT2_Fonthandle *handle, double cheight, double cwidth,
     error = FT_Load_Glyph(handle->face, index, loadFlags);
     if (error) {
       ft2_push_message(error);
-      i_push_errorf(0, "loading glyph for character \\x%02x (glyph 0x%04X)", 
+      i_push_errorf(0, "loading glyph for character \\x%02lx (glyph 0x%04X)",
                     c, index);
       return 0;
     }
@@ -738,10 +744,12 @@ i_ft2_text(FT2_Fonthandle *handle, i_img *im, i_img_dim tx, i_img_dim ty, const 
   char last_mode = ft_pixel_mode_none; 
   int last_grays = -1;
   int loadFlags = FT_LOAD_DEFAULT;
-  i_render *render;
+  i_render *render = NULL;
 
-  mm_log((1, "i_ft2_text(handle %p, im %p, tx %d, ty %d, cl %p, cheight %f, cwidth %f, text %p, len %d, align %d, aa %d)\n",
-	  handle, im, tx, ty, cl, cheight, cwidth, text, align, aa));
+  mm_log((1, "i_ft2_text(handle %p, im %p, (tx,ty) (" i_DFp "), cl %p, cheight %f, cwidth %f, text %p, len %u, align %d, aa %d, vlayout %d, utf8 %d)\n",
+	  handle, im, i_DFcp(tx, ty), cl, cheight, cwidth, text, (unsigned)len, align, aa, vlayout, utf8));
+
+  i_clear_error();
 
   if (vlayout) {
     if (!FT_HAS_VERTICAL(handle->face)) {
@@ -783,9 +791,9 @@ i_ft2_text(FT2_Fonthandle *handle, i_img *im, i_img_dim tx, i_img_dim ty, const 
     error = FT_Load_Glyph(handle->face, index, loadFlags);
     if (error) {
       ft2_push_message(error);
-      i_push_errorf(0, "loading glyph for character \\x%02x (glyph 0x%04X)", 
+      i_push_errorf(0, "loading glyph for character \\x%02lx (glyph 0x%04X)",
                     c, index);
-      if (aa)
+      if (render)
         i_render_delete(render);
       return 0;
     }
@@ -796,8 +804,8 @@ i_ft2_text(FT2_Fonthandle *handle, i_img *im, i_img_dim tx, i_img_dim ty, const 
       error = FT_Render_Glyph(slot, aa ? ft_render_mode_normal : ft_render_mode_mono);
       if (error) {
 	ft2_push_message(error);
-	i_push_errorf(0, "rendering glyph 0x%04X (character \\x%02X)");
-      if (aa)
+	i_push_errorf(0, "rendering glyph 0x%04lX (character \\x%02X)", c, index);
+      if (render)
         i_render_delete(render);
 	return 0;
       }
@@ -848,14 +856,14 @@ i_ft2_text(FT2_Fonthandle *handle, i_img *im, i_img_dim tx, i_img_dim ty, const 
     ty -= slot->advance.y / 64;
   }
 
-  if (aa)
+  if (render)
     i_render_delete(render);
 
   return 1;
 }
 
 /*
-=item i_ft2_cp(FT2_Fonthandle *handle, i_img *im, int tx, int ty, int channel, double cheight, double cwidth, char *text, size_t len, int align, int aa)
+=item i_ft2_cp(FT2_Fonthandle *handle, i_img *im, int tx, int ty, int channel, double cheight, double cwidth, char *text, size_t len, int align, int aa, int vlayout, int utf8)
 
 Renders I<text> to (I<tx>, I<ty>) in I<im> to I<channel> at the given 
 I<cheight> and I<cwidth>.
@@ -865,7 +873,9 @@ first character at (I<tx>, I<ty>).  If align is non-zero then the text
 is rendered with (I<tx>, I<ty>) aligned with the base-line of the
 characters.
 
-If aa is non-zero then the text is anti-aliased.
+If C<utf8> is non-zero the text is treated as UTF-8 encoded
+
+If C<aa> is non-zero then the text is drawn anti-aliased.
 
 Returns non-zero on success.
 
@@ -881,8 +891,10 @@ i_ft2_cp(FT2_Fonthandle *handle, i_img *im, i_img_dim tx, i_img_dim ty, int chan
   i_color cl, cl2;
   int x, y;
 
-  mm_log((1, "i_ft2_cp(handle %p, im %p, tx %d, ty %d, channel %d, cheight %f, cwidth %f, text %p, len %d, ...)\n", 
-	  handle, im, tx, ty, channel, cheight, cwidth, text, len));
+  mm_log((1, "i_ft2_cp(handle %p, im %p, (tx, ty) (" i_DFp "), channel %d, cheight %f, cwidth %f, text %p, len %u, align %d, aa %d, vlayout %d, utf8 %d)\n", 
+	  handle, im, i_DFcp(tx, ty), channel, cheight, cwidth, text, (unsigned)len, align, aa, vlayout, utf8));
+
+  i_clear_error();
 
   if (vlayout && !FT_HAS_VERTICAL(handle->face)) {
     i_push_error(0, "face has no vertical metrics");
@@ -894,6 +906,7 @@ i_ft2_cp(FT2_Fonthandle *handle, i_img *im, i_img_dim tx, i_img_dim ty, int chan
 
   work = i_img_8_new(bbox[2]-bbox[0]+1, bbox[3]-bbox[1]+1, 1);
   cl.channel[0] = 255;
+  cl.channel[1] = 255;
   if (!i_ft2_text(handle, work, -bbox[0], -bbox[1], &cl, cheight, cwidth, 
                   text, len, 1, aa, vlayout, utf8))
     return 0;
@@ -930,8 +943,10 @@ size_t
 i_ft2_has_chars(FT2_Fonthandle *handle, char const *text, size_t len, 
                     int utf8, char *out) {
   int count = 0;
-  mm_log((1, "i_ft2_has_chars(handle %p, text %p, len %d, utf8 %d)\n", 
-	  handle, text, len, utf8));
+  mm_log((1, "i_ft2_has_chars(handle %p, text %p, len %u, utf8 %d)\n", 
+	  handle, text, (unsigned)len, utf8));
+
+  i_clear_error();
 
   while (len) {
     unsigned long c;
@@ -1124,6 +1139,10 @@ i_ft2_glyph_name(FT2_Fonthandle *handle, unsigned long ch, char *name_buf,
       *name_buf = '\0';
       return 0;
     }
+    if (strcmp(name_buf, ".notdef") == 0) {
+      *name_buf = 0;
+      return 0;
+    }
     if (*name_buf) {
       return strlen(name_buf) + 1;
     }
@@ -1132,7 +1151,6 @@ i_ft2_glyph_name(FT2_Fonthandle *handle, unsigned long ch, char *name_buf,
     }
   }
   else {
-    i_push_error(0, "no glyph for that character");
     *name_buf = 0;
     return 0;
   }
@@ -1153,7 +1171,8 @@ i_ft2_face_has_glyph_names(FT2_Fonthandle *handle) {
 #ifdef FT_CONFIG_OPTION_NO_GLYPH_NAMES
   return 0;
 #else
-  return FT_Has_PS_Glyph_Names(handle->face);
+  return FT_HAS_GLYPH_NAMES(handle->face);
+  /* return FT_Has_PS_Glyph_Names(handle->face);*/
 #endif
 }
 

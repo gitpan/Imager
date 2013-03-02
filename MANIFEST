@@ -70,6 +70,7 @@ FT2/Makefile.PL
 FT2/README
 FT2/t/t10ft2.t
 FT2/t/t20thread.t
+FT2/t/t90std.t			Standard font tests for FT2
 FT2/typemap
 gaussian.im
 GIF/GIF.pm
@@ -146,6 +147,7 @@ imgdouble.c			Implements double/sample images
 imio.h
 immacros.h
 imperl.h
+imperlio.h
 imrender.h			Buffer rending engine function declarations
 inc/Devel/CheckLib.pm		David Cantrell's Devel::CheckLib
 io.c
@@ -193,6 +195,7 @@ lib/Imager/Fountain.pm
 lib/Imager/Handy.pod
 lib/Imager/ImageTypes.pod
 lib/Imager/Inline.pod		Using Imager with Inline::C
+lib/Imager/Install.pod		Installation notes
 lib/Imager/interface.pod
 lib/Imager/IO.pod		Document Imager::IO objects
 lib/Imager/LargeSamples.pod	Track large sample support
@@ -225,6 +228,7 @@ mutexpthr.c
 mutexwin.c
 palimg.c
 paste.im
+perlio.c
 plug.h
 PNG/impng.c
 PNG/impng.h
@@ -339,6 +343,7 @@ t/t22flood.t			Flood fill tests
 t/t31font.t			General font interface tests
 t/t35ttfont.t
 t/t36oofont.t
+t/t37std.t			Standard font tests for TT
 t/t40scale.t
 t/t50basicoo.t
 t/t55trans.t
@@ -384,6 +389,7 @@ T1/README
 T1/t/t10type1.t
 T1/t/t20oo.t
 T1/t/t30thread.t
+T1/t/t90std.t			Standard font tests for T1
 T1/T1.pm
 T1/T1.xs
 T1/typemap
@@ -508,6 +514,7 @@ W32/lib/Imager/Font/Win32.pm
 W32/Makefile.PL
 W32/README
 W32/t/t10win32.t		Tests Win32 GDI font support
+W32/t/t90std.t 			Standard font tests for W32
 W32/W32.pm
 W32/W32.xs
 W32/win32.c			Implements font support through Win32 GDI

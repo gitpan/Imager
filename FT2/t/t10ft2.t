@@ -5,7 +5,7 @@ use Cwd qw(getcwd abs_path);
 
 use Imager qw(:all);
 
-use Imager::Test qw(diff_text_with_nul is_color3 is_color4 isnt_image);
+use Imager::Test qw(diff_text_with_nul is_color3 is_color4 isnt_image is_image);
 
 -d "testout" or mkdir "testout";
 
@@ -137,6 +137,7 @@ SKIP:
                            aa=>1), "drawn UTF natively")) {
       print "# ",$im->errstr,"\n";
     }
+
   }
 
   # an attempt using emulation of UTF8
@@ -604,3 +605,5 @@ sub cross {
                  color => $color);
   
 }
+
+

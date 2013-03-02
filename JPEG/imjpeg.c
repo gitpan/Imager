@@ -42,6 +42,9 @@ Reads and writes JPEG images
 
 #define JPEG_DIM_MAX JPEG_MAX_DIMENSION
 
+#define _STRINGIFY(x) #x
+#define STRINGIFY(x) _STRINGIFY(x)
+
 static unsigned char fake_eoi[]={(JOCTET) 0xFF,(JOCTET) JPEG_EOI};
 
 /* Source and Destination managers */
@@ -215,7 +218,7 @@ wiol_empty_output_buffer(j_compress_ptr cinfo) {
 
   if (rc != JPGS) { /* XXX: Should raise some jpeg error */
     myfree(dest->buffer);
-    mm_log((1, "wiol_empty_output_buffer: Error: nbytes = %d != rc = %d\n", JPGS, rc));
+    mm_log((1, "wiol_empty_output_buffer: Error: nbytes = %d != rc = %d\n", JPGS, (int)rc));
     ERREXIT(cinfo, JERR_FILE_WRITE);
   }
   dest->pub.free_in_buffer = JPGS;
@@ -336,6 +339,25 @@ transfer_gray(i_color *out, JSAMPARRAY in, int width) {
 }
 
 typedef void (*transfer_function_t)(i_color *out, JSAMPARRAY in, int width);
+
+static const char version_string[] =
+#ifdef LIBJPEG_TURBO_VERSION
+  "libjpeg-turbo " STRINGIFY(LIBJPEG_TURBO_VERSION) " api " STRINGIFY(JPEG_LIB_VERSION)
+#else
+  "libjpeg " STRINGIFY(JPEG_LIB_VERSION)
+#endif
+  ;
+
+/*
+=item i_libjpeg_version()
+
+=cut
+*/
+
+const char *
+i_libjpeg_version(void) {
+  return version_string;
+}
 
 /*
 =item i_readjpeg_wiol(data, length, iptc_itext, itlength)
@@ -525,7 +547,7 @@ i_readjpeg_wiol(io_glue *data, int length, char** iptc_itext, int *itlength) {
 
   i_tags_set(&im->tags, "i_format", "jpeg", 4);
 
-  mm_log((1,"i_readjpeg_wiol -> (0x%x)\n",im));
+  mm_log((1,"i_readjpeg_wiol -> (%p)\n",im));
   return im;
 }
 

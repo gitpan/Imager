@@ -1,8 +1,10 @@
 #!perl -w
 use strict;
-use Test::More tests => 252;
+use Test::More tests => 274;
+use Imager::Test qw(is_image);
 # for SEEK_SET etc, Fcntl doesn't provide these in 5.005_03
 use IO::Seekable;
+use Config;
 
 BEGIN { use_ok(Imager => ':all') };
 
@@ -834,6 +836,57 @@ SKIP:
   }
 }
 
+SKIP:
+{
+  $Config{useperlio}
+    or skip "PerlIO::scalar requires perlio", 13;
+
+  my $foo;
+  open my $fh, "+<", \$foo;
+  my $io = Imager::IO->_new_perlio($fh);
+  ok($io, "perlio: make a I/O object for a perl scalar fh");
+  is($io->write("test"), 4, "perlio: check we can write");
+  is($io->seek(2, SEEK_SET), 2, "perlio: check we can seek");
+  is($io->write("more"), 4, "perlio: write some more");
+  is($io->seek(0, SEEK_SET), 0, "perlio: seek back to start");
+  my $data;
+  is($io->read($data, 10), 6, "perlio: read everything back");
+  is($data, "temore", "perlio: check we read back what we wrote");
+  is($io->close, 0, "perlio: close it");
+  is($foo, "temore", "perlio: check it got to the scalar properly");
+
+  my $io2 = Imager::IO->new_fh($fh);
+  ok($io2, "new_fh() can make an I/O layer object from a scalar fh");
+  close $fh;
+
+  my $im = Imager->new(xsize => 10, ysize => 10);
+  $foo = "";
+  open my $fh2, ">", \$foo;
+  ok($im->write(fh => $fh2, type => "pnm"), "can write image to scalar fh")
+    or print "# ", $im->errstr, "\n";
+
+  close $fh2;
+  open my $fh3, "<", \$foo;
+  my $im2 = Imager->new(fh => $fh3);
+  ok($im2, "read image from a scalar fh");
+  is_image($im, $im2, "check they match");
+}
+
+{
+  tie *FOO, "IO::Tied";
+  my $io = Imager::IO->new_fh(\*FOO);
+  ok($io, "tied: make a I/O object for a tied fh");
+  is($io->write("test"), 4, "tied: check we can write");
+  is($io->seek(2, SEEK_SET), 2, "tied: check we can seek");
+  is($io->write("more"), 4, "tied: write some more");
+  is($io->seek(0, SEEK_SET), 0, "tied: seek back to start");
+  my $data;
+  is($io->read($data, 10), 6, "tied: read everything back");
+  is($data, "temore", "tied: check we read back what we wrote");
+  is($io->close, 0, "tied: close it");
+  is(tied(*FOO)->[0], "temore", "tied: check it got to the output properly");
+}
+
 Imager->close_log;
 
 unless ($ENV{IMAGER_KEEP_FILES}) {
@@ -867,4 +920,67 @@ sub fail_read {
 
 sub fail_seek {
   return -1;
+}
+
+package IO::Tied;
+use base 'Tie::Handle';
+use IO::Seekable;
+
+sub TIEHANDLE {
+  return bless [ "", 0 ];
+}
+
+sub PRINT {
+  for my $entry (@_[1 .. $#_]) {
+    substr($_[0][0], $_[0][1], length $entry, $entry);
+    $_[0][1] += length $entry;
+  }
+
+  return 1;
+}
+
+sub SEEK {
+  my ($self, $offset, $whence) = @_;
+
+  my $newpos;
+  if ($whence == SEEK_SET) {
+    $newpos = $offset;
+  }
+  elsif ($whence == SEEK_CUR) {
+    $newpos = $self->[1] + $offset;
+  }
+  elsif ($whence == SEEK_END) {
+    $newpos = length($self->[0]) + $newpos;
+  }
+  else {
+    return -1;
+  }
+
+  if ($newpos < 0) {
+    return 0;
+  }
+
+  $self->[1] = $newpos;
+
+  return 1;
+}
+
+sub TELL {
+  return $_[0][1];
+}
+
+sub READ {
+  my $self = shift;
+  my $outlen = $_[1];
+  my $offset = @_ > 2 ? $_[2] : 0;
+  if ($self->[1] + $outlen > length $self->[0]) {
+    $outlen = length($self->[0]) - $self->[1];
+    $outlen <= 0
+      and return "";
+  }
+  defined $_[0] or $_[0] = "";
+  substr($_[0], $offset, $outlen) = substr($self->[0], $self->[1], $outlen);
+  $self->[1] += $outlen;
+
+  return $outlen;
 }

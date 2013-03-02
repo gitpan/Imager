@@ -6,6 +6,7 @@ use IO::File;
 use Scalar::Util;
 use Imager::Color;
 use Imager::Font;
+use Config;
 
 @EXPORT_OK = qw(
 		init
@@ -143,7 +144,7 @@ BEGIN {
   if ($ex_version < 5.57) {
     @ISA = qw(Exporter);
   }
-  $VERSION = '0.94';
+  $VERSION = '0.94_01';
   require XSLoader;
   XSLoader::load(Imager => $VERSION);
 }
@@ -1350,12 +1351,11 @@ sub _get_reader_io {
     return io_new_fd($input->{fd});
   }
   elsif ($input->{fh}) {
-    my $fd = fileno($input->{fh});
-    unless (defined $fd) {
+    unless (Scalar::Util::openhandle($input->{fh})) {
       $self->_set_error("Handle in fh option not opened");
       return;
     }
-    return io_new_fd($fd);
+    return Imager::IO->new_fh($input->{fh});
   }
   elsif ($input->{file}) {
     my $file = IO::File->new($input->{file}, "r");
@@ -1405,17 +1405,11 @@ sub _get_writer_io {
     $io = io_new_fd($input->{fd});
   }
   elsif ($input->{fh}) {
-    my $fd = fileno($input->{fh});
-    unless (defined $fd) {
+    unless (Scalar::Util::openhandle($input->{fh})) {
       $self->_set_error("Handle in fh option not opened");
       return;
     }
-    # flush it
-    my $oldfh = select($input->{fh});
-    # flush anything that's buffered, and make sure anything else is flushed
-    $| = 1;
-    select($oldfh);
-    $io = io_new_fd($fd);
+    $io = Imager::IO->new_fh($input->{fh});
   }
   elsif ($input->{file}) {
     my $fh = new IO::File($input->{file},"w+");
@@ -4215,6 +4209,46 @@ sub preload {
   eval { require Imager::Font::T1 };
 }
 
+package Imager::IO;
+use IO::Seekable;
+
+sub new_fh {
+  my ($class, $fh) = @_;
+
+  if (tied(*$fh)) {
+    return $class->new_cb
+      (
+       sub {
+	 local $\;
+
+	 return print $fh $_[0];
+       },
+       sub {
+	 my $tmp;
+	 my $count = CORE::read $fh, $tmp, $_[1];
+	 defined $count
+	   or return undef;
+	 $count
+	   or return "";
+	 return $tmp;
+       },
+       sub {
+	 if ($_[1] != SEEK_CUR || $_[0] != 0) {
+	   unless (CORE::seek $fh, $_[0], $_[1]) {
+	     return -1;
+	   }
+	 }
+
+	 return tell $fh;
+       },
+       undef,
+      );
+  }
+  else {
+    return $class->_new_perlio($fh);
+  }
+}
+
 # backward compatibility for %formats
 package Imager::FORMATS;
 use strict;
@@ -4389,6 +4423,10 @@ Overview.
 
 =item *
 
+L<Imager::Install> - installation notes for Imager.
+
+=item *
+
 L<Imager::Tutorial> - a brief introduction to Imager.
 
 =item *
@@ -4452,6 +4490,10 @@ L<Imager::Matrix2d> - Helper class for affine transformations.
 =item *
 
 L<Imager::Fountain> - Helper for making gradient profiles.
+
+=item *
+
+L<Imager::IO> - Imager I/O abstraction.
 
 =item *
 
@@ -5058,7 +5100,8 @@ L<Affix::Infix2Postfix>(3), L<Parse::RecDescent>(3)
 
 Other perl imaging modules include:
 
-L<GD>(3), L<Image::Magick>(3), L<Graphics::Magick>(3),
+L<GD>(3), L<Image::Magick>(3),
+L<Graphics::Magick|http://www.graphicsmagick.org/perl.html>(3),
 L<Prima::Image>, L<IPA>.
 
 For manipulating image metadata see L<Image::ExifTool>.
