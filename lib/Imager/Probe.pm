@@ -4,6 +4,8 @@ use File::Spec;
 use Config;
 use Cwd ();
 
+our $VERSION = "1.002";
+
 my @alt_transfer = qw/altname incsuffix libbase/;
 
 sub probe {
@@ -410,6 +412,8 @@ sub _gcc_lib_paths {
   $base_version >= 4
     or return;
 
+  local $ENV{LANG} = "C";
+  local $ENV{LC_ALL} = "C";
   my ($lib_line) = grep /^libraries:/, `$Config{cc} -print-search-dirs`
     or return;
   $lib_line =~ s/^libraries: =//;
@@ -618,5 +622,9 @@ C<altname> key describing the alternative.  Any key not mentioned in
 an alternative defaults to the value from the main configuration.
 
 =back
+
+=head1 AUTHOR
+
+Tony Cook <tonyc@cpan.org>, Arnar M. Hrafnkelsson
 
 =cut
