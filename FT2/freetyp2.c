@@ -586,7 +586,6 @@ int
 i_ft2_bbox_r(FT2_Fonthandle *handle, double cheight, double cwidth, 
            char const *text, size_t len, int vlayout, int utf8, i_img_dim *bbox) {
   FT_Error error;
-  i_img_dim width;
   int index;
   int first;
   i_img_dim ascent = 0, descent = 0;
@@ -612,7 +611,6 @@ i_ft2_bbox_r(FT2_Fonthandle *handle, double cheight, double cwidth,
   }
 
   first = 1;
-  width = 0;
   while (len) {
     unsigned long c;
     if (utf8) {
@@ -739,15 +737,18 @@ i_ft2_text(FT2_Fonthandle *handle, i_img *im, i_img_dim tx, i_img_dim ty, const 
   i_img_dim bbox[BOUNDING_BOX_COUNT];
   FT_GlyphSlot slot;
   int x, y;
-  unsigned char *bmp;
   unsigned char map[256];
   char last_mode = ft_pixel_mode_none; 
   int last_grays = -1;
   int loadFlags = FT_LOAD_DEFAULT;
   i_render *render = NULL;
+  unsigned char *work_bmp = NULL;
+  size_t work_bmp_size = 0;
 
-  mm_log((1, "i_ft2_text(handle %p, im %p, (tx,ty) (" i_DFp "), cl %p, cheight %f, cwidth %f, text %p, len %u, align %d, aa %d, vlayout %d, utf8 %d)\n",
-	  handle, im, i_DFcp(tx, ty), cl, cheight, cwidth, text, (unsigned)len, align, aa, vlayout, utf8));
+  mm_log((1, "i_ft2_text(handle %p, im %p, (tx,ty) (" i_DFp "), cl %p (#%02x%02x%02x%02x), cheight %f, cwidth %f, text %p, len %u, align %d, aa %d, vlayout %d, utf8 %d)\n",
+	  handle, im, i_DFcp(tx, ty), cl, cl->rgba.r, cl->rgba.g, cl->rgba.b,
+	  cl->rgba.a, cheight, cwidth, text, (unsigned)len, align, aa,
+	  vlayout, utf8));
 
   i_clear_error();
 
@@ -765,8 +766,10 @@ i_ft2_text(FT2_Fonthandle *handle, i_img *im, i_img_dim tx, i_img_dim ty, const 
   if (!i_ft2_bbox(handle, cheight, cwidth, text, len, bbox, utf8))
     return 0;
 
-  if (aa)
-    render = i_render_new(im, bbox[BBOX_POS_WIDTH] - bbox[BBOX_NEG_WIDTH]);
+  render = i_render_new(im, bbox[BBOX_POS_WIDTH] - bbox[BBOX_NEG_WIDTH]);
+
+  work_bmp_size = bbox[BBOX_POS_WIDTH] - bbox[BBOX_NEG_WIDTH];
+  work_bmp = mymalloc(work_bmp_size);
 
   if (!align) {
     /* this may need adjustment */
@@ -805,29 +808,38 @@ i_ft2_text(FT2_Fonthandle *handle, i_img *im, i_img_dim tx, i_img_dim ty, const 
       if (error) {
 	ft2_push_message(error);
 	i_push_errorf(0, "rendering glyph 0x%04lX (character \\x%02X)", c, index);
-      if (render)
-        i_render_delete(render);
+	if (render)
+	  i_render_delete(render);
 	return 0;
       }
       if (slot->bitmap.pixel_mode == ft_pixel_mode_mono) {
-	bmp = slot->bitmap.buffer;
+	unsigned char *bmp = slot->bitmap.buffer;
+	if (work_bmp_size < slot->bitmap.width) {
+	  work_bmp_size = slot->bitmap.width;
+	  work_bmp =  myrealloc(work_bmp, work_bmp_size);
+	}
 	for (y = 0; y < slot->bitmap.rows; ++y) {
 	  int pos = 0;
 	  int bit = 0x80;
+	  unsigned char *p = work_bmp;
 	  for (x = 0; x < slot->bitmap.width; ++x) {
-	    if (bmp[pos] & bit)
-	      i_ppix(im, tx+x+slot->bitmap_left, ty+y-slot->bitmap_top, cl);
-	    
+	    *p++ = (bmp[pos] & bit) ? 0xff : 0;
+
 	    bit >>= 1;
 	    if (bit == 0) {
 	      bit = 0x80;
 	      ++pos;
 	    }
 	  }
+          i_render_color(render, tx + slot->bitmap_left, ty-slot->bitmap_top+y,
+                         slot->bitmap.width, work_bmp, cl);
+
 	  bmp += slot->bitmap.pitch;
 	}
       }
       else {
+	unsigned char *bmp = slot->bitmap.buffer;
+
 	/* grey scale or something we can treat as greyscale */
 	/* we create a map to convert from the bitmap values to 0-255 */
 	if (last_mode != slot->bitmap.pixel_mode 
@@ -838,7 +850,6 @@ i_ft2_text(FT2_Fonthandle *handle, i_img *im, i_img_dim tx, i_img_dim ty, const 
 	  last_grays = slot->bitmap.num_grays;
 	}
 
-	bmp = slot->bitmap.buffer;
 	for (y = 0; y < slot->bitmap.rows; ++y) {
           if (last_mode == ft_pixel_mode_grays &&
               last_grays != 255) {
@@ -858,6 +869,9 @@ i_ft2_text(FT2_Fonthandle *handle, i_img *im, i_img_dim tx, i_img_dim ty, const 
 
   if (render)
     i_render_delete(render);
+
+  if (work_bmp)
+    myfree(work_bmp);
 
   return 1;
 }
@@ -888,8 +902,9 @@ i_ft2_cp(FT2_Fonthandle *handle, i_img *im, i_img_dim tx, i_img_dim ty, int chan
          int aa, int vlayout, int utf8) {
   i_img_dim bbox[8];
   i_img *work;
-  i_color cl, cl2;
-  int x, y;
+  i_color cl;
+  int y;
+  unsigned char *bmp;
 
   mm_log((1, "i_ft2_cp(handle %p, im %p, (tx, ty) (" i_DFp "), channel %d, cheight %f, cwidth %f, text %p, len %u, align %d, aa %d, vlayout %d, utf8 %d)\n", 
 	  handle, im, i_DFcp(tx, ty), channel, cheight, cwidth, text, (unsigned)len, align, aa, vlayout, utf8));
@@ -918,14 +933,13 @@ i_ft2_cp(FT2_Fonthandle *handle, i_img *im, i_img_dim tx, i_img_dim ty, int chan
   
   /* render to the specified channel */
   /* this will be sped up ... */
+  bmp = mymalloc(work->xsize);
   for (y = 0; y < work->ysize; ++y) {
-    for (x = 0; x < work->xsize; ++x) {
-      i_gpix(work, x, y, &cl);
-      i_gpix(im, tx + x + bbox[0], ty + y + bbox[1], &cl2);
-      cl2.channel[channel] = cl.channel[0];
-      i_ppix(im, tx + x + bbox[0], ty + y + bbox[1], &cl2);
-    }
+    i_gsamp(work, 0, work->xsize, y, bmp, NULL, 1);
+    i_psamp(im, tx + bbox[0], tx + bbox[0] + work->xsize,
+	    ty + y + bbox[1], bmp, &channel, 1);
   }
+  myfree(bmp);
   i_img_destroy(work);
   return 1;
 }

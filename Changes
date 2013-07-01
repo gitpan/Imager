@@ -1,5 +1,59 @@
 Imager release history.  Older releases can be found in Changes.old
 
+Imager 0.96_01 - 1 Jun 2013
+==============
+
+ - TIFF: handle SampleFormat = 2 by translating the signed integer
+   values to unsigned by flipping their sign bits.
+
+   Handle SampleFormat = 3 where possible.
+
+   SampleFormat is ignored for paletted images.
+
+   Mixed SampleFormat are be handled incorrectly, since libtiff
+   returns only the first SampleFormat value, and an image with both
+   an alpha channel and SampleFormat = 2 for color channels probably
+   has a different SampleFormat for the alpha channel.
+
+   https://rt.cpan.org/Ticket/Display.html?id=74540
+
+ - XS clean up:
+     https://rt.cpan.org/Ticket/Display.html?id=69243
+
+   - Imager::Color's rgba() method now returns it's values as integers
+     instead of floating point. (IV instead of NV).
+
+   - The XS for i_map() and i_matrix_transform() now use the AV *
+     typemap instead of rolling their own.
+
+   - The XS for DSO_call() now uses the HV * typemap instead of
+     rolling it's own.
+
+   - The XS for i_poly_aa(), i_poly_aa_cfill(), i_transform() and
+     i_gradgen() now use a new T_AVARRAY typemap that greatly
+     simplifies the XS code.
+
+   - many other minor XS changes
+
+   - some XS code formatting
+
+ - TT (Freetype 1.x) and FT2 (Freetype 2.x) non-antialiased rendering
+   now renders in alpha-combining mode, to match antialiased output.
+   https://rt.cpan.org/Ticket/Display.html?id=73359
+
+ - add sample code and cookbook notes for drawing a blurred drop-shadow.
+
+ - add support for libpng 1.6, which changed the defaults for
+   reporting some types of error.
+   https://rt.cpan.org/Ticket/Display.html?id=85746
+
+ - FT2: use gsamp/psamp() to transfer pixels from the work image to
+   the output image instead of gpix/ppix.
+   https://rt.cpan.org/Ticket/Display.html?id=83478
+
+ - eliminate various GCC warnings, mostly initialized but otherwise
+   unused variables.
+
 Imager 0.96 - 19 May 2013
 ===========
 

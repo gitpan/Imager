@@ -762,12 +762,10 @@ i_tt_render_glyph( TT_Glyph glyph, TT_Glyph_Metrics* gmetrics, TT_Raster_Map *bi
   
   if ( !smooth ) TT_Get_Glyph_Bitmap( glyph, bit, x_off * 64, y_off * 64);
   else {
-    TT_F26Dot6 xmin, ymin, xmax, ymax;
+    TT_F26Dot6 xmin, ymin;
 
     xmin =  gmetrics->bbox.xMin & -64;
     ymin =  gmetrics->bbox.yMin & -64;
-    xmax = (gmetrics->bbox.xMax + 63) & -64;
-    ymax = (gmetrics->bbox.yMax + 63) & -64;
     
     i_tt_clear_raster_map( small_bit );
     TT_Get_Glyph_Pixmap( glyph, small_bit, -xmin, -ymin );
@@ -871,22 +869,30 @@ i_tt_dump_raster_map2( i_img* im, TT_Raster_Map* bit, i_img_dim xb, i_img_dim yb
     }
     i_render_done(&r);
   } else {
+    unsigned char *bmp = mymalloc(bit->width);
+    i_render r;
+
+    i_render_init(&r, im, bit->width);
+
     for(y=0;y<bit->rows;y++) {
       unsigned mask = 0x80;
       unsigned char *p = bmap + y * bit->cols;
+      unsigned char *pout = bmp;
 
       for(x = 0; x < bit->width; x++) {
-	if (*p & mask) {
-	  i_ppix(im, x+xb, y+yb, cl);
-	}
+	*pout++ = (*p & mask) ? 0xFF : 0;
 	mask >>= 1;
 	if (!mask) {
 	  mask = 0x80;
 	  ++p;
 	}
       }
+
+      i_render_color(&r, xb, yb+y, bit->cols, bmp, cl);
     }
 
+    i_render_done(&r);
+    myfree(bmp);
   }
 }
 
@@ -1113,8 +1119,6 @@ i_tt_bbox_inst( TT_Fonthandle *handle, int inst ,const char *txt, size_t len, i_
   int rightb   = 0;
 
   unsigned long j;
-  unsigned char *ustr;
-  ustr=(unsigned char*)txt;
 
   mm_log((1,"i_tt_box_inst(handle %p,inst %d,txt '%.*s', len %ld, utf8 %d)\n",
 	  handle, inst, (int)len, txt, (long)len, utf8));
