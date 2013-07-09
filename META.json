@@ -4,7 +4,7 @@
       "Tony Cook <tonyc@cpan.org>, Arnar M. Hrafnkelsson"
    ],
    "dynamic_config" : 1,
-   "generated_by" : "ExtUtils::MakeMaker version 6.66, CPAN::Meta::Converter version 2.120921",
+   "generated_by" : "ExtUtils::MakeMaker version 6.66, CPAN::Meta::Converter version 2.112621",
    "license" : [
       "perl_5"
    ],
@@ -29,22 +29,22 @@
    "prereqs" : {
       "build" : {
          "requires" : {
-            "ExtUtils::MakeMaker" : "0"
+            "ExtUtils::MakeMaker" : 0
          }
       },
       "configure" : {
          "requires" : {
-            "ExtUtils::MakeMaker" : "0"
+            "ExtUtils::MakeMaker" : 0
          }
       },
       "runtime" : {
          "recommends" : {
-            "Parse::RecDescent" : "0"
+            "Parse::RecDescent" : 0
          },
          "requires" : {
             "Scalar::Util" : "1",
             "Test::More" : "0.47",
-            "XSLoader" : "0"
+            "XSLoader" : 0
          }
       }
    },
@@ -58,5 +58,5 @@
          "url" : "git://git.imager.perl.org/imager.git"
       }
    },
-   "version" : "0.96_01"
+   "version" : "0.96_02"
 }
