@@ -1,5 +1,59 @@
 Imager release history.  Older releases can be found in Changes.old
 
+Imager 0.98 - 3 Jan 2014
+===========
+
+Incompatible changes:
+
+ - the return value of setpixel() has changed.
+
+   Previously the return values for undrawable pixels vs caller errors
+   changed depending on whether you used the multiple pixel calling
+   mechanism, or the single pixel mechanism.
+
+   Now:
+
+    - for an invalid parameter, such as an unknown colour, or missing
+      parameter, an empty list (or undef in scalar context) is
+      returned, and errstr() is set,
+
+    - otherwise the number of pixels drawn is returned.  If none of
+      the pixels could be drawn (they were all outside the image), "0
+      but true" is returned.
+
+   https://rt.cpan.org/Ticket/Display.html?id=87650
+
+Other changes:
+
+ - when drawing on an image with an alpha channel where the source
+   minimum is greater than zero, Imager would read from beyond the end
+   of a malloc() allocated buffer.  In rare circumstances this could
+   lead to some of the source image not being written to the target
+   image, or possibly to a segmentation fault.
+   I don't believe this has any security concerns beyond that.
+
+ - if the first text drawn with Imager::Font::T1 is not anti-aliased,
+   text drawn would be nonsense.  This would also read beyond the end
+   of a malloced buffer.
+
+ - non-AA text drawn with an Imager::Font::TT (Truetype 1) font would be
+   truncated early.
+   https://rt.cpan.org/Ticket/Display.html?id=88993
+
+ - Imager::Font::Wrap no longer requires the image parameter.
+   https://rt.cpan.org/Ticket/Display.html?id=87338
+
+ - a documentation typo fix in Imager::Transformations
+   Thanks to Adrian Yee.
+   https://rt.cpan.org/Ticket/Display.html?id=88598
+
+ - Image::Probe, Imager's internal module for probing library
+   locations now searches the directories specified by LD_RUN_PATH,
+   LD_LIBRARY_PATH, DYLD_LIBRARY_PATH and LIBRARY_PATH for libraries,
+   and the corresponing s/\blib$/include/ directories for header
+   files.
+   https://rt.cpan.org/Ticket/Display.html?id=86428
+
 Imager 0.97 - 15 Jul 2013
 ===========
 

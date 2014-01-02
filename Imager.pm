@@ -144,7 +144,7 @@ BEGIN {
   if ($ex_version < 5.57) {
     @ISA = qw(Exporter);
   }
-  $VERSION = '0.97';
+  $VERSION = '0.98';
   require XSLoader;
   XSLoader::load(Imager => $VERSION);
 }
@@ -424,7 +424,7 @@ BEGIN {
 # Non methods
 #
 
-# initlize Imager
+# initialize Imager
 # NOTE: this might be moved to an import override later on
 
 sub import {
@@ -3242,15 +3242,15 @@ sub setpixel {
   else {
     if ($color->isa('Imager::Color')) {
       i_ppix($self->{IMG}, $x, $y, $color)
-	and return;
+	and return "0 but true";
     }
     else {
       i_ppixf($self->{IMG}, $x, $y, $color)
-	and return;
+	and return "0 but true";
     }
-  }
 
-  return $self;
+    return 1;
+  }
 }
 
 sub getpixel {
@@ -5053,17 +5053,19 @@ To browse Imager's git repository:
 
   http://git.imager.perl.org/imager.git
 
-or:
-
-  https://github.com/tonycoz/imager
-
 To clone:
 
   git clone git://git.imager.perl.org/imager.git
 
-or:
+My preference is that patches are provided in the format produced by
+C<git format-patch>, for example, if you made your changes in a branch
+from master you might do:
 
-  git clone git://github.com/tonycoz/imager.git
+  git format-patch -k --stdout master >my-patch.txt
+
+and then attach that to your bug report, either by adding it as an
+attachment in your email client, or by using the Request Tracker
+attachment mechanism.
 
 =head1 AUTHOR
 
