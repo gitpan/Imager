@@ -144,7 +144,7 @@ BEGIN {
   if ($ex_version < 5.57) {
     @ISA = qw(Exporter);
   }
-  $VERSION = '0.98';
+  $VERSION = '0.99';
   require XSLoader;
   XSLoader::load(Imager => $VERSION);
 }
@@ -204,10 +204,16 @@ BEGIN {
      callsub => sub { my %hsh=@_; i_hardinvertall($hsh{image}); }
     };
 
-  $filters{autolevels} ={
+  $filters{autolevels_skew} ={
 			 callseq => ['image','lsat','usat','skew'],
 			 defaults => { lsat=>0.1,usat=>0.1,skew=>0.0 },
 			 callsub => sub { my %hsh=@_; i_autolevels($hsh{image},$hsh{lsat},$hsh{usat},$hsh{skew}); }
+			};
+
+  $filters{autolevels} ={
+			 callseq => ['image','lsat','usat'],
+			 defaults => { lsat=>0.1,usat=>0.1 },
+			 callsub => sub { my %hsh=@_; i_autolevels_mono($hsh{image},$hsh{lsat},$hsh{usat}); }
 			};
 
   $filters{turbnoise} ={
@@ -520,6 +526,12 @@ END {
 sub load_plugin {
   my ($filename)=@_;
   my $i;
+
+  if ($^O eq 'android') {
+    require File::Spec;
+    $filename = File::Spec->rel2abs($filename);
+  }
+
   my ($DSO_handle,$str)=DSO_open($filename);
   if (!defined($DSO_handle)) { $Imager::ERRSTR="Couldn't load plugin '$filename'\n"; return undef; }
   my %funcs=DSO_funclist($DSO_handle);
@@ -542,6 +554,11 @@ sub load_plugin {
 
 sub unload_plugin {
   my ($filename)=@_;
+
+  if ($^O eq 'android') {
+    require File::Spec;
+    $filename = File::Spec->rel2abs($filename);
+  }
 
   if (!$DSOs{$filename}) { $ERRSTR="plugin '$filename' not loaded."; return undef; }
   my ($DSO_handle,$funcref)=@{$DSOs{$filename}};

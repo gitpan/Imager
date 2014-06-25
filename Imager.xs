@@ -30,6 +30,10 @@ extern "C" {
 
 #include "imperl.h"
 
+#ifndef SV_COW_DROP_PV
+#define SV_COW_DROP_PV 0
+#endif
+
 /*
 
 Context object management
@@ -234,9 +238,9 @@ static int getobj(void *hv_t,char *key,char *type,void **store) {
 
 UTIL_table_t i_UTIL_table={getstr,getint,getdouble,getvoid,getobj};
 
-void my_SvREFCNT_dec(void *p) {
-  dTHX;
-  SvREFCNT_dec((SV*)p);
+static void
+free_buffer(void *p) {
+  myfree(p);
 }
 
 
@@ -447,14 +451,41 @@ static void io_destroyer(void *p) {
   myfree(cbd);
 }
 
+static bool
+im_SvREFSCALAR(SV *sv) {
+  svtype type = SvTYPE(sv);
+  return type == SVt_PV || type == SVt_PVIV || type == SVt_PVNV
+      || type == SVt_PVMG || type == SVt_IV || type == SVt_NV
+      || type == SVt_PVLV || type == SVt_REGEXP;
+}
+
 static i_io_glue_t *
 do_io_new_buffer(pTHX_ SV *data_sv) {
   const char *data;
+  char *data_copy;
   STRLEN length;
+  SV *sv;
 
-  data = SvPVbyte(data_sv, length);
-  SvREFCNT_inc(data_sv);
-  return io_new_buffer(data, length, my_SvREFCNT_dec, data_sv);
+  SvGETMAGIC(data_sv);
+  if (SvROK(data_sv)) {
+    if (im_SvREFSCALAR(data_sv)) {
+      sv = SvRV(data_sv);
+    }
+    else {
+      i_push_error(0, "data is not a scalar or a reference to scalar");
+      return NULL;
+    }
+  }
+  else {
+    sv = data_sv;
+  }
+
+  /* previously this would keep the SV around, but this is unsafe in
+     many ways, so always copy the bytes */
+  data = SvPVbyte(sv, length);
+  data_copy = mymalloc(length);
+  memcpy(data_copy, data, length);
+  return io_new_buffer(data_copy, length, free_buffer, data_copy);
 }
 
 static const char *
@@ -1106,7 +1137,10 @@ Imager::IO
 io_new_buffer(data_sv)
 	  SV   *data_sv
 	CODE:
+	  i_clear_error();
 	  RETVAL = do_io_new_buffer(aTHX_ data_sv);
+	  if (!RETVAL)
+	    XSRETURN(0);
         OUTPUT:
           RETVAL
 
@@ -1177,7 +1211,10 @@ Imager::IO
 io_new_buffer(class, data_sv)
 	SV *data_sv
     CODE:
+        i_clear_error();
         RETVAL = do_io_new_buffer(aTHX_ data_sv);
+	if (!RETVAL)
+	  XSRETURN(0);
     OUTPUT:
         RETVAL
 
@@ -1247,15 +1284,9 @@ i_io_raw_read(ig, buffer_sv, size)
       PPCODE:
         if (size <= 0)
 	  croak("size negative in call to i_io_raw_read()");
-        /* prevent an undefined value warning if they supplied an 
-	   undef buffer.
-           Orginally conditional on !SvOK(), but this will prevent the
-	   downgrade from croaking */
-	sv_setpvn(buffer_sv, "", 0);
-#ifdef SvUTF8
-	if (SvUTF8(buffer_sv))
-          sv_utf8_downgrade(buffer_sv, FALSE);
-#endif
+	if (SvTHINKFIRST(buffer_sv))
+	  sv_force_normal_flags(buffer_sv, SV_COW_DROP_PV);
+	SvUPGRADE(buffer_sv, SVt_PV);
 	buffer = SvGROW(buffer_sv, size+1);
         result = i_io_raw_read(ig, buffer, size);
         if (result >= 0) {
@@ -1378,15 +1409,9 @@ i_io_read(ig, buffer_sv, size)
       PPCODE:
         if (size <= 0)
 	  croak("size negative in call to i_io_read()");
-        /* prevent an undefined value warning if they supplied an 
-	   undef buffer.
-           Orginally conditional on !SvOK(), but this will prevent the
-	   downgrade from croaking */
-	sv_setpvn(buffer_sv, "", 0);
-#ifdef SvUTF8
-	if (SvUTF8(buffer_sv))
-          sv_utf8_downgrade(buffer_sv, FALSE);
-#endif
+	if (SvTHINKFIRST(buffer_sv))
+	  sv_force_normal_flags(buffer_sv, SV_COW_DROP_PV);
+	SvUPGRADE(buffer_sv, SVt_PV);
 	buffer = SvGROW(buffer_sv, size+1);
         result = i_io_read(ig, buffer, size);
         if (result >= 0) {
@@ -2677,6 +2702,12 @@ i_autolevels(im,lsat,usat,skew)
              float     lsat
              float     usat
              float     skew
+
+void
+i_autolevels_mono(im,lsat,usat)
+    Imager::ImgRaw     im
+             float     lsat
+             float     usat
 
 void
 i_radnoise(im,xo,yo,rscale,ascale)
