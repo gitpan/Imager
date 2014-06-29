@@ -48,7 +48,7 @@
          }
       }
    },
-   "release_status" : "stable",
+   "release_status" : "testing",
    "resources" : {
       "bugtracker" : {
          "web" : "http://rt.cpan.org/NoAuth/Bugs.html?Dist=Imager"
@@ -58,5 +58,5 @@
          "url" : "git://git.imager.perl.org/imager.git"
       }
    },
-   "version" : "0.99"
+   "version" : "0.99_01"
 }
