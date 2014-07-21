@@ -144,7 +144,7 @@ BEGIN {
   if ($ex_version < 5.57) {
     @ISA = qw(Exporter);
   }
-  $VERSION = '0.99_01';
+  $VERSION = '0.99_02';
   require XSLoader;
   XSLoader::load(Imager => $VERSION);
 }
@@ -4196,7 +4196,8 @@ sub parseiptc {
 }
 
 sub Inline {
-  my ($lang) = @_;
+  # Inline added a new argument at the beginning
+  my $lang = $_[-1];
 
   $lang eq 'C'
     or die "Only C language supported";
