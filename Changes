@@ -1,5 +1,33 @@
 Imager release history.  Older releases can be found in Changes.old
 
+Imager 1.001 - 2 Jan 2015
+============
+
+ - both Imager and perl 5.21.3 define my_strerror(), prevent a conflict
+   Thanks to Slaven Rezic for the report and the patch.
+   https://rt.cpan.org/Public/Bug/Display.html?id=98234
+
+ - GIF: clean-up a test file if the test for the giflib 4.2.0 file
+   version bug fails.
+
+ - fix Imager::Matrix2d::rotate()'s centre point handling
+   https://rt.cpan.org/Public/Bug/Display.html?id=99959
+
+ - ICO: don't apply the icon mask to images with an alpha channel by
+   default
+   https://rt.cpan.org/Public/Bug/Display.html?id=99507
+
+ - make verbose probing output more verbose
+
+ - use Imager::Probe to probe for freetype 1.x
+   https://rt.cpan.org/Ticket/Display.html?id=100502
+
+ - The --enable and --disable parameters to the top-level Makefile.PL
+   work again.
+
+ - update the bundled/modified Devel::CheckLib to handle the gcc-4
+   symlink on Cygwin
+
 Imager 1.000 - 28 Jul 2014
 ============
 
